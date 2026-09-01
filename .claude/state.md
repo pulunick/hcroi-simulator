@@ -4,14 +4,14 @@
 > 결정된 사항(바뀌지 않는 규칙)은 [brain.md](brain.md) 에만 적는다 — 여기에 중복하지 않는다.
 > 형식: 상단 "현재 상태" 스냅샷 → "다음 할 일" → 하단에 세션 로그 누적.
 
-## 현재 상태 (2026-09-01 기준)
+## 현재 상태 (2026-09-01 세션 2 종료 시점)
 
 | 항목            | 상태                                                                                                                                    |
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| 단계            | 프로토타입 — 코드 골격 완성, **첫 커밋 전**                                                                                             |
-| `npm test`      | ✅ 3 파일 / 36 테스트 통과 (formulas · scenario · insights)                                                                             |
+| 단계            | 프로토타입 **기능 완료**, 공개 저장소 push 완료. **Vercel 배포 대기**(사용자가 import) → 인사담당자 시연 2단계                          |
+| `npm test`      | ✅ 4 파일 / 51 테스트 (formulas · scenario · insights · excel)                                                                          |
 | `npm run check` | ✅ 0 errors / 0 warnings (353 files)                                                                                                    |
-| `npm run lint`  | ⚠️ prettier 경고 3건: `docs/spec.md`, `README.md`, `supabase/README.md` (코드는 통과)                                                   |
+| `npm run lint`  | ✅                                                                                                                                      |
 | git             | 원격 **github.com/pulunick/hcroi-simulator (public)**, 브랜치 `main`. 공개 전 식별자 제거 후 히스토리 단일 커밋으로 재생성 (2026-09-01) |
 | DB              | 없음. 마이그레이션 SQL 준비만 됨, 어느 프로젝트에도 미적용                                                                              |
 | 원격 저장소     | pulunick/hcroi-simulator (public). push 절차는 brain §1 참조                                                                            |
@@ -58,7 +58,7 @@
 
 ## 다음 할 일 (우선순위 순)
 
-1. `npm run format` 으로 md 3개 포맷 정리 → `npm run lint` 초록 확인
+1. ~~md 포맷 정리~~ 완료
 2. ~~첫 커밋~~ 완료 → **Vercel 배포**: 사용자가 Vercel 대시보드에서 pulunick/hcroi-simulator import (Framework: SvelteKit, 기본 설정 그대로) → URL 을 인사담당자에게 사내 메신저로 전달
 3. ~~화면 육안 점검~~ 완료, 발견 이슈 9건 수정 완료. 기획서 **원문 파일**을 `docs/` 에 받아 requirements-coverage.md 를 문장 단위로 재대조
 4. ~~엑셀 내보내기/가져오기 구현~~ 완료 (2026-09-01)
@@ -95,3 +95,9 @@
 - 데이터 관리 표: 휴지통 아이콘 삭제(행별) + 오른쪽 `초기화`(표준 기본값 복원), HCROI 열 우측 기준선 일치.
 - 데이터 관리 표 헤더 전체 가운데 정렬(본문 숫자는 우측), HCROI 헤더는 숫자+배지 묶음(9rem) 중앙.
 - 첫 커밋 `1923bcc` + 개인 GitHub **pulunick/hcroi-simulator (public)** 생성·push. 빌드(`npm run build`, adapter-vercel) 통과 확인. 다음: 사용자가 Vercel import.
+
+### 2026-09-01 — 세션 2 마무리
+
+- 메모리(`~/.claude/projects/.../memory/`) 5건 저장: 사용자 프로필, gh 계정/push 절차, 공개 저장소 위생, 작업 방식, 육안 점검 방법.
+- 로컬 dev 서버(5173) 종료. 작업 트리 클린, 원격과 동기화.
+- **다음 세션 시작점**: ① 사용자가 Vercel import 했는지 확인 → 배포 URL 4개 화면·엑셀 다운로드 점검 ② 인사담당자 시연 피드백 반영 ③ 기획서 원문 오면 requirements-coverage 재대조 ④ Phase 2 우선순위 결정.
