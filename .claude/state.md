@@ -4,17 +4,17 @@
 > 결정된 사항(바뀌지 않는 규칙)은 [brain.md](brain.md) 에만 적는다 — 여기에 중복하지 않는다.
 > 형식: 상단 "현재 상태" 스냅샷 → "다음 할 일" → 하단에 세션 로그 누적.
 
-## 현재 상태 (2026-09-01 세션 2 종료 시점)
+## 현재 상태 (2026-09-03 세션 3 종료 시점)
 
-| 항목            | 상태                                                                                                                                    |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| 단계            | 프로토타입 **기능 완료**, 공개 저장소 push 완료. **Vercel 배포 대기**(사용자가 import) → 인사담당자 시연 2단계                          |
-| `npm test`      | ✅ 4 파일 / 51 테스트 (formulas · scenario · insights · excel)                                                                          |
-| `npm run check` | ✅ 0 errors / 0 warnings (353 files)                                                                                                    |
-| `npm run lint`  | ✅                                                                                                                                      |
-| git             | 원격 **github.com/pulunick/hcroi-simulator (public)**, 브랜치 `main`. 공개 전 식별자 제거 후 히스토리 단일 커밋으로 재생성 (2026-09-01) |
-| DB              | 없음. 마이그레이션 SQL 준비만 됨, 어느 프로젝트에도 미적용                                                                              |
-| 원격 저장소     | pulunick/hcroi-simulator (public). push 절차는 brain §1 참조                                                                            |
+| 항목            | 상태                                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------ |
+| 단계            | 프로토타입 **기능 완료** + 확장 지침 1차 반영. **Vercel 배포 대기**(사용자가 import) → 인사담당자 시연 2단계 |
+| `npm test`      | ✅ 4 파일 / 51 테스트 (formulas · scenario · insights · excel)                                               |
+| `npm run check` | ✅ 0 errors / 0 warnings (360 files)                                                                         |
+| `npm run lint`  | ✅                                                                                                           |
+| git             | 원격 **github.com/pulunick/hcroi-simulator (public)**, 브랜치 `main`. 세션 3 변경분 커밋 완료                |
+| DB              | 없음(보류). 마이그레이션 SQL 준비만 됨, 어느 프로젝트에도 미적용                                             |
+| 원격 저장소     | pulunick/hcroi-simulator (public). push 절차는 brain §1 참조                                                 |
 
 ### 구현 완료
 
@@ -27,6 +27,8 @@
 - [x] Supabase `hcroi` 스키마 SQL 초안 (organizations / members / fiscal_years / scenarios + RLS)
 - [x] `.claude/brain.md` + `.claude/state.md` 운영 체계 도입
 - [x] 엑셀 내보내기(4시트)·템플릿·가져오기(미리보기/검증/병합/되돌리기) — `src/lib/hcroi/excel/`, exceljs 4.4 동적 로드, 테스트 14건 + 브라우저 E2E 16건
+- [x] **등급 3단계 전환** (2026-09-03): <1.0 위험 · 1.0–1.5 보통 · ≥1.5 우수. `fair`(양호) 타입·배지·기준선·문서 전부 제거
+- [x] **대시보드 제목 커스터마이징** (2026-09-03): `workspace.orgName`(localStorage) → h1 · 브라우저 탭 · 엑셀 파일명. DB 불필요
 
 ### 육안 점검 결과 (2026-09-01, 세션 2)
 
@@ -60,14 +62,16 @@
 
 1. ~~md 포맷 정리~~ 완료
 2. ~~첫 커밋~~ 완료 → **Vercel 배포**: 사용자가 Vercel 대시보드에서 pulunick/hcroi-simulator import (Framework: SvelteKit, 기본 설정 그대로) → URL 을 인사담당자에게 사내 메신저로 전달
-3. ~~화면 육안 점검~~ 완료, 발견 이슈 9건 수정 완료. 기획서 **원문 파일**을 `docs/` 에 받아 requirements-coverage.md 를 문장 단위로 재대조
+3. ~~화면 육안 점검·이슈 9건 수정~~ 완료. ~~기획서 원문 대조~~ — 확장 지침 PDF 접수·요약 완료([plans/martin-2.0-extensions.md](../docs/plans/martin-2.0-extensions.md))
 4. ~~엑셀 내보내기/가져오기 구현~~ 완료 (2026-09-01)
 5. ~~원격 저장소 연결~~ 완료
-6. 그 외 Phase 2 항목 우선순위는 프로토타입 검토 후 사용자 결정
+6. **확장 지침 Phase 2 항목 우선순위 결정** — 기간별(분기/월) 세분화 · 부서별 HCROI(배부율 α 결정 필요) · 결산서 OCR 파싱(서버 필요 = 브라우저 전용 원칙과 충돌). 상세는 [plans/martin-2.0-extensions.md §3](../docs/plans/martin-2.0-extensions.md)
+7. 그 외 Phase 2 항목(LLM 인사이트·PDF 리포트) 우선순위는 시연 후 결정
 
 ## 막힌 것 / 사용자 결정 대기
 
-- 기획서 원문 파일 제공 여부 (requirements-coverage 재대조용).
+- 확장 지침 3대 확장의 착수 순서. 특히 **결산서 OCR 파싱**은 서버가 필요해 "데이터가 브라우저 밖으로 나가지 않는다" 원칙을 깨는 결정이 선행돼야 함.
+- 부서별 HCROI 의 **배부율 α**: 인원 비중 vs 인건비 비중 (원문도 택일로 남김).
 - **DB(Supabase) 도입 여부 — 보류.** 2026-09-01 논의: 공유·이력·부서별 분해·로그인 요구가 확인될 때까지 "엑셀 파일이 원본, 앱은 계산기" 구조 유지. 인사담당자 시연 때 공유 필요성 질문으로 확인하기로 함.
 - (엑셀 §9 는 답변 완료 — 조직명만 추후 조직 개념 도입 시 재논의)
 
@@ -102,3 +106,11 @@
 - 메모리(`~/.claude/projects/.../memory/`) 5건 저장: 사용자 프로필, gh 계정/push 절차, 공개 저장소 위생, 작업 방식, 육안 점검 방법.
 - 로컬 dev 서버(5173) 종료. 작업 트리 클린, 원격과 동기화.
 - **다음 세션 시작점**: ① 사용자가 Vercel import 했는지 확인 → 배포 URL 4개 화면·엑셀 다운로드 점검 ② 인사담당자 시연 피드백 반영 ③ 기획서 원문 오면 requirements-coverage 재대조 ④ Phase 2 우선순위 결정.
+
+### 2026-09-03 — 세션 3 (확장 지침 반영)
+
+- 확장 지침 PDF("Martin's HCROI Simulator 2.0", 10쪽 이미지 PDF) 전 쪽 검토 → **텍스트 요약본** `docs/plans/martin-2.0-extensions.md` 작성 (다음 세션에 PDF 재분할 불필요).
+- **등급 3단계 전환**: 원문 케이스 스터디가 1.33·1.40 을 "보통"으로 표기 → 1.3–1.5 "양호" 폐지. `HCROI_THRESHOLDS`·`HcroiGrade`·GradeBadge·insights·대시보드 기준선·guide 등급표·엑셀 산식 시트·spec §3·user-guide·README·CLAUDE.md·brain 반영.
+- **대시보드 제목 커스터마이징**: `workspace.orgName` 추가(localStorage, JSON 내보내기 포함). h1 옆 연필 아이콘 → 인라인 편집, 브라우저 탭 제목, 엑셀 파일명(`hcroi-<조직명>-YYYY-MM-DD.xlsx`)에 반영. **DB 불필요** 확인.
+- 검증: test 51/51 ✅ · check 0 ✅ · lint ✅ · 브라우저 E2E 8건 PASS(등급 표기·제목 저장/복원/초기화·엑셀 파일명).
+- 확장 지침 나머지(기간별·부서별·OCR)는 미착수 — Phase 2 후보로 접수만.

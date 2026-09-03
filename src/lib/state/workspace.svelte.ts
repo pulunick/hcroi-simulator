@@ -17,6 +17,8 @@ interface Persisted {
 	years: YearRecord[];
 	scenarios: Scenario[];
 	baseYearId: string | null;
+	/** 대시보드 제목에 붙는 회사/조직 이름 (선택) */
+	orgName?: string;
 }
 
 export function newId(): string {
@@ -60,6 +62,8 @@ class Workspace {
 	years = $state<YearRecord[]>(sampleYears());
 	scenarios = $state<Scenario[]>(defaultScenarios());
 	baseYearId = $state<string | null>(null);
+	/** 대시보드 제목 커스터마이징용 회사/조직 이름 (빈 문자열 = 기본 제목) */
+	orgName = $state('');
 	/** localStorage 로드 완료 여부 — 로드 전에는 저장하지 않는다 */
 	loaded = $state(false);
 	/** 되돌릴 수 있는 가져오기 스냅샷이 있는지 */
@@ -79,6 +83,7 @@ class Workspace {
 					this.years = parsed.years;
 					this.scenarios = parsed.scenarios.length ? parsed.scenarios : defaultScenarios();
 					this.baseYearId = parsed.baseYearId ?? null;
+					this.orgName = typeof parsed.orgName === 'string' ? parsed.orgName : '';
 				}
 			}
 		} catch {
@@ -97,7 +102,8 @@ class Workspace {
 		const data: Persisted = {
 			years: $state.snapshot(this.years),
 			scenarios: $state.snapshot(this.scenarios),
-			baseYearId: this.baseYearId
+			baseYearId: this.baseYearId,
+			orgName: this.orgName
 		};
 		try {
 			localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -201,7 +207,8 @@ class Workspace {
 		const data: Persisted = {
 			years: $state.snapshot(this.years),
 			scenarios: $state.snapshot(this.scenarios),
-			baseYearId: this.baseYearId
+			baseYearId: this.baseYearId,
+			orgName: this.orgName
 		};
 		return JSON.stringify(data, null, 2);
 	}
@@ -214,6 +221,7 @@ class Workspace {
 			this.years = parsed.years;
 			this.scenarios = parsed.scenarios.length ? parsed.scenarios : defaultScenarios();
 			this.baseYearId = parsed.baseYearId ?? null;
+			this.orgName = typeof parsed.orgName === 'string' ? parsed.orgName : '';
 			return null;
 		} catch (e) {
 			return `JSON 파싱 실패: ${(e as Error).message}`;

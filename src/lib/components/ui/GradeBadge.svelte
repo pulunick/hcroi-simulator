@@ -10,7 +10,6 @@
 
 	const styles: Record<HcroiGrade, { bg: string; ink: string; dot: string }> = {
 		excellent: { bg: 'bg-status-good-bg', ink: 'text-status-good-ink', dot: 'bg-status-good' },
-		fair: { bg: 'bg-brand-tint', ink: 'text-brand-ink', dot: 'bg-brand' },
 		warning: {
 			bg: 'bg-status-warning-bg',
 			ink: 'text-status-warning-ink',
@@ -57,18 +56,6 @@
 				stroke-linecap="round"
 				stroke-linejoin="round"
 				aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 8v4M12 16h.01" /></svg
-			>
-		{:else if grade === 'fair'}
-			<svg
-				width="16"
-				height="16"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2.2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="m9 12 2 2 4-4" /></svg
 			>
 		{:else}
 			<svg

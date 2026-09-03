@@ -30,7 +30,7 @@ npm run lint
 - **HCROI** = (영업이익 + 총 인건비) ÷ 총 인건비
 - **HCVA** = (영업이익 + 총 인건비) ÷ 총 임직원 수
 - 총 인건비 = 기본급 + 성과급/수당 + 퇴직급여 + 법정후생비 + 기타 복리후생비 + 교육훈련비
-- 등급: < 1.0 위험 · 1.0~~1.3 보통 · 1.3~~1.5 양호 · ≥ 1.5 우수
+- 등급: < 1.0 위험 · 1.0~1.5 보통 · ≥ 1.5 우수 (3등급, 2026-09-03 확장 지침 반영)
 
 사용 설명서: [docs/user-guide.md](docs/user-guide.md) · 전체 명세·가정: [docs/spec.md](docs/spec.md) · 결정 이력: [docs/decision-log.md](docs/decision-log.md) · 요구사항 대조: [docs/requirements-coverage.md](docs/requirements-coverage.md)
 

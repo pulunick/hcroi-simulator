@@ -44,26 +44,23 @@ export function operatingCostFromProfit(revenue: number, operatingProfit: number
 }
 
 /**
- * HCROI 정상성 진단 기준 (요구사항 §주요기능 1 예시 확장)
+ * HCROI 정상성 진단 기준 — 3등급 (확장 지침 "Martin's HCROI Simulator 2.0", 결정 2026-09-03)
  *  - 1.0 미만  : 위험 — 인건비 1원당 회수액이 1원 미만 → 인건비 투입이 이익으로 회수되지 않음(영업손실)
- *  - 1.0 ~ 1.3 : 보통
- *  - 1.3 ~ 1.5 : 양호  (요구사항에 명시되지 않은 구간 — 보통/우수 사이로 정의)
+ *  - 1.0 ~ 1.5 : 보통 (기존 1.3~1.5 "양호" 구간을 보통에 통합)
  *  - 1.5 이상  : 우수
  */
-export const HCROI_THRESHOLDS = { warning: 1.0, fair: 1.3, excellent: 1.5 } as const;
+export const HCROI_THRESHOLDS = { warning: 1.0, excellent: 1.5 } as const;
 
 export function gradeOf(hcroi: number | null): HcroiGrade | null {
 	if (hcroi === null || !Number.isFinite(hcroi)) return null;
 	if (hcroi < HCROI_THRESHOLDS.warning) return 'critical';
-	if (hcroi < HCROI_THRESHOLDS.fair) return 'warning';
-	if (hcroi < HCROI_THRESHOLDS.excellent) return 'fair';
+	if (hcroi < HCROI_THRESHOLDS.excellent) return 'warning';
 	return 'excellent';
 }
 
 export const GRADE_LABEL: Record<HcroiGrade, string> = {
 	critical: '위험',
 	warning: '보통',
-	fair: '양호',
 	excellent: '우수'
 };
 
@@ -73,8 +70,7 @@ export function diagnose(hcroi: number | null): Diagnosis | null {
 	const v = hcroi.toFixed(2);
 	const summaries: Record<HcroiGrade, string> = {
 		critical: `인건비 1원당 ${v}원 회수 — 인건비조차 회수하지 못하는 영업손실 구간입니다. 구조적 개선이 시급합니다.`,
-		warning: `인건비 1원당 ${v}원 회수 — 인건비는 회수하지만 잉여가 얇습니다. 임금 인상 여력이 제한적입니다.`,
-		fair: `인건비 1원당 ${v}원 회수 — 안정 구간입니다. 생산성 제고로 1.5배 이상 진입을 목표로 삼을 수 있습니다.`,
+		warning: `인건비 1원당 ${v}원 회수 — 인건비는 회수하는 보통 구간입니다. 생산성 제고로 1.5배 이상(우수) 진입을 목표로 삼을 수 있습니다.`,
 		excellent: `인건비 1원당 ${v}원 회수 — 인적자본 투자효율이 우수합니다. 현 수준 유지와 인재 투자 확대를 검토할 수 있습니다.`
 	};
 	return { grade, label: GRADE_LABEL[grade], summary: summaries[grade] };

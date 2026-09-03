@@ -2,11 +2,10 @@ import { HCROI_THRESHOLDS, computeMetrics, gradeOf } from './formulas';
 import { formatKrwCompact, formatMultiple, formatPct, formatSigned } from './format';
 import type { BaseInputs, HcroiGrade, Insight, Metrics, ScenarioResult, YearRecord } from './types';
 
-const GRADE_RANK: HcroiGrade[] = ['critical', 'warning', 'fair', 'excellent'];
+const GRADE_RANK: HcroiGrade[] = ['critical', 'warning', 'excellent'];
 const GRADE_KO: Record<HcroiGrade, string> = {
 	critical: '위험',
 	warning: '보통',
-	fair: '양호',
 	excellent: '우수'
 };
 

@@ -54,12 +54,11 @@ describe('computeMetrics — 핵심 수식', () => {
 });
 
 describe('진단 등급', () => {
-	it('경계값: <1.0 위험 / 1.0~1.3 보통 / 1.3~1.5 양호 / ≥1.5 우수', () => {
+	it('경계값: <1.0 위험 / 1.0~1.5 보통 / ≥1.5 우수 (2026-09-03: 양호 구간 폐지)', () => {
 		expect(gradeOf(0.99)).toBe('critical');
 		expect(gradeOf(1.0)).toBe('warning');
-		expect(gradeOf(1.29)).toBe('warning');
-		expect(gradeOf(1.3)).toBe('fair');
-		expect(gradeOf(1.49)).toBe('fair');
+		expect(gradeOf(1.3)).toBe('warning');
+		expect(gradeOf(1.49)).toBe('warning');
 		expect(gradeOf(1.5)).toBe('excellent');
 		expect(gradeOf(null)).toBeNull();
 	});

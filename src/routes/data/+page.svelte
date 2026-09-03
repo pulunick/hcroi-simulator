@@ -102,8 +102,10 @@
 				scenarios: $state.snapshot(workspace.scenarios),
 				baseYear: workspace.baseYear ? $state.snapshot(workspace.baseYear) : null
 			});
-			downloadBuffer(buf, `hcroi-${today()}.xlsx`);
-			ioMessage = `엑셀 파일(hcroi-${today()}.xlsx)을 내려받았습니다. 시트: 지표 요약 · 입력 데이터 · 시나리오 비교 · 산식·가정`;
+			const org = workspace.orgName.trim().replace(/[\\/:*?"<>|\s]+/g, '-');
+			const fname = `hcroi-${org ? org + '-' : ''}${today()}.xlsx`;
+			downloadBuffer(buf, fname);
+			ioMessage = `엑셀 파일(${fname})을 내려받았습니다. 시트: 지표 요약 · 입력 데이터 · 시나리오 비교 · 산식·가정`;
 		} catch (e) {
 			ioMessage = `엑셀 내보내기 실패: ${(e as Error).message}`;
 		} finally {

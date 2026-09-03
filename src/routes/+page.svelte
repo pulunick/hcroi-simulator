@@ -70,21 +70,65 @@
 	);
 	const thresholds = [
 		{ value: 1.0, label: '보통 1.0' },
-		{ value: 1.3, label: '양호 1.3' },
 		{ value: 1.5, label: '우수 1.5' }
 	];
 	const trend = $derived(trendInsights(workspace.years));
 	const oneDecimalBil = (v: number) => (v === 0 ? '0억' : formatKrwCompact(v, ''));
+
+	// 대시보드 제목 커스터마이징 — 회사/조직 이름은 localStorage 작업공간에만 저장 (서버 전송 없음)
+	let editingTitle = $state(false);
+	const pageTitle = $derived(
+		workspace.orgName.trim() ? `${workspace.orgName.trim()} HCROI 대시보드` : 'HCROI 대시보드'
+	);
 </script>
 
-<svelte:head><title>HCROI 대시보드</title></svelte:head>
+<svelte:head><title>{pageTitle}</title></svelte:head>
 
 <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
 	<div>
-		<h1 class="text-2xl font-bold text-ink">HCROI 대시보드</h1>
-		<p class="mt-1 text-[15px] text-ink-2">
-			재무·HR 데이터를 입력하면 인적자본 투자효율 지표가 실시간으로 산출됩니다.
-		</p>
+		<h1 class="flex items-center gap-2 text-2xl font-bold text-ink">
+			{pageTitle}
+			<button
+				type="button"
+				class="btn p-1.5 btn-ghost text-muted hover:text-ink"
+				aria-label="대시보드 제목 수정"
+				title="회사/조직 이름 넣기"
+				onclick={() => (editingTitle = !editingTitle)}
+			>
+				<svg
+					width="15"
+					height="15"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					aria-hidden="true"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg
+				>
+			</button>
+		</h1>
+		{#if editingTitle}
+			<form
+				class="mt-2 flex items-center gap-2"
+				onsubmit={(e) => {
+					e.preventDefault();
+					editingTitle = false;
+				}}
+			>
+				<input
+					class="field-input w-64 py-1.5"
+					placeholder="회사/조직 이름 (비우면 기본 제목)"
+					bind:value={workspace.orgName}
+				/>
+				<button type="submit" class="btn py-1.5 btn-primary">확인</button>
+			</form>
+			<p class="mt-1 text-xs text-muted">이 브라우저에만 저장되며 서버로 전송되지 않습니다.</p>
+		{:else}
+			<p class="mt-1 text-[15px] text-ink-2">
+				재무·HR 데이터를 입력하면 인적자본 투자효율 지표가 실시간으로 산출됩니다.
+			</p>
+		{/if}
 	</div>
 	{#if workspace.years.length}
 		<label class="flex items-center gap-2 text-sm font-semibold text-ink-2">

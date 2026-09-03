@@ -63,11 +63,11 @@ export interface YearRecord {
 	memo?: string;
 }
 
-export type HcroiGrade = 'critical' | 'warning' | 'fair' | 'excellent';
+export type HcroiGrade = 'critical' | 'warning' | 'excellent';
 
 export interface Diagnosis {
 	grade: HcroiGrade;
-	/** 화면 표기용 등급명 (위험/보통/양호/우수) */
+	/** 화면 표기용 등급명 (위험/보통/우수) */
 	label: string;
 	/** 한 줄 해설 */
 	summary: string;

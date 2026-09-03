@@ -74,14 +74,9 @@
 					><td class="py-2 text-ink-2">인건비조차 회수하지 못함 (영업손실)</td></tr
 				>
 				<tr
-					><td class="tabular py-2">1.0 ~ 1.3배</td><td
+					><td class="tabular py-2">1.0 ~ 1.5배</td><td
 						class="py-2 font-semibold text-status-warning-ink">보통</td
-					><td class="py-2 text-ink-2">인건비는 회수하나 잉여가 얇음</td></tr
-				>
-				<tr
-					><td class="tabular py-2">1.3 ~ 1.5배</td><td class="py-2 font-semibold text-brand-ink"
-						>양호</td
-					><td class="py-2 text-ink-2">안정 구간 (요구사항 미정의 구간을 보통/우수 사이로 정의)</td
+					><td class="py-2 text-ink-2">인건비는 회수하나 잉여가 얇음 — 1.5배(우수) 진입이 목표</td
 					></tr
 				>
 				<tr
