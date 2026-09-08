@@ -37,6 +37,55 @@ export const HC_COST_LABELS: Record<keyof HcCostBreakdown, string> = {
 	training: '교육훈련비'
 };
 
+/**
+ * 임직원 수 세부 구성 (선택 입력).
+ * 값이 있으면 `HeadcountBasis.include` 설정에 따라 총 임직원 수를 계산한다.
+ * 없으면 총 임직원 수를 직접 입력한 값으로 본다.
+ */
+export interface HeadcountBreakdown {
+	/** 정규직 — 항상 포함 */
+	regular: number;
+	/** 계약직·기간제 */
+	contract: number;
+	/** 파견·도급 등 소속 외 근로자 */
+	dispatched: number;
+	/** 등기임원 */
+	executive: number;
+}
+
+export const HEADCOUNT_KEYS = [
+	'regular',
+	'contract',
+	'dispatched',
+	'executive'
+] as const satisfies readonly (keyof HeadcountBreakdown)[];
+
+export const HEADCOUNT_LABELS: Record<keyof HeadcountBreakdown, string> = {
+	regular: '정규직',
+	contract: '계약직·기간제',
+	dispatched: '파견·도급(소속 외)',
+	executive: '등기임원'
+};
+
+/** 총 임직원 수에 포함할 수 있는 구분 (정규직은 선택 대상이 아니라 항상 포함) */
+export const HEADCOUNT_OPTIONAL_KEYS = ['contract', 'dispatched', 'executive'] as const;
+
+/**
+ * 임직원 수 산정 기준 — 작업공간 전체에 적용된다 (연도마다 다르면 추이 비교가 무의미해진다).
+ * `method` 는 표기용 메타데이터로, 계산에는 영향을 주지 않는다.
+ */
+export interface HeadcountBasis {
+	/** 기간 평균(FTE) | 기말 인원 */
+	method: 'average' | 'periodEnd';
+	/** 총 임직원 수에 포함할 구분 — 실무 기준상 셋 다 기본 제외 */
+	include: Record<(typeof HEADCOUNT_OPTIONAL_KEYS)[number], boolean>;
+}
+
+export const DEFAULT_HEADCOUNT_BASIS: HeadcountBasis = {
+	method: 'average',
+	include: { contract: false, dispatched: false, executive: false }
+};
+
 /** HCROI 산출에 필요한 최소 입력값 */
 export interface BaseInputs {
 	/** 매출액 (원) */
@@ -60,6 +109,11 @@ export interface YearRecord {
 	 * (세부 내역 없이 총액만 입력하는 경우 null)
 	 */
 	breakdown: HcCostBreakdown | null;
+	/**
+	 * 임직원 수 세부 구성. 값이 있으면 `inputs.headcount` 는 산정 기준(`HeadcountBasis`)을 적용한
+	 * 합계와 같아야 한다. 총원만 입력하는 경우 null.
+	 */
+	headcountBreakdown?: HeadcountBreakdown | null;
 	memo?: string;
 }
 

@@ -5,11 +5,19 @@ import {
 	gradeOf,
 	operatingCostFromProfit,
 	sumHcCost,
+	sumHeadcount,
 	validateInputs
 } from './formulas';
 import { splitHcCost, sampleYears } from './defaults';
-import { amountUnitLabel, formatAmount, formatKrwCompact, formatSigned, niceTicks } from './format';
-import type { BaseInputs } from './types';
+import {
+	amountUnitLabel,
+	formatAmount,
+	formatKrwCompact,
+	formatSigned,
+	headcountBasisLabel,
+	niceTicks
+} from './format';
+import { DEFAULT_HEADCOUNT_BASIS, type BaseInputs, type HeadcountBasis } from './types';
 
 const base: BaseInputs = { revenue: 100, operatingCost: 90, hcCost: 30, headcount: 10 };
 
@@ -97,6 +105,40 @@ describe('validateInputs', () => {
 		expect(validateInputs({ ...base, hcCost: 95 }).join()).toContain('영업비용보다 클 수 없습니다');
 		expect(validateInputs({ ...base, headcount: 0 }).join()).toContain('임직원 수');
 		expect(validateInputs({ ...base, hcCost: 0 }).join()).toContain('총 인건비');
+	});
+});
+
+describe('sumHeadcount — 임직원 수 산정 기준', () => {
+	const hc = { regular: 30, contract: 4, dispatched: 3, executive: 2 };
+	const basis = (patch: Partial<HeadcountBasis['include']> = {}): HeadcountBasis => ({
+		method: 'average',
+		include: { ...DEFAULT_HEADCOUNT_BASIS.include, ...patch }
+	});
+
+	it('기본값은 정규직만 센다', () => {
+		expect(sumHeadcount(hc, DEFAULT_HEADCOUNT_BASIS)).toBe(30);
+	});
+	it('포함 토글을 켠 구분만 더한다', () => {
+		expect(sumHeadcount(hc, basis({ contract: true }))).toBe(34);
+		expect(sumHeadcount(hc, basis({ contract: true, executive: true }))).toBe(36);
+		expect(sumHeadcount(hc, basis({ contract: true, dispatched: true, executive: true }))).toBe(39);
+	});
+	it('기간 평균/기말은 표기용이라 합계를 바꾸지 않는다', () => {
+		expect(sumHeadcount(hc, { ...basis(), method: 'periodEnd' })).toBe(
+			sumHeadcount(hc, { ...basis(), method: 'average' })
+		);
+	});
+	it('빈 칸(NaN)은 0으로 본다', () => {
+		expect(sumHeadcount({ ...hc, contract: NaN }, basis({ contract: true }))).toBe(30);
+	});
+	it('기준을 한 줄로 표기한다', () => {
+		expect(headcountBasisLabel(DEFAULT_HEADCOUNT_BASIS)).toBe('기간 평균(FTE) · 정규직만');
+		expect(headcountBasisLabel(basis({ contract: true }))).toBe(
+			'기간 평균(FTE) · 정규직+계약직·기간제'
+		);
+		expect(headcountBasisLabel({ ...basis({ executive: true }), method: 'periodEnd' })).toBe(
+			'기말 인원 · 정규직+등기임원'
+		);
 	});
 });
 

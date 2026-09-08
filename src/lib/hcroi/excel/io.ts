@@ -1,8 +1,10 @@
 import type ExcelJS from 'exceljs';
 import { compareScenarios } from '../scenario';
-import type { Scenario, YearRecord } from '../types';
+import type { HeadcountBasis, Scenario, YearRecord } from '../types';
+import { DEFAULT_HEADCOUNT_BASIS, HEADCOUNT_OPTIONAL_KEYS } from '../types';
 import { sampleYears } from '../defaults';
 import {
+	BASIS_SHEET,
 	INPUT_COLUMNS,
 	INPUT_FIRST_DATA_ROW,
 	INPUT_HEADER_ROW,
@@ -174,23 +176,43 @@ function addFormulaSheet(wb: ExcelJS.Workbook) {
 	});
 }
 
-/** 시트 ⑤ `조직 정보` — 회사/조직 이름 한 칸. 이 값만 가져오기 때 다시 읽는다 */
-function addOrgSheet(wb: ExcelJS.Workbook, orgName: string) {
+/**
+ * 시트 ⑤ `조직 정보` — 회사/조직 이름 + 임직원 수 산정 기준.
+ * 가져오기 때 다시 읽는 값은 이 시트와 `입력 데이터` 뿐이다.
+ */
+function addOrgSheet(wb: ExcelJS.Workbook, orgName: string, basis: HeadcountBasis) {
 	const ws = wb.addWorksheet(SHEET.org);
-	ws.columns = [{ width: 20 }, { width: 40 }];
-	const row = ws.getRow(1);
-	const label = row.getCell(1);
-	label.value = ORG_SHEET.label;
-	label.font = HEADER_FONT;
-	label.fill = HEADER_FILL;
-	const value = row.getCell(2);
-	value.value = orgName.trim() || null;
-	value.numFmt = '@';
-	const note = ws.getRow(2).getCell(1);
-	note.value = ORG_SHEET.note;
-	note.font = NOTE_FONT;
-	note.alignment = { wrapText: true };
-	ws.mergeCells(2, 1, 2, 2);
+	ws.columns = [{ width: 26 }, { width: 40 }];
+
+	const put = (r: number, label: string, value: string | null) => {
+		const row = ws.getRow(r);
+		const l = row.getCell(1);
+		l.value = label;
+		l.font = HEADER_FONT;
+		l.fill = HEADER_FILL;
+		const v = row.getCell(2);
+		v.value = value;
+		v.numFmt = '@';
+	};
+	const note = (r: number, text: string) => {
+		const c = ws.getRow(r).getCell(1);
+		c.value = text;
+		c.font = NOTE_FONT;
+		c.alignment = { wrapText: true };
+		ws.mergeCells(r, 1, r, 2);
+	};
+
+	put(1, ORG_SHEET.label, orgName.trim() || null);
+	note(2, ORG_SHEET.note);
+	put(
+		4,
+		BASIS_SHEET.method.label,
+		basis.method === 'periodEnd' ? BASIS_SHEET.method.periodEnd : BASIS_SHEET.method.average
+	);
+	HEADCOUNT_OPTIONAL_KEYS.forEach((k, i) =>
+		put(5 + i, BASIS_SHEET.include[k], basis.include[k] ? BASIS_SHEET.yes : BASIS_SHEET.no)
+	);
+	note(8, BASIS_SHEET.note);
 }
 
 export interface ExportData {
@@ -200,6 +222,8 @@ export interface ExportData {
 	baseYear: YearRecord | null;
 	/** 대시보드 제목에 붙는 회사/조직 이름 (빈 문자열이면 빈 칸으로 내보낸다) */
 	orgName?: string;
+	/** 임직원 수 산정 기준 — 인원 구분을 쓴 연도의 총원이 이 기준으로 정해진다 */
+	headcountBasis?: HeadcountBasis;
 }
 
 /** 작업공간 전체 → .xlsx (시트 ①②③ + 조직 정보 + 산식) */
@@ -211,7 +235,7 @@ export async function buildWorkbookBuffer(data: ExportData): Promise<ArrayBuffer
 	addSummarySheet(wb, data.years);
 	addInputSheet(wb, data.years);
 	if (data.baseYear) addScenarioSheet(wb, data.baseYear, data.scenarios);
-	addOrgSheet(wb, data.orgName ?? '');
+	addOrgSheet(wb, data.orgName ?? '', data.headcountBasis ?? DEFAULT_HEADCOUNT_BASIS);
 	addFormulaSheet(wb);
 	return toArrayBuffer(await wb.xlsx.writeBuffer());
 }
@@ -222,7 +246,7 @@ export async function buildTemplateBuffer(opts: { withSample: boolean } = { with
 	const wb = new Excel.Workbook();
 	wb.creator = 'HCROI 시뮬레이터';
 	addInputSheet(wb, opts.withSample ? sampleYears() : []);
-	addOrgSheet(wb, '');
+	addOrgSheet(wb, '', DEFAULT_HEADCOUNT_BASIS);
 	addFormulaSheet(wb);
 	return toArrayBuffer(await wb.xlsx.writeBuffer());
 }

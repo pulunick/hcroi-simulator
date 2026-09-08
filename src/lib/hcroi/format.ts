@@ -1,4 +1,5 @@
 /** 숫자 표기 유틸 — 모든 결과 표시는 단위(원, %, 명)를 명시한다. */
+import { HEADCOUNT_LABELS, HEADCOUNT_OPTIONAL_KEYS, type HeadcountBasis } from './types';
 
 const nf0 = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 0 });
 const nf1 = new Intl.NumberFormat('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -124,6 +125,18 @@ export function formatSigned(v: number | null | undefined, fmt: (n: number) => s
 	if (!isFiniteNumber(v)) return '—';
 	if (v === 0) return `±${fmt(0)}`;
 	return `${v > 0 ? '+' : '-'}${fmt(Math.abs(v))}`;
+}
+
+/**
+ * 임직원 수 산정 기준 한 줄 표기.
+ *  → "기간 평균(FTE) · 정규직만" / "기말 인원 · 정규직+계약직·기간제"
+ */
+export function headcountBasisLabel(basis: HeadcountBasis): string {
+	const method = basis.method === 'average' ? '기간 평균(FTE)' : '기말 인원';
+	const extra = HEADCOUNT_OPTIONAL_KEYS.filter((k) => basis.include[k]).map(
+		(k) => HEADCOUNT_LABELS[k]
+	);
+	return `${method} · ${extra.length ? `정규직+${extra.join('+')}` : '정규직만'}`;
 }
 
 /** 인원 표기: 123 → "123명" */

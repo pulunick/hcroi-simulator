@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { REFERENCE_DEFAULTS } from '$lib/hcroi/defaults';
 	import { HC_COST_KEYS, HC_COST_LABELS } from '$lib/hcroi/types';
-	import { formatAmount } from '$lib/hcroi/format';
+	import { formatAmount, headcountBasisLabel } from '$lib/hcroi/format';
 	import { workspace } from '$lib/state/workspace.svelte';
 
 	/** 금액 표기 — 작업공간의 표시 단위 설정을 따른다 (저장값은 언제나 원 단위 정수) */
 	const won = (v: number | null | undefined, suffix = '원') =>
 		formatAmount(v, workspace.amountUnit, suffix);
+	const basisLabel = $derived(headcountBasisLabel(workspace.headcountBasis));
 </script>
 
 <svelte:head><title>산식·가이드 — HCROI</title></svelte:head>
@@ -47,7 +48,16 @@
 				</dd>
 			</div>
 			<div>
-				<dt class="font-semibold text-ink">4. 총 인건비 (Total Human Capital Cost)</dt>
+				<dt class="font-semibold text-ink">4. 총 임직원 수 (기준 명시)</dt>
+				<dd class="mt-1 text-sm text-ink-2">
+					현재 기준 <strong class="text-ink">{basisLabel}</strong>. 인당 지표(HCVA·인당 매출·인당
+					인건비)는 모두 이 기준의 인원으로 나눈 값입니다. 기준은 데이터 관리 화면에서 바꿉니다 —
+					계약직·기간제, 파견·도급(소속 외), 등기임원을 총원에 넣을지 고를 수 있고, 인원 구분을
+					입력한 연도의 총원이 이 설정으로 다시 계산됩니다.
+				</dd>
+			</div>
+			<div>
+				<dt class="font-semibold text-ink">5. 총 인건비 (Total Human Capital Cost)</dt>
 				<dd class="mt-1 rounded-md bg-surface-2 px-3 py-2 font-mono text-sm break-keep text-ink-2">
 					기본급 + 성과급/수당 + 퇴직급여 + 법정후생비 + 기타 복리후생비 + 교육훈련비
 				</dd>

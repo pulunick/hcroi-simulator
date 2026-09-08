@@ -1,9 +1,30 @@
-import type { BaseInputs, Diagnosis, HcCostBreakdown, HcroiGrade, Metrics } from './types';
-import { HC_COST_KEYS } from './types';
+import type {
+	BaseInputs,
+	Diagnosis,
+	HcCostBreakdown,
+	HcroiGrade,
+	HeadcountBasis,
+	HeadcountBreakdown,
+	Metrics
+} from './types';
+import { HC_COST_KEYS, HEADCOUNT_OPTIONAL_KEYS } from './types';
 
 /** 총 인건비 = 기본급 + 성과급/수당 + 퇴직급여 + 법정후생비 + 기타 복리후생비 + 교육훈련비 */
 export function sumHcCost(b: HcCostBreakdown): number {
 	return HC_COST_KEYS.reduce((acc, k) => acc + (Number.isFinite(b[k]) ? b[k] : 0), 0);
+}
+
+/**
+ * 총 임직원 수 = 정규직 + 산정 기준에서 포함하기로 한 구분들.
+ * 정규직은 항상 포함하고, 계약직·파견·등기임원은 `basis.include` 를 따른다.
+ * (기간 평균/기말은 입력값의 성격일 뿐 계산에는 영향이 없다 — 표기용 메타데이터)
+ */
+export function sumHeadcount(b: HeadcountBreakdown, basis: HeadcountBasis): number {
+	const n = (v: number) => (Number.isFinite(v) ? v : 0);
+	return HEADCOUNT_OPTIONAL_KEYS.reduce(
+		(acc, k) => acc + (basis.include[k] ? n(b[k]) : 0),
+		n(b.regular)
+	);
 }
 
 function ratio(num: number, den: number): number | null {

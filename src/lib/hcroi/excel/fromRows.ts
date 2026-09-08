@@ -1,6 +1,16 @@
-import { sumHcCost, validateInputs } from '../formulas';
-import { HC_COST_KEYS, type HcCostBreakdown, type YearRecord } from '../types';
+import { sumHcCost, sumHeadcount, validateInputs } from '../formulas';
 import {
+	DEFAULT_HEADCOUNT_BASIS,
+	HC_COST_KEYS,
+	HEADCOUNT_KEYS,
+	HEADCOUNT_OPTIONAL_KEYS,
+	type HcCostBreakdown,
+	type HeadcountBasis,
+	type HeadcountBreakdown,
+	type YearRecord
+} from '../types';
+import {
+	BASIS_SHEET,
 	INPUT_COLUMN_BY_HEADER,
 	INPUT_COLUMNS,
 	INPUT_FIRST_DATA_ROW,
@@ -74,7 +84,11 @@ export function mapHeader(headerCells: unknown[]): {
 	return { index, error: null };
 }
 
-export function parseInputRows(rows: unknown[][]): ParseResult {
+export function parseInputRows(
+	rows: unknown[][],
+	/** 인원 구분 합계를 낼 때 쓸 산정 기준 (파일의 `조직 정보` 시트 값 → 없으면 현재 설정) */
+	basis: HeadcountBasis = DEFAULT_HEADCOUNT_BASIS
+): ParseResult {
 	const headerCells = rows[INPUT_HEADER_ROW - 1] ?? [];
 	const { index, error } = mapHeader(headerCells);
 	if (error) return { records: [], errors: [], headerError: error };
@@ -111,9 +125,33 @@ export function parseInputRows(rows: unknown[][]): ParseResult {
 		if (revenue === null) messages.push('매출액이 비어 있습니다.');
 		else if (Number.isNaN(revenue)) messages.push('매출액을 숫자로 읽을 수 없습니다.');
 
-		const headcount = parseNumber(cell(cells, 'headcount'));
-		if (headcount === null) messages.push('총 임직원 수가 비어 있습니다.');
-		else if (Number.isNaN(headcount)) messages.push('총 임직원 수를 숫자로 읽을 수 없습니다.');
+		// 총 임직원 수 / 인원 구분 4항목
+		const headTotalCell = parseNumber(cell(cells, 'headcount'));
+		if (Number.isNaN(headTotalCell)) messages.push('총 임직원 수를 숫자로 읽을 수 없습니다.');
+		const headParts = HEADCOUNT_KEYS.map((k) => parseNumber(cell(cells, k)));
+		let headcountBreakdown: HeadcountBreakdown | null = null;
+		let headcount: number | null =
+			headTotalCell !== null && !Number.isNaN(headTotalCell) ? headTotalCell : null;
+		if (headParts.some((p) => p !== null)) {
+			if (headParts.some((p) => Number.isNaN(p))) {
+				messages.push('인원 구분 중 숫자로 읽을 수 없는 값이 있습니다.');
+			} else {
+				headcountBreakdown = {} as HeadcountBreakdown;
+				HEADCOUNT_KEYS.forEach((k, i) => (headcountBreakdown![k] = headParts[i] ?? 0));
+				if (headParts.some((p) => p === null))
+					warnings.push('비어 있는 인원 구분은 0으로 처리했습니다.');
+				// 구분을 쓴 연도의 총원은 산정 기준을 적용한 합계가 정답이다 (총원 칸은 참고값)
+				const sum = sumHeadcount(headcountBreakdown, basis);
+				if (headcount !== null && Math.abs(headcount - sum) > 0.5)
+					warnings.push(
+						`총 임직원 수(${headcount.toLocaleString()}명)가 산정 기준을 적용한 인원 구분 합계` +
+							`(${sum.toLocaleString()}명)와 달라 합계를 사용했습니다.`
+					);
+				headcount = sum;
+			}
+		}
+		if (headcount === null)
+			messages.push('총 임직원 수가 비어 있습니다 (인원 구분으로 대신 입력할 수도 있습니다).');
 
 		// 영업비용 or 영업이익
 		const opCost = parseNumber(cell(cells, 'operatingCost'));
@@ -189,7 +227,7 @@ export function parseInputRows(rows: unknown[][]): ParseResult {
 				seenYears.set(year as number, rowNo);
 				records.push({
 					row: rowNo,
-					record: { year: year as number, inputs, breakdown, memo },
+					record: { year: year as number, inputs, breakdown, headcountBreakdown, memo },
 					warnings
 				});
 				continue;
@@ -267,4 +305,39 @@ export function parseOrgName(rows: unknown[][] | null): string | null {
 			.slice(0, ORG_NAME_MAX);
 	}
 	return null;
+}
+
+/**
+ * 시트 ⑤ `조직 정보` → 임직원 수 산정 기준 (순수 함수).
+ * 기준 행이 하나도 없으면 `null` — 옛 파일이므로 현재 설정을 그대로 둔다.
+ */
+export function parseHeadcountBasis(rows: unknown[][] | null): HeadcountBasis | null {
+	if (!rows) return null;
+	const find = (label: string): string | null => {
+		const want = normalizeHeader(label);
+		for (const cells of rows.slice(0, ORG_SHEET.scanRows)) {
+			const i = (cells ?? []).findIndex((c) => normalizeHeader(c) === want);
+			if (i < 0) continue;
+			const raw = cells.slice(i + 1).find((c) => c !== null && c !== undefined && String(c).trim());
+			return raw === undefined ? '' : String(raw).trim();
+		}
+		return null;
+	};
+
+	const basis: HeadcountBasis = structuredClone(DEFAULT_HEADCOUNT_BASIS);
+	let found = false;
+
+	const method = find(BASIS_SHEET.method.label);
+	if (method !== null) {
+		found = true;
+		if (normalizeHeader(method) === normalizeHeader(BASIS_SHEET.method.periodEnd))
+			basis.method = 'periodEnd';
+	}
+	for (const k of HEADCOUNT_OPTIONAL_KEYS) {
+		const v = find(BASIS_SHEET.include[k]);
+		if (v === null) continue;
+		found = true;
+		basis.include[k] = normalizeHeader(v) === normalizeHeader(BASIS_SHEET.yes);
+	}
+	return found ? basis : null;
 }

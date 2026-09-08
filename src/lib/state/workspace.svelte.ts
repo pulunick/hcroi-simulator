@@ -1,8 +1,16 @@
 import { browser } from '$app/environment';
 import { sampleYears } from '$lib/hcroi/defaults';
 import { DEFAULT_SCENARIO_PARAMS } from '$lib/hcroi/scenario';
-import type { HcCostBreakdown, Scenario, ScenarioParams, YearRecord } from '$lib/hcroi/types';
-import { sumHcCost } from '$lib/hcroi/formulas';
+import type {
+	HcCostBreakdown,
+	HeadcountBasis,
+	HeadcountBreakdown,
+	Scenario,
+	ScenarioParams,
+	YearRecord
+} from '$lib/hcroi/types';
+import { DEFAULT_HEADCOUNT_BASIS } from '$lib/hcroi/types';
+import { sumHcCost, sumHeadcount } from '$lib/hcroi/formulas';
 import { DEFAULT_AMOUNT_UNIT, isAmountUnit, type AmountUnit } from '$lib/hcroi/format';
 
 /**
@@ -22,6 +30,8 @@ interface Persisted {
 	orgName?: string;
 	/** 금액 표시 단위 (선택). 저장값은 언제나 원 단위 정수 — 이건 보기 설정일 뿐이다 */
 	amountUnit?: AmountUnit;
+	/** 임직원 수 산정 기준 (선택). 없으면 기본값(기간 평균 · 정규직만) */
+	headcountBasis?: HeadcountBasis;
 }
 
 export function newId(): string {
@@ -55,6 +65,20 @@ function defaultScenarios(): Scenario[] {
 	];
 }
 
+/** 저장값의 산정 기준을 안전하게 읽는다 (없거나 손상되면 기본값) */
+function normalizeBasis(v: unknown): HeadcountBasis {
+	const d = structuredClone(DEFAULT_HEADCOUNT_BASIS);
+	if (!v || typeof v !== 'object') return d;
+	const o = v as Partial<HeadcountBasis>;
+	if (o.method === 'average' || o.method === 'periodEnd') d.method = o.method;
+	if (o.include && typeof o.include === 'object') {
+		for (const k of ['contract', 'dispatched', 'executive'] as const) {
+			if (typeof o.include[k] === 'boolean') d.include[k] = o.include[k];
+		}
+	}
+	return d;
+}
+
 function isPersisted(v: unknown): v is Persisted {
 	if (!v || typeof v !== 'object') return false;
 	const o = v as Record<string, unknown>;
@@ -69,6 +93,11 @@ class Workspace {
 	orgName = $state('');
 	/** 화면·표에 금액을 어떤 단위로 보여줄지. 계산·저장에는 영향이 없다 */
 	amountUnit = $state<AmountUnit>(DEFAULT_AMOUNT_UNIT);
+	/**
+	 * 임직원 수 산정 기준. 연도마다 다르면 추이 비교가 무의미해지므로 작업공간 단위로 둔다.
+	 * 인원 세부 구성을 입력한 연도는 이 설정에 따라 총 임직원 수가 다시 계산된다.
+	 */
+	headcountBasis = $state<HeadcountBasis>(structuredClone(DEFAULT_HEADCOUNT_BASIS));
 	/** localStorage 로드 완료 여부 — 로드 전에는 저장하지 않는다 */
 	loaded = $state(false);
 	/** 되돌릴 수 있는 가져오기 스냅샷이 있는지 */
@@ -92,6 +121,7 @@ class Workspace {
 					this.amountUnit = isAmountUnit(parsed.amountUnit)
 						? parsed.amountUnit
 						: DEFAULT_AMOUNT_UNIT;
+					this.headcountBasis = normalizeBasis(parsed.headcountBasis);
 				}
 			}
 		} catch {
@@ -112,7 +142,8 @@ class Workspace {
 			scenarios: $state.snapshot(this.scenarios),
 			baseYearId: this.baseYearId,
 			orgName: this.orgName,
-			amountUnit: this.amountUnit
+			amountUnit: this.amountUnit,
+			headcountBasis: $state.snapshot(this.headcountBasis)
 		};
 		try {
 			localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -160,6 +191,22 @@ class Workspace {
 		if (!y) return;
 		y.breakdown = breakdown;
 		if (breakdown) y.inputs.hcCost = sumHcCost(breakdown);
+	}
+
+	setHeadcountBreakdown(id: string, breakdown: HeadcountBreakdown | null) {
+		const y = this.getYear(id);
+		if (!y) return;
+		y.headcountBreakdown = breakdown;
+		if (breakdown) y.inputs.headcount = sumHeadcount(breakdown, this.headcountBasis);
+	}
+
+	/** 산정 기준이 바뀌면 세부 구성을 입력한 연도의 총 임직원 수를 다시 계산한다 */
+	applyHeadcountBasis() {
+		for (const y of this.years) {
+			if (y.headcountBreakdown) {
+				y.inputs.headcount = sumHeadcount(y.headcountBreakdown, this.headcountBasis);
+			}
+		}
 	}
 
 	hasYear(year: number): boolean {
@@ -218,7 +265,8 @@ class Workspace {
 			scenarios: $state.snapshot(this.scenarios),
 			baseYearId: this.baseYearId,
 			orgName: this.orgName,
-			amountUnit: this.amountUnit
+			amountUnit: this.amountUnit,
+			headcountBasis: $state.snapshot(this.headcountBasis)
 		};
 		return JSON.stringify(data, null, 2);
 	}
@@ -233,6 +281,7 @@ class Workspace {
 			this.baseYearId = parsed.baseYearId ?? null;
 			this.orgName = typeof parsed.orgName === 'string' ? parsed.orgName : '';
 			if (isAmountUnit(parsed.amountUnit)) this.amountUnit = parsed.amountUnit;
+			this.headcountBasis = normalizeBasis(parsed.headcountBasis);
 			return null;
 		} catch (e) {
 			return `JSON 파싱 실패: ${(e as Error).message}`;

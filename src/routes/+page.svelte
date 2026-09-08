@@ -6,6 +6,7 @@
 	import {
 		amountUnitLabel,
 		formatHeadcount,
+		headcountBasisLabel,
 		formatAmount,
 		formatAmountBare,
 		formatKrwCompact,
@@ -25,6 +26,8 @@
 	const won = (v: number | null | undefined, suffix = '원') =>
 		formatAmount(v, workspace.amountUnit, suffix);
 
+	/** 임직원 수 산정 기준 한 줄 표기 — 인원 관련 입력·지표에 함께 붙인다 */
+	const basisLabel = $derived(headcountBasisLabel(workspace.headcountBasis));
 	/** 표 칸용 금액 — 고정 단위를 고르면 단위는 열 머리글이 밝히고 칸에는 숫자만 둔다 */
 	const cellWon = (v: number | null | undefined) =>
 		workspace.amountUnit === 'auto' ? won(v) : formatAmountBare(v, workspace.amountUnit);
@@ -236,7 +239,16 @@
 						? '세부 내역 합계 (데이터 관리에서 수정)'
 						: '기본급+성과급/수당+퇴직급여+법정후생비+기타 복리후생비+교육훈련비'}
 				/>
-				<NumberField label="총 임직원 수" bind:value={year.inputs.headcount} unit="명" min={1} />
+				<NumberField
+					label="총 임직원 수"
+					bind:value={year.inputs.headcount}
+					unit="명"
+					min={1}
+					readonly={!!year.headcountBreakdown}
+					help={year.headcountBreakdown
+						? `인원 구분 합계 · ${basisLabel} (데이터 관리에서 수정)`
+						: basisLabel}
+				/>
 			</div>
 			{#if errors.length}
 				<ul

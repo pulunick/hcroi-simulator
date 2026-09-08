@@ -3,16 +3,31 @@
 	import {
 		mergeYears,
 		parseInputRows,
+		parseHeadcountBasis,
 		parseOrgName,
 		type ParseResult
 	} from '$lib/hcroi/excel/fromRows';
-	import { computeMetrics, gradeOf, sumHcCost, validateInputs } from '$lib/hcroi/formulas';
+	import {
+		computeMetrics,
+		gradeOf,
+		sumHcCost,
+		sumHeadcount,
+		validateInputs
+	} from '$lib/hcroi/formulas';
 	import { estimateFromRevenue, splitHcCost, REFERENCE_DEFAULTS } from '$lib/hcroi/defaults';
-	import { HC_COST_KEYS, HC_COST_LABELS } from '$lib/hcroi/types';
+	import {
+		HC_COST_KEYS,
+		HC_COST_LABELS,
+		HEADCOUNT_KEYS,
+		HEADCOUNT_LABELS,
+		HEADCOUNT_OPTIONAL_KEYS,
+		type HeadcountBasis
+	} from '$lib/hcroi/types';
 	import {
 		AMOUNT_UNITS,
 		amountUnitLabel,
 		formatAmount,
+		headcountBasisLabel,
 		formatAmountBare,
 		formatHeadcount,
 		formatMultiple,
@@ -92,6 +107,34 @@
 		if (selected) workspace.setBreakdown(selected.id, splitHcCost(selected.inputs.hcCost));
 	}
 
+	// --- 임직원 수 산정 기준 ---
+	const basisLabel = $derived(headcountBasisLabel(workspace.headcountBasis));
+	/** 인원 구분을 입력한 연도는 산정 기준에 따라 총원이 정해진다 */
+	const headcountSum = $derived(
+		selected?.headcountBreakdown
+			? sumHeadcount(selected.headcountBreakdown, workspace.headcountBasis)
+			: null
+	);
+	/** 세부 값을 고치면 총 임직원 수를 다시 맞춘다 (기준 변경은 applyBasis 가 전 연도에 반영) */
+	$effect(() => {
+		if (selected && headcountSum !== null && selected.inputs.headcount !== headcountSum) {
+			selected.inputs.headcount = headcountSum;
+		}
+	});
+	function toggleHeadcountBreakdown() {
+		if (!selected) return;
+		workspace.setHeadcountBreakdown(
+			selected.id,
+			selected.headcountBreakdown
+				? null
+				: // 총원을 전부 정규직으로 놓고 시작한다 (나머지는 사용자가 나눠 적는다)
+					{ regular: selected.inputs.headcount, contract: 0, dispatched: 0, executive: 0 }
+		);
+	}
+	function applyBasis() {
+		workspace.applyHeadcountBasis();
+	}
+
 	// 가져오기 / 내보내기
 	let fileInput = $state<HTMLInputElement | null>(null);
 	let ioMessage = $state<string | null>(null);
@@ -119,11 +162,15 @@
 		result: ParseResult;
 		/** 파일의 `조직 정보` 시트에서 읽은 회사명. 시트가 없으면 null */
 		orgName: string | null;
+		/** 파일이 나른 임직원 수 산정 기준. 기준 행이 없는 옛 파일이면 null */
+		basis: HeadcountBasis | null;
 	} | null>(null);
 	let overwrite = $state(true);
 	let skipErrors = $state(false);
 	/** 미리보기에서 "제목도 바꾸기" 체크 여부 (파일 조직명이 현재와 다를 때만 노출) */
 	let applyOrgName = $state(true);
+	/** 미리보기에서 "산정 기준도 파일 기준으로" 체크 여부 (파일 기준이 현재와 다를 때만 노출) */
+	let applyBasisFromFile = $state(true);
 	const today = () => new Date().toISOString().slice(0, 10);
 
 	async function exportExcel() {
@@ -134,7 +181,8 @@
 				years: $state.snapshot(workspace.years),
 				scenarios: $state.snapshot(workspace.scenarios),
 				baseYear: workspace.baseYear ? $state.snapshot(workspace.baseYear) : null,
-				orgName: workspace.orgName
+				orgName: workspace.orgName,
+				headcountBasis: $state.snapshot(workspace.headcountBasis)
 			});
 			const org = workspace.orgName.trim().replace(/[\\/:*?"<>|\s]+/g, '-');
 			const fname = `hcroi-${org ? org + '-' : ''}${today()}.xlsx`;
@@ -169,10 +217,14 @@
 			const { readWorkbook } = await import('$lib/hcroi/excel/io');
 			const read = await readWorkbook(await file.arrayBuffer());
 			applyOrgName = true;
+			applyBasisFromFile = true;
+			// 인원 구분 합계는 산정 기준에 따라 달라지므로 파일이 나른 기준을 우선 적용해 파싱한다
+			const fileBasis = parseHeadcountBasis(read.org);
 			preview = {
 				fileName: file.name,
-				result: parseInputRows(read.input),
-				orgName: parseOrgName(read.org)
+				result: parseInputRows(read.input, fileBasis ?? $state.snapshot(workspace.headcountBasis)),
+				orgName: parseOrgName(read.org),
+				basis: fileBasis
 			};
 		} catch (err) {
 			ioMessage = `엑셀 파일을 읽지 못했습니다: ${(err as Error).message}`;
@@ -209,6 +261,13 @@
 		];
 		return rows.sort((a, b) => a.row - b.row);
 	});
+	/** 파일 산정 기준이 현재 설정과 달라 물어볼 필요가 있을 때만 값을 갖는다 */
+	const basisChange = $derived.by(() => {
+		if (!preview?.basis) return null;
+		const now = headcountBasisLabel(workspace.headcountBasis);
+		const file = headcountBasisLabel(preview.basis);
+		return file === now ? null : file;
+	});
 	/** 파일 조직명이 현재 제목과 달라 물어볼 필요가 있을 때만 값을 갖는다 */
 	const orgNameChange = $derived(
 		preview && preview.orgName !== null && preview.orgName !== workspace.orgName.trim()
@@ -233,6 +292,10 @@
 		if (orgNameChange !== null && applyOrgName) {
 			workspace.orgName = orgNameChange;
 			parts.push(orgNameChange ? `제목 "${orgNameChange}"` : '제목 기본값으로');
+		}
+		if (basisChange !== null && applyBasisFromFile && preview.basis) {
+			workspace.headcountBasis = preview.basis;
+			parts.push(`인원 산정 기준 "${basisChange}"`);
 		}
 		if (r.skipped) parts.push(`${r.skipped}개 건너뜀(기존 연도 유지)`);
 		if (preview.result.errors.length) parts.push(`오류 ${preview.result.errors.length}행 제외`);
@@ -270,7 +333,8 @@
 	<div>
 		<h1 class="text-2xl font-bold text-ink">데이터 관리</h1>
 		<p class="mt-1 text-[15px] text-ink-2">
-			연도별 재무·HR 데이터를 입력합니다. 총 인건비는 6개 항목의 세부 내역으로도 관리할 수 있습니다.
+			연도별 재무·HR 데이터를 입력합니다. 총 인건비는 6개 항목으로, 임직원 수는 4개 구분으로 나눠
+			관리할 수 있습니다.
 		</p>
 		<label class="mt-3 flex flex-wrap items-center gap-2 text-sm text-ink-2">
 			<span class="font-medium text-ink">금액 표시 단위</span>
@@ -281,6 +345,29 @@
 			</select>
 			<span class="text-muted">화면 표기만 바뀝니다 — 입력·저장·엑셀은 원 단위 그대로입니다.</span>
 		</label>
+		<div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-ink-2">
+			<span class="font-medium text-ink">임직원 수 산정 기준</span>
+			<select
+				class="field-input w-auto py-1 text-sm"
+				bind:value={workspace.headcountBasis.method}
+				onchange={applyBasis}
+			>
+				<option value="average">기간 평균(FTE)</option>
+				<option value="periodEnd">기말 인원</option>
+			</select>
+			{#each HEADCOUNT_OPTIONAL_KEYS as k (k)}
+				<label class="flex items-center gap-1.5 whitespace-nowrap">
+					<input
+						type="checkbox"
+						class="rounded border-line-2 text-brand focus:ring-brand/30"
+						bind:checked={workspace.headcountBasis.include[k]}
+						onchange={applyBasis}
+					/>
+					{HEADCOUNT_LABELS[k]} 포함
+				</label>
+			{/each}
+			<span class="text-muted">인원 구분을 입력한 연도만 합계가 다시 계산됩니다.</span>
+		</div>
 	</div>
 	<div class="flex flex-wrap items-center gap-2">
 		<button type="button" class="btn btn-primary" onclick={exportExcel} disabled={busy}
@@ -371,6 +458,16 @@
 							bind:checked={skipErrors}
 						/>
 						오류 행 건너뛰고 반영
+					</label>
+				{/if}
+				{#if basisChange !== null}
+					<label class="flex items-center gap-2 text-sm text-ink-2">
+						<input
+							type="checkbox"
+							class="rounded border-line-2 text-brand"
+							bind:checked={applyBasisFromFile}
+						/>
+						<span class="whitespace-nowrap">임직원 수 산정 기준도 "{basisChange}" 으로</span>
 					</label>
 				{/if}
 				{#if orgNameChange !== null}
@@ -609,12 +706,58 @@
 					min={0}
 					help="영업이익 = {won(selected.inputs.revenue - selected.inputs.operatingCost)}"
 				/>
-				<NumberField
-					label="총 임직원 수"
-					bind:value={selected.inputs.headcount}
-					unit="명"
-					min={1}
-				/>
+				<div class="rounded-lg border border-line bg-surface-2 p-4">
+					<div class="mb-3 flex items-center justify-between gap-3">
+						<h3 class="text-sm font-semibold text-ink-2">총 임직원 수</h3>
+						<label class="flex items-center gap-2 text-sm text-ink-2">
+							<input
+								type="checkbox"
+								class="rounded border-line-2 text-brand focus:ring-brand/30"
+								checked={!!selected.headcountBreakdown}
+								onchange={toggleHeadcountBreakdown}
+							/>
+							인원 구분으로 입력
+						</label>
+					</div>
+					{#if selected.headcountBreakdown}
+						<div class="grid gap-3 sm:grid-cols-2">
+							{#each HEADCOUNT_KEYS as k (k)}
+								<NumberField
+									label={HEADCOUNT_LABELS[k] + (k === 'regular' ? ' (항상 포함)' : '')}
+									bind:value={selected.headcountBreakdown[k]}
+									unit="명"
+									min={0}
+									help={k === 'regular' || workspace.headcountBasis.include[k]
+										? undefined
+										: '지금 기준에서는 총원에 넣지 않습니다'}
+								/>
+							{/each}
+						</div>
+						<div class="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3 text-sm">
+							<span class="text-ink-2">총 임직원 수</span>
+							<strong class="tabular text-ink">{formatHeadcount(selected.inputs.headcount)}</strong>
+							<span class="text-muted">· {basisLabel}</span>
+						</div>
+						{#if workspace.headcountBasis.include.dispatched && selected.headcountBreakdown.dispatched > 0}
+							<p class="mt-2 text-xs text-status-warning-ink">
+								파견·도급 인원은 인건비가 아니라 지급수수료로 잡히는 경우가 많습니다. 총원에만
+								더하면 인당 지표(HCVA·인당 인건비)가 실제보다 낮게 나옵니다.
+							</p>
+						{/if}
+						<p class="mt-2 text-xs text-muted">
+							총원은 위 구분 중 <strong>산정 기준에서 포함하기로 한 것</strong>만 더해 자동으로
+							계산됩니다. 기준은 화면 위쪽에서 바꿉니다.
+						</p>
+					{:else}
+						<NumberField
+							label="총 임직원 수"
+							bind:value={selected.inputs.headcount}
+							unit="명"
+							min={1}
+							help={basisLabel}
+						/>
+					{/if}
+				</div>
 
 				<div class="rounded-lg border border-line bg-surface-2 p-4">
 					<div class="mb-3 flex items-center justify-between gap-3">

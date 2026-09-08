@@ -3,10 +3,18 @@ import { sampleYears } from '../defaults';
 import { computeMetrics } from '../formulas';
 import { compareScenarios } from '../scenario';
 import { DEFAULT_SCENARIO_PARAMS } from '../scenario';
-import { ORG_NAME_MAX, mergeYears, parseInputRows, parseNumber, parseOrgName } from './fromRows';
+import {
+	ORG_NAME_MAX,
+	mergeYears,
+	parseHeadcountBasis,
+	parseInputRows,
+	parseNumber,
+	parseOrgName
+} from './fromRows';
 import { buildTemplateBuffer, buildWorkbookBuffer, readInputSheet, readWorkbook } from './io';
-import { INPUT_COLUMNS, ORG_SHEET, headerText } from './schema';
+import { BASIS_SHEET, INPUT_COLUMNS, ORG_SHEET, headerText } from './schema';
 import { inputRows, scenarioSheet, summaryRows } from './toRows';
+import { DEFAULT_HEADCOUNT_BASIS, type HeadcountBasis } from '../types';
 
 const header = INPUT_COLUMNS.map(headerText);
 const col = (key: string) => INPUT_COLUMNS.findIndex((c) => c.key === key);
@@ -56,6 +64,7 @@ describe('parseInputRows', () => {
 				headcount: 36
 			},
 			breakdown: null,
+			headcountBreakdown: null,
 			memo: '결산'
 		});
 		expect(computeMetrics(rec.inputs).hcroi).toBeCloseTo(1.25, 2);
@@ -159,7 +168,13 @@ describe('toRows ↔ fromRows 왕복', () => {
 		const parsed = parseInputRows(sheet(...rows));
 		expect(parsed.errors).toEqual([]);
 		expect(parsed.records.map((p) => p.record)).toEqual(
-			years.map(({ year, inputs, breakdown, memo }) => ({ year, inputs, breakdown, memo }))
+			years.map(({ year, inputs, breakdown, memo }) => ({
+				year,
+				inputs,
+				breakdown,
+				headcountBreakdown: null,
+				memo
+			}))
 		);
 	});
 
@@ -221,6 +236,75 @@ describe('인건비 세부 항목이 6개 미만인 회사', () => {
 		const p = parseInputRows(sheet(row({ ...fourParts, hcCost: null })));
 		expect(p.errors).toEqual([]);
 		expect(p.records[0].record.inputs.hcCost).toBe(3_010_000_000);
+	});
+});
+
+describe('인원 구분 · 임직원 수 산정 기준', () => {
+	const base = {
+		year: 2025,
+		revenue: 14_100_000_000,
+		operatingCost: 13_254_000_000,
+		hcCost: 3_384_000_000
+	};
+	const parts = { regular: 30, contract: 4, dispatched: 3, executive: 2 };
+	const basis = (patch: Partial<HeadcountBasis['include']> = {}): HeadcountBasis => ({
+		method: 'average',
+		include: { ...DEFAULT_HEADCOUNT_BASIS.include, ...patch }
+	});
+
+	it('총원을 비워도 인원 구분 합계로 채운다 (기본: 정규직만)', () => {
+		const p = parseInputRows(sheet(row({ ...base, ...parts })), DEFAULT_HEADCOUNT_BASIS);
+		expect(p.errors).toEqual([]);
+		expect(p.records[0].record.inputs.headcount).toBe(30);
+		expect(p.records[0].record.headcountBreakdown).toEqual(parts);
+	});
+
+	it('포함 기준을 켜면 합계가 달라진다', () => {
+		const p = parseInputRows(sheet(row({ ...base, ...parts })), basis({ contract: true }));
+		expect(p.records[0].record.inputs.headcount).toBe(34);
+	});
+
+	it('총원 칸이 구분 합계와 다르면 합계를 쓰고 경고한다', () => {
+		const p = parseInputRows(
+			sheet(row({ ...base, ...parts, headcount: 39 })),
+			DEFAULT_HEADCOUNT_BASIS
+		);
+		expect(p.errors).toEqual([]);
+		expect(p.records[0].record.inputs.headcount).toBe(30);
+		expect(p.records[0].warnings.join(' ')).toMatch(/인원 구분 합계/);
+	});
+
+	it('인원 구분이 없으면 종전대로 총원 칸을 쓴다', () => {
+		const p = parseInputRows(sheet(row({ ...base, headcount: 36 })));
+		expect(p.records[0].record.inputs.headcount).toBe(36);
+		expect(p.records[0].record.headcountBreakdown).toBeNull();
+	});
+
+	it('총원도 인원 구분도 없으면 오류', () => {
+		const p = parseInputRows(sheet(row(base)));
+		expect(p.records).toEqual([]);
+		expect(p.errors[0].messages.join(' ')).toMatch(/총 임직원 수가 비어 있습니다/);
+	});
+
+	it('조직 정보 시트에서 산정 기준을 읽는다', () => {
+		const rows = [
+			[ORG_SHEET.label, '가나다'],
+			[],
+			[],
+			[BASIS_SHEET.method.label, BASIS_SHEET.method.periodEnd],
+			[BASIS_SHEET.include.contract, BASIS_SHEET.yes],
+			[BASIS_SHEET.include.dispatched, BASIS_SHEET.no],
+			[BASIS_SHEET.include.executive, BASIS_SHEET.yes]
+		];
+		expect(parseHeadcountBasis(rows)).toEqual({
+			method: 'periodEnd',
+			include: { contract: true, dispatched: false, executive: true }
+		});
+	});
+
+	it('기준 행이 없는 옛 파일은 null (현재 설정을 건드리지 않는다)', () => {
+		expect(parseHeadcountBasis(null)).toBeNull();
+		expect(parseHeadcountBasis([[ORG_SHEET.label, '가나다']])).toBeNull();
 	});
 });
 
@@ -314,6 +398,47 @@ describe('exceljs 입출력 (node)', { timeout: 30_000 }, () => {
 		const tpl = await readWorkbook(await buildTemplateBuffer({ withSample: true }));
 		expect(tpl.org).not.toBeNull();
 		expect(parseOrgName(tpl.org)).toBe('');
+	});
+
+	it('인원 구분과 산정 기준이 파일로 왕복된다', async () => {
+		const years = sampleYears().map((y) => ({
+			...y,
+			headcountBreakdown: {
+				regular: y.inputs.headcount - 6,
+				contract: 4,
+				dispatched: 0,
+				executive: 2
+			}
+		}));
+		const basis: HeadcountBasis = {
+			method: 'periodEnd',
+			include: { contract: true, dispatched: false, executive: false }
+		};
+		// 총 임직원 수는 기준을 적용한 합계와 맞춰 둔다 (정규직 + 계약직)
+		for (const y of years) y.inputs.headcount = y.headcountBreakdown.regular + 4;
+
+		const read = await readWorkbook(
+			await buildWorkbookBuffer({
+				years,
+				scenarios: [],
+				baseYear: null,
+				orgName: '가나다 주식회사',
+				headcountBasis: basis
+			})
+		);
+		expect(parseHeadcountBasis(read.org)).toEqual(basis);
+
+		const parsed = parseInputRows(read.input, parseHeadcountBasis(read.org) ?? undefined);
+		expect(parsed.errors).toEqual([]);
+		expect(parsed.records.map((p) => p.record.headcountBreakdown)).toEqual(
+			years.map((y) => y.headcountBreakdown)
+		);
+		expect(parsed.records.map((p) => p.record.inputs.headcount)).toEqual(
+			years.map((y) => y.inputs.headcount)
+		);
+		// 기준이 바뀌면 같은 파일에서도 총원이 달라진다 (그래서 기준을 파일에 싣는다)
+		const asDefault = parseInputRows(read.input, DEFAULT_HEADCOUNT_BASIS);
+		expect(asDefault.records[0].record.inputs.headcount).toBe(years[0].headcountBreakdown.regular);
 	});
 
 	it('템플릿(샘플 포함/빈)도 같은 헤더로 읽힌다', async () => {

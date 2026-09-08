@@ -1,6 +1,6 @@
 import { computeMetrics, GRADE_LABEL, gradeOf } from '../formulas';
 import type { Comparison } from '../scenario';
-import { HC_COST_KEYS, type Metrics, type YearRecord } from '../types';
+import { HC_COST_KEYS, HEADCOUNT_KEYS, type Metrics, type YearRecord } from '../types';
 import { NUM_FMT, type InputColumnKey } from './schema';
 
 /**
@@ -29,9 +29,14 @@ export function inputRows(years: YearRecord[]): InputRow[] {
 				statutoryWelfare: null,
 				otherWelfare: null,
 				training: null,
+				regular: null,
+				contract: null,
+				dispatched: null,
+				executive: null,
 				memo: y.memo ?? null
 			};
 			if (y.breakdown) for (const k of HC_COST_KEYS) row[k] = y.breakdown[k];
+			if (y.headcountBreakdown) for (const k of HEADCOUNT_KEYS) row[k] = y.headcountBreakdown[k];
 			return row;
 		});
 }
