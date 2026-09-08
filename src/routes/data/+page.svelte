@@ -9,9 +9,29 @@
 	import { computeMetrics, gradeOf, sumHcCost, validateInputs } from '$lib/hcroi/formulas';
 	import { estimateFromRevenue, splitHcCost, REFERENCE_DEFAULTS } from '$lib/hcroi/defaults';
 	import { HC_COST_KEYS, HC_COST_LABELS } from '$lib/hcroi/types';
-	import { formatHeadcount, formatKrwCompact, formatMultiple, formatWon } from '$lib/hcroi/format';
+	import {
+		AMOUNT_UNITS,
+		amountUnitLabel,
+		formatAmount,
+		formatAmountBare,
+		formatHeadcount,
+		formatMultiple,
+		formatWon
+	} from '$lib/hcroi/format';
 	import NumberField from '$lib/components/ui/NumberField.svelte';
 	import GradeBadge from '$lib/components/ui/GradeBadge.svelte';
+
+	/** 금액 표기 — 작업공간의 표시 단위 설정을 따른다 (저장값은 언제나 원 단위 정수) */
+	const won = (v: number | null | undefined, suffix = '원') =>
+		formatAmount(v, workspace.amountUnit, suffix);
+
+	/** 표 칸용 금액 — 고정 단위를 고르면 단위는 열 머리글이 밝히고 칸에는 숫자만 둔다 */
+	const cellWon = (v: number | null | undefined) =>
+		workspace.amountUnit === 'auto' ? won(v) : formatAmountBare(v, workspace.amountUnit);
+	/** 열 머리글에 붙일 단위 — 자동 축약일 때는 붙이지 않는다 */
+	const colUnit = $derived(
+		workspace.amountUnit === 'auto' ? '' : ` (${amountUnitLabel(workspace.amountUnit)})`
+	);
 
 	let selectedId = $state<string | null>(null);
 	const selected = $derived(
@@ -252,6 +272,15 @@
 		<p class="mt-1 text-[15px] text-ink-2">
 			연도별 재무·HR 데이터를 입력합니다. 총 인건비는 6개 항목의 세부 내역으로도 관리할 수 있습니다.
 		</p>
+		<label class="mt-3 flex flex-wrap items-center gap-2 text-sm text-ink-2">
+			<span class="font-medium text-ink">금액 표시 단위</span>
+			<select class="field-input w-auto py-1 text-sm" bind:value={workspace.amountUnit}>
+				{#each AMOUNT_UNITS as u (u.key)}
+					<option value={u.key}>{u.label}</option>
+				{/each}
+			</select>
+			<span class="text-muted">화면 표기만 바뀝니다 — 입력·저장·엑셀은 원 단위 그대로입니다.</span>
+		</label>
 	</div>
 	<div class="flex flex-wrap items-center gap-2">
 		<button type="button" class="btn btn-primary" onclick={exportExcel} disabled={busy}
@@ -376,9 +405,9 @@
 							<th scope="col" class="px-3 py-2 text-center font-semibold">행</th>
 							<th scope="col" class="px-3 py-2 text-center font-semibold">연도</th>
 							<th scope="col" class="px-3 py-2 text-center font-semibold">상태</th>
-							<th scope="col" class="px-3 py-2 text-center font-semibold">매출액</th>
-							<th scope="col" class="px-3 py-2 text-center font-semibold">영업이익</th>
-							<th scope="col" class="px-3 py-2 text-center font-semibold">총 인건비</th>
+							<th scope="col" class="px-3 py-2 text-center font-semibold">매출액{colUnit}</th>
+							<th scope="col" class="px-3 py-2 text-center font-semibold">영업이익{colUnit}</th>
+							<th scope="col" class="px-3 py-2 text-center font-semibold">총 인건비{colUnit}</th>
 							<th scope="col" class="px-3 py-2 text-center font-semibold">인원</th>
 							<th scope="col" class="px-3 py-2 text-center font-semibold">비고</th>
 						</tr>
@@ -404,15 +433,12 @@
 									>
 								</td>
 								<td class="tabular px-3 py-2 text-right"
-									>{r.inputs ? formatKrwCompact(r.inputs.revenue) : '—'}</td
+									>{r.inputs ? won(r.inputs.revenue) : '—'}</td
 								>
 								<td class="tabular px-3 py-2 text-right"
-									>{r.inputs
-										? formatKrwCompact(r.inputs.revenue - r.inputs.operatingCost)
-										: '—'}</td
+									>{r.inputs ? won(r.inputs.revenue - r.inputs.operatingCost) : '—'}</td
 								>
-								<td class="tabular px-3 py-2 text-right"
-									>{r.inputs ? formatKrwCompact(r.inputs.hcCost) : '—'}</td
+								<td class="tabular px-3 py-2 text-right">{r.inputs ? won(r.inputs.hcCost) : '—'}</td
 								>
 								<td class="tabular px-3 py-2 text-right"
 									>{r.inputs ? formatHeadcount(r.inputs.headcount) : '—'}</td
@@ -476,9 +502,9 @@
 				<thead>
 					<tr class="border-y border-line bg-surface-2 text-sm text-ink-2">
 						<th scope="col" class="px-4 py-2 text-center font-semibold">연도</th>
-						<th scope="col" class="px-3 py-2 text-center font-semibold">매출액</th>
-						<th scope="col" class="px-3 py-2 text-center font-semibold">영업이익</th>
-						<th scope="col" class="px-3 py-2 text-center font-semibold">총 인건비</th>
+						<th scope="col" class="px-3 py-2 text-center font-semibold">매출액{colUnit}</th>
+						<th scope="col" class="px-3 py-2 text-center font-semibold">영업이익{colUnit}</th>
+						<th scope="col" class="px-3 py-2 text-center font-semibold">총 인건비{colUnit}</th>
 						<th scope="col" class="px-3 py-2 text-center font-semibold">인원</th>
 						<th scope="col" class="px-3 py-2 text-center font-semibold"
 							><span class="ml-auto block w-36 text-center">HCROI</span></th
@@ -497,7 +523,10 @@
 							aria-selected={selected?.id === y.id}
 							onclick={() => (selectedId = y.id)}
 						>
-							<th scope="row" class="px-4 py-2 text-left align-middle font-semibold text-ink">
+							<th
+								scope="row"
+								class="px-4 py-2 text-left align-middle font-semibold whitespace-nowrap text-ink"
+							>
 								<button
 									type="button"
 									class="underline-offset-2 hover:underline"
@@ -507,15 +536,10 @@
 										class="ml-1 text-xs font-normal whitespace-nowrap text-muted">샘플</span
 									>{/if}
 							</th>
-							<td class="tabular px-3 py-2 text-right align-middle"
-								>{formatKrwCompact(y.inputs.revenue)}</td
+							<td class="tabular px-3 py-2 text-right align-middle">{cellWon(y.inputs.revenue)}</td>
+							<td class="tabular px-3 py-2 text-right align-middle">{cellWon(m.operatingProfit)}</td
 							>
-							<td class="tabular px-3 py-2 text-right align-middle"
-								>{formatKrwCompact(m.operatingProfit)}</td
-							>
-							<td class="tabular px-3 py-2 text-right align-middle"
-								>{formatKrwCompact(y.inputs.hcCost)}</td
-							>
+							<td class="tabular px-3 py-2 text-right align-middle">{cellWon(y.inputs.hcCost)}</td>
 							<td class="tabular px-3 py-2 text-right align-middle"
 								>{formatHeadcount(y.inputs.headcount)}</td
 							>
@@ -583,9 +607,7 @@
 					label="영업비용 (인건비 포함)"
 					bind:value={selected.inputs.operatingCost}
 					min={0}
-					help="영업이익 = {formatKrwCompact(
-						selected.inputs.revenue - selected.inputs.operatingCost
-					)}"
+					help="영업이익 = {won(selected.inputs.revenue - selected.inputs.operatingCost)}"
 				/>
 				<NumberField
 					label="총 임직원 수"

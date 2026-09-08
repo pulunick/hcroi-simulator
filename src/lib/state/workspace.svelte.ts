@@ -3,6 +3,7 @@ import { sampleYears } from '$lib/hcroi/defaults';
 import { DEFAULT_SCENARIO_PARAMS } from '$lib/hcroi/scenario';
 import type { HcCostBreakdown, Scenario, ScenarioParams, YearRecord } from '$lib/hcroi/types';
 import { sumHcCost } from '$lib/hcroi/formulas';
+import { DEFAULT_AMOUNT_UNIT, isAmountUnit, type AmountUnit } from '$lib/hcroi/format';
 
 /**
  * 프로토타입 단계의 작업공간 상태.
@@ -19,6 +20,8 @@ interface Persisted {
 	baseYearId: string | null;
 	/** 대시보드 제목에 붙는 회사/조직 이름 (선택) */
 	orgName?: string;
+	/** 금액 표시 단위 (선택). 저장값은 언제나 원 단위 정수 — 이건 보기 설정일 뿐이다 */
+	amountUnit?: AmountUnit;
 }
 
 export function newId(): string {
@@ -64,6 +67,8 @@ class Workspace {
 	baseYearId = $state<string | null>(null);
 	/** 대시보드 제목 커스터마이징용 회사/조직 이름 (빈 문자열 = 기본 제목) */
 	orgName = $state('');
+	/** 화면·표에 금액을 어떤 단위로 보여줄지. 계산·저장에는 영향이 없다 */
+	amountUnit = $state<AmountUnit>(DEFAULT_AMOUNT_UNIT);
 	/** localStorage 로드 완료 여부 — 로드 전에는 저장하지 않는다 */
 	loaded = $state(false);
 	/** 되돌릴 수 있는 가져오기 스냅샷이 있는지 */
@@ -84,6 +89,9 @@ class Workspace {
 					this.scenarios = parsed.scenarios.length ? parsed.scenarios : defaultScenarios();
 					this.baseYearId = parsed.baseYearId ?? null;
 					this.orgName = typeof parsed.orgName === 'string' ? parsed.orgName : '';
+					this.amountUnit = isAmountUnit(parsed.amountUnit)
+						? parsed.amountUnit
+						: DEFAULT_AMOUNT_UNIT;
 				}
 			}
 		} catch {
@@ -103,7 +111,8 @@ class Workspace {
 			years: $state.snapshot(this.years),
 			scenarios: $state.snapshot(this.scenarios),
 			baseYearId: this.baseYearId,
-			orgName: this.orgName
+			orgName: this.orgName,
+			amountUnit: this.amountUnit
 		};
 		try {
 			localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -208,7 +217,8 @@ class Workspace {
 			years: $state.snapshot(this.years),
 			scenarios: $state.snapshot(this.scenarios),
 			baseYearId: this.baseYearId,
-			orgName: this.orgName
+			orgName: this.orgName,
+			amountUnit: this.amountUnit
 		};
 		return JSON.stringify(data, null, 2);
 	}
@@ -222,6 +232,7 @@ class Workspace {
 			this.scenarios = parsed.scenarios.length ? parsed.scenarios : defaultScenarios();
 			this.baseYearId = parsed.baseYearId ?? null;
 			this.orgName = typeof parsed.orgName === 'string' ? parsed.orgName : '';
+			if (isAmountUnit(parsed.amountUnit)) this.amountUnit = parsed.amountUnit;
 			return null;
 		} catch (e) {
 			return `JSON 파싱 실패: ${(e as Error).message}`;

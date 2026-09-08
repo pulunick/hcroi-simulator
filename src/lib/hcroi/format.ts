@@ -38,6 +38,75 @@ export function formatKrwCompact(v: number | null | undefined, unit = '원'): st
 	return `${sign}${nf0.format(abs)}${unit}`;
 }
 
+/**
+ * 금액 표시 단위 — 저장·계산은 언제나 원 단위 정수이고, 이 값은 **표시에만** 쓴다.
+ * `auto` 는 조/억/만 자동 축약(`formatKrwCompact`), 나머지는 고정 단위로 나눠 표기한다.
+ */
+export type AmountUnit = 'auto' | 'won' | 'thousand' | 'million' | 'billion';
+
+export const AMOUNT_UNITS: {
+	key: AmountUnit;
+	/** 선택 UI 라벨 */
+	label: string;
+	/** 원 → 표시값 나눗수 (auto 는 없음) */
+	divisor?: number;
+	/** 숫자 뒤 자릿수 단위어 ("천", "백만" …). auto 는 값에 따라 달라져 비운다 */
+	word?: string;
+	digits?: 0 | 1;
+}[] = [
+	{ key: 'auto', label: '자동 (억·만 축약)' },
+	{ key: 'won', label: '원', divisor: 1, word: '', digits: 0 },
+	{ key: 'thousand', label: '천원', divisor: 1e3, word: '천', digits: 0 },
+	{ key: 'million', label: '백만원', divisor: 1e6, word: '백만', digits: 0 },
+	{ key: 'billion', label: '억원', divisor: 1e8, word: '억', digits: 1 }
+];
+
+export const DEFAULT_AMOUNT_UNIT: AmountUnit = 'thousand';
+
+export function isAmountUnit(v: unknown): v is AmountUnit {
+	return AMOUNT_UNITS.some((u) => u.key === v);
+}
+
+/**
+ * 선택한 단위로 금액을 표기한다. 원 단위 정수를 받아 표시 문자열만 만든다.
+ *  formatAmount(14_100_000_000, 'thousand') → "14,100,000천원"
+ *  formatAmount(14_100_000_000, 'billion')  → "141.0억원"
+ *  formatAmount(14_100_000_000, 'auto')     → "141.0억원"
+ * `suffix` 를 ''  로 주면 통화어("원")를 뺀다 — 단위를 헤더·축 라벨이 이미 밝힌 경우.
+ */
+export function formatAmount(
+	v: number | null | undefined,
+	unit: AmountUnit = 'auto',
+	suffix = '원'
+): string {
+	if (!isFiniteNumber(v)) return '—';
+	const u = AMOUNT_UNITS.find((x) => x.key === unit);
+	if (!u || u.divisor === undefined) return formatKrwCompact(v, suffix);
+	const scaled = v / u.divisor;
+	const abs = Math.abs(scaled);
+	// 자릿수가 적게 남는 값(인당 지표를 억원으로 보는 경우 등)은 소수를 더 보여
+	// 연도 간 차이가 뭉개지지 않게 한다. 1 미만도 0 으로 잘리지 않는다.
+	const f = u.digits === 0 ? (abs >= 1 ? nf0 : nf2) : abs >= 10 ? nf1 : nf2;
+	return `${f.format(scaled)}${u.word}${suffix}`;
+}
+
+/**
+ * 표 칸용 — 열 머리글이 단위를 이미 밝힌 경우의 숫자만 표기.
+ * 고정 단위는 단위어까지 떼고("14,100,000"), `auto` 는 축약이 곧 단위라 "141.0억" 을 그대로 쓴다.
+ */
+export function formatAmountBare(v: number | null | undefined, unit: AmountUnit = 'auto'): string {
+	if (!isFiniteNumber(v)) return '—';
+	const u = AMOUNT_UNITS.find((x) => x.key === unit);
+	if (!u || u.divisor === undefined) return formatKrwCompact(v, '');
+	return formatAmount(v, unit, '').replace(u.word ?? '', '');
+}
+
+/** 선택한 단위의 표기용 이름: 'thousand' → "천원" */
+export function amountUnitLabel(unit: AmountUnit): string {
+	const u = AMOUNT_UNITS.find((x) => x.key === unit);
+	return u?.divisor === undefined ? '원' : `${u.word}원`;
+}
+
 /** 배수 표기: 1.4321 → "1.43배" */
 export function formatMultiple(v: number | null | undefined): string {
 	return isFiniteNumber(v) ? `${nf2.format(v)}배` : '—';

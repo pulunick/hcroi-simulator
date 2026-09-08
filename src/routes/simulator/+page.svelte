@@ -5,7 +5,10 @@
 	import { scenarioInsights } from '$lib/hcroi/insights';
 	import { gradeOf } from '$lib/hcroi/formulas';
 	import {
+		amountUnitLabel,
 		formatHeadcount,
+		formatAmount,
+		formatAmountBare,
 		formatKrwCompact,
 		formatMultiple,
 		formatPct,
@@ -16,6 +19,17 @@
 	import InsightList from '$lib/components/ui/InsightList.svelte';
 	import BarPanel from '$lib/components/charts/BarPanel.svelte';
 	import Legend from '$lib/components/charts/Legend.svelte';
+
+	/** 금액 표기 — 작업공간의 표시 단위 설정을 따른다 (저장값은 언제나 원 단위 정수) */
+	const won = (v: number | null | undefined, suffix = '원') =>
+		formatAmount(v, workspace.amountUnit, suffix);
+
+	/** 비교표 칸용 — 고정 단위를 고르면 단위는 지표 열이 밝히고 칸에는 숫자만 둔다 */
+	const cellWon = (v: number | null | undefined) =>
+		workspace.amountUnit === 'auto' ? won(v) : formatAmountBare(v, workspace.amountUnit);
+	/** 비교표 지표 열의 단위 표기: '원' · '원/인' 을 고른 표시 단위로 바꾼다 */
+	const rowUnit = (unit: string) =>
+		unit.startsWith('원') ? amountUnitLabel(workspace.amountUnit) + unit.slice(1) : unit;
 
 	const SERIES_COLORS = ['var(--color-series-1)', 'var(--color-series-2)', 'var(--color-series-3)'];
 
@@ -49,21 +63,21 @@
 			label: '총 인건비',
 			unit: '원',
 			pick: (_, i) => i.hcCost,
-			fmt: (v) => formatKrwCompact(v),
+			fmt: (v) => cellWon(v),
 			goodWhenUp: false
 		},
 		{
 			label: '영업이익',
 			unit: '원',
 			pick: (m) => m.operatingProfit,
-			fmt: (v) => formatKrwCompact(v),
+			fmt: (v) => cellWon(v),
 			goodWhenUp: true
 		},
 		{
 			label: '매출액',
 			unit: '원',
 			pick: (_, i) => i.revenue,
-			fmt: (v) => formatKrwCompact(v),
+			fmt: (v) => cellWon(v),
 			goodWhenUp: true
 		},
 		{
@@ -77,21 +91,21 @@
 			label: 'HCVA (인당 부가가치)',
 			unit: '원/인',
 			pick: (m) => m.hcva,
-			fmt: (v) => formatKrwCompact(v),
+			fmt: (v) => cellWon(v),
 			goodWhenUp: true
 		},
 		{
 			label: '인당 매출액',
 			unit: '원/인',
 			pick: (m) => m.revenuePerHead,
-			fmt: (v) => formatKrwCompact(v),
+			fmt: (v) => cellWon(v),
 			goodWhenUp: true
 		},
 		{
 			label: '인당 인건비',
 			unit: '원/인',
 			pick: (m) => m.hcCostPerHead,
-			fmt: (v) => formatKrwCompact(v),
+			fmt: (v) => cellWon(v),
 			goodWhenUp: false
 		},
 		{
@@ -159,19 +173,19 @@
 			</div>
 			<div>
 				<dt class="text-sm text-muted">매출액</dt>
-				<dd class="tabular font-semibold">{formatKrwCompact(base.inputs.revenue)}</dd>
+				<dd class="tabular font-semibold">{won(base.inputs.revenue)}</dd>
 			</div>
 			<div>
 				<dt class="text-sm text-muted">영업이익</dt>
-				<dd class="tabular font-semibold">{formatKrwCompact(b.operatingProfit)}</dd>
+				<dd class="tabular font-semibold">{won(b.operatingProfit)}</dd>
 			</div>
 			<div>
 				<dt class="text-sm text-muted">총 인건비</dt>
-				<dd class="tabular font-semibold">{formatKrwCompact(base.inputs.hcCost)}</dd>
+				<dd class="tabular font-semibold">{won(base.inputs.hcCost)}</dd>
 			</div>
 			<div>
 				<dt class="text-sm text-muted">비인건비 영업비용</dt>
-				<dd class="tabular font-semibold">{formatKrwCompact(b.nonHcCost)}</dd>
+				<dd class="tabular font-semibold">{won(b.nonHcCost)}</dd>
 			</div>
 			<div>
 				<dt class="text-sm text-muted">총 임직원 수</dt>
@@ -269,9 +283,7 @@
 					max={20}
 					step={0.5}
 					unit="%"
-					help="인당 인건비 {formatKrwCompact(b.hcCostPerHead)} → {formatKrwCompact(
-						r.metrics.hcCostPerHead
-					)}"
+					help="인당 인건비 {won(b.hcCostPerHead)} → {won(r.metrics.hcCostPerHead)}"
 				/>
 				<SliderField
 					label="인당 생산성(인당 매출) 변화율"
@@ -280,9 +292,7 @@
 					max={30}
 					step={0.5}
 					unit="%"
-					help="인당 매출 {formatKrwCompact(b.revenuePerHead)} → {formatKrwCompact(
-						r.metrics.revenuePerHead
-					)}"
+					help="인당 매출 {won(b.revenuePerHead)} → {won(r.metrics.revenuePerHead)}"
 				/>
 
 				<details class="rounded-lg border border-line bg-surface-2 px-4 py-2">
@@ -298,7 +308,7 @@
 							step={5}
 							unit="%"
 							zeroLabel="전액 고정비"
-							help="비인건비 영업비용 {formatKrwCompact(
+							help="비인건비 영업비용 {won(
 								b.nonHcCost
 							)} 중 매출에 비례해 움직이는 비중. 0%면 고정비로 간주합니다."
 						/>
@@ -319,18 +329,18 @@
 					</div>
 					<div>
 						<div class="text-sm text-muted">예상 총 인건비</div>
-						<div class="tabular text-lg font-bold">{formatKrwCompact(r.inputs.hcCost)}</div>
+						<div class="tabular text-lg font-bold">{won(r.inputs.hcCost)}</div>
 						<div class="tabular text-sm font-semibold {deltaClass(r.delta.hcCost, false)}">
-							{formatSigned(r.delta.hcCost, (n) => formatKrwCompact(n))}
+							{formatSigned(r.delta.hcCost, (n) => won(n))}
 						</div>
 					</div>
 					<div>
 						<div class="text-sm text-muted">예상 영업이익</div>
 						<div class="tabular text-lg font-bold">
-							{formatKrwCompact(r.metrics.operatingProfit)}
+							{won(r.metrics.operatingProfit)}
 						</div>
 						<div class="tabular text-sm font-semibold {deltaClass(r.delta.operatingProfit, true)}">
-							{formatSigned(r.delta.operatingProfit, (n) => formatKrwCompact(n))}
+							{formatSigned(r.delta.operatingProfit, (n) => won(n))}
 						</div>
 					</div>
 				</div>
@@ -428,7 +438,8 @@
 					{@const bv = row.pick(b, base.inputs)}
 					<tr class="border-b border-line last:border-0">
 						<th scope="row" class="px-5 py-2 text-left font-medium text-ink"
-							>{row.label} <span class="text-xs font-normal text-muted">({row.unit})</span></th
+							>{row.label}
+							<span class="text-xs font-normal text-muted">({rowUnit(row.unit)})</span></th
 						>
 						<td class="tabular px-4 py-2 text-right">{bv === null ? '—' : row.fmt(bv)}</td>
 						{#each cmp.results as r (r.scenario.id)}
@@ -461,7 +472,7 @@
 							aria-hidden="true"
 						></span>{r.scenario.name}
 					</h3>
-					<InsightList insights={scenarioInsights(base.inputs, r)} />
+					<InsightList insights={scenarioInsights(base.inputs, r, workspace.amountUnit)} />
 				</div>
 			{/each}
 		</div>

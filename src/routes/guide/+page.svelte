@@ -1,7 +1,12 @@
 <script lang="ts">
 	import { REFERENCE_DEFAULTS } from '$lib/hcroi/defaults';
 	import { HC_COST_KEYS, HC_COST_LABELS } from '$lib/hcroi/types';
-	import { formatKrwCompact } from '$lib/hcroi/format';
+	import { formatAmount } from '$lib/hcroi/format';
+	import { workspace } from '$lib/state/workspace.svelte';
+
+	/** 금액 표기 — 작업공간의 표시 단위 설정을 따른다 (저장값은 언제나 원 단위 정수) */
+	const won = (v: number | null | undefined, suffix = '원') =>
+		formatAmount(v, workspace.amountUnit, suffix);
 </script>
 
 <svelte:head><title>산식·가이드 — HCROI</title></svelte:head>
@@ -135,7 +140,7 @@
 			<dd class="tabular font-semibold">{REFERENCE_DEFAULTS.operatingMarginPct}%</dd>
 			<dt class="text-ink-2">인당 매출액</dt>
 			<dd class="tabular font-semibold">
-				{formatKrwCompact(REFERENCE_DEFAULTS.revenuePerHead)}/인
+				{won(REFERENCE_DEFAULTS.revenuePerHead)}/인
 			</dd>
 		</dl>
 		<h3 class="mt-4 mb-2 text-sm font-semibold text-ink-2">총 인건비 구성비 (총액만 알 때 분배)</h3>

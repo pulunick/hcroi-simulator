@@ -1,5 +1,5 @@
 import { HCROI_THRESHOLDS, computeMetrics, gradeOf } from './formulas';
-import { formatKrwCompact, formatMultiple, formatPct, formatSigned } from './format';
+import { formatAmount, formatMultiple, formatPct, formatSigned, type AmountUnit } from './format';
 import type { BaseInputs, HcroiGrade, Insight, Metrics, ScenarioResult, YearRecord } from './types';
 
 const GRADE_RANK: HcroiGrade[] = ['critical', 'warning', 'excellent'];
@@ -23,7 +23,13 @@ const pp = (n: number) => formatMultiple(n);
  * 요구사항 §응답규칙: 수치 악화 시 원인 분석 + 구조적 개선책(인당 생산성 제고, 고정비 절감 등) 제시.
  * (Phase 2 에서 LLM 서술로 대체/보강 예정 — 규칙은 그대로 프롬프트 근거로 재사용)
  */
-export function scenarioInsights(base: BaseInputs, r: ScenarioResult): Insight[] {
+export function scenarioInsights(
+	base: BaseInputs,
+	r: ScenarioResult,
+	unit: AmountUnit = 'auto'
+): Insight[] {
+	/** 금액 표기 — 화면에서 고른 표시 단위를 그대로 쓴다 */
+	const won = (v: number | null | undefined) => formatAmount(v, unit);
 	const b = computeMetrics(base);
 	const s = r.metrics;
 	const p = r.scenario.params;
@@ -41,8 +47,8 @@ export function scenarioInsights(base: BaseInputs, r: ScenarioResult): Insight[]
 	const dHcroi = s.hcroi - b.hcroi;
 	const headline =
 		`HCROI ${formatMultiple(b.hcroi)} → ${formatMultiple(s.hcroi)} (${formatSigned(dHcroi, pp)}), ` +
-		`영업이익 ${formatKrwCompact(b.operatingProfit)} → ${formatKrwCompact(s.operatingProfit)} (${formatSigned(r.delta.operatingProfit, (n) => formatKrwCompact(n))}), ` +
-		`총 인건비 ${formatKrwCompact(base.hcCost)} → ${formatKrwCompact(r.inputs.hcCost)} (${formatSigned(r.delta.hcCost, (n) => formatKrwCompact(n))}), ` +
+		`영업이익 ${won(b.operatingProfit)} → ${won(s.operatingProfit)} (${formatSigned(r.delta.operatingProfit, (n) => won(n))}), ` +
+		`총 인건비 ${won(base.hcCost)} → ${won(r.inputs.hcCost)} (${formatSigned(r.delta.hcCost, (n) => won(n))}), ` +
 		`인원 ${base.headcount}명 → ${r.inputs.headcount}명.`;
 
 	// 1) 헤드라인 — 등급 변동 포함
@@ -86,7 +92,7 @@ export function scenarioInsights(base: BaseInputs, r: ScenarioResult): Insight[]
 		if (r.delta.headcount < 0 && p.productivityPct < 0) {
 			const fixed = b.nonHcCost * (1 - p.variableCostRatioPct / 100);
 			causes.push(
-				`인원 감축(${r.delta.headcount}명)과 함께 인당 생산성까지 하락(${formatPct(p.productivityPct)})하여 매출 감소분이 고정비(${formatKrwCompact(fixed)})에 흡수되지 못합니다.`
+				`인원 감축(${r.delta.headcount}명)과 함께 인당 생산성까지 하락(${formatPct(p.productivityPct)})하여 매출 감소분이 고정비(${won(fixed)})에 흡수되지 못합니다.`
 			);
 		}
 		if (causes.length === 0) {
@@ -110,7 +116,7 @@ export function scenarioInsights(base: BaseInputs, r: ScenarioResult): Insight[]
 		const nonHcCut = neededNonHcCostCut(r, b.hcroi);
 		if (nonHcCut !== null && nonHcCut > 0 && s.nonHcCost > 0) {
 			fixes.push(
-				`③ 고정비 절감: 비인건비 영업비용을 ${formatKrwCompact(nonHcCut)} (${formatPct((nonHcCut / s.nonHcCost) * 100)}) 절감하면 동일 HCROI 를 유지할 수 있습니다.`
+				`③ 고정비 절감: 비인건비 영업비용을 ${won(nonHcCut)} (${formatPct((nonHcCut / s.nonHcCost) * 100)}) 절감하면 동일 HCROI 를 유지할 수 있습니다.`
 			);
 		}
 		fixes.push(
@@ -142,7 +148,7 @@ export function scenarioInsights(base: BaseInputs, r: ScenarioResult): Insight[]
 		const dRevenue = r.inputs.revenue - base.revenue;
 		if (dRevenue > base.revenue * 0.01 && p.variableCostRatioPct <= 0 && b.nonHcCost > 0) {
 			notes.push(
-				`이 개선은 비인건비 영업비용 ${formatKrwCompact(b.nonHcCost)} 을 전액 고정비로 가정(변동비 비율 0%)한 결과입니다. 매출이 ${formatKrwCompact(dRevenue)} 늘어도 재료비·외주비 등 변동비가 전혀 따라 늘지 않는다는 뜻이므로 영업이익·HCROI 개선폭이 과대 추정될 수 있습니다. "고급 가정"의 변동비 비율을 조정해 민감도를 확인하세요.`
+				`이 개선은 비인건비 영업비용 ${won(b.nonHcCost)} 을 전액 고정비로 가정(변동비 비율 0%)한 결과입니다. 매출이 ${won(dRevenue)} 늘어도 재료비·외주비 등 변동비가 전혀 따라 늘지 않는다는 뜻이므로 영업이익·HCROI 개선폭이 과대 추정될 수 있습니다. "고급 가정"의 변동비 비율을 조정해 민감도를 확인하세요.`
 			);
 		}
 		if (notes.length)
@@ -154,7 +160,7 @@ export function scenarioInsights(base: BaseInputs, r: ScenarioResult): Insight[]
 		out.push({
 			tone: 'critical',
 			title: '영업손실 전환',
-			body: `시나리오 적용 시 영업이익이 ${formatKrwCompact(s.operatingProfit)} 으로 적자입니다. HCROI ${formatMultiple(s.hcroi)} 는 인건비 1원당 회수액이 1원 미만임을 뜻합니다.`
+			body: `시나리오 적용 시 영업이익이 ${won(s.operatingProfit)} 으로 적자입니다. HCROI ${formatMultiple(s.hcroi)} 는 인건비 1원당 회수액이 1원 미만임을 뜻합니다.`
 		});
 	}
 
@@ -237,6 +243,7 @@ function decliningStreak(values: (number | null)[]): number {
 	return streak;
 }
 
-export function metricsSummaryLine(m: Metrics): string {
-	return `HCROI ${formatMultiple(m.hcroi)} · HCVA ${formatKrwCompact(m.hcva)}/인 · 인당 매출 ${formatKrwCompact(m.revenuePerHead)}/인 · 인당 인건비 ${formatKrwCompact(m.hcCostPerHead)}/인`;
+export function metricsSummaryLine(m: Metrics, unit: AmountUnit = 'auto'): string {
+	const won = (v: number | null | undefined) => formatAmount(v, unit);
+	return `HCROI ${formatMultiple(m.hcroi)} · HCVA ${won(m.hcva)}/인 · 인당 매출 ${won(m.revenuePerHead)}/인 · 인당 인건비 ${won(m.hcCostPerHead)}/인`;
 }

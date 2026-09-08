@@ -194,3 +194,12 @@ input[type='range'].slider::-moz-range-thumb {
 .tabular {
 	font-variant-numeric: tabular-nums;
 }
+
+/* "12,000,000천원" 처럼 단위가 붙은 숫자가 표 칸 안에서 글자 단위로 잘리지 않게 한다.
+   표는 overflow-x-auto 안에서 가로 스크롤되므로 폭이 늘어도 문서가 넘치지 않는다.
+   (표 밖의 힌트 문구까지 nowrap 이 되면 카드가 모바일에서 가로로 삐져나온다) */
+table .tabular,
+/* "영업이익 (천원)" 같은 열 머리글도 단위가 잘려 내려가지 않게 한다 */
+table thead th {
+	white-space: nowrap;
+}

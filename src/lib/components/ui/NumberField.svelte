@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { formatInt, formatKrwCompact } from '$lib/hcroi/format';
+	import { formatAmount, formatInt } from '$lib/hcroi/format';
+	// 힌트 표기에만 작업공간의 표시 단위를 참조한다 (값 자체는 언제나 원 단위 정수)
+	import { workspace } from '$lib/state/workspace.svelte';
 
 	interface Props {
 		label: string;
@@ -86,7 +88,12 @@
 		<p class="text-sm text-status-critical-ink">{error}</p>
 	{:else if krwHint || help}
 		<p id="{id}-help" class="text-sm text-muted">
-			{#if krwHint}<span class="tabular">= {formatKrwCompact(value)}</span>{/if}
+			{#if krwHint}<span class="tabular"
+					>= {formatAmount(
+						value,
+						workspace.amountUnit === 'won' ? 'auto' : workspace.amountUnit
+					)}</span
+				>{/if}
 			{#if krwHint && help}<span aria-hidden="true"> · </span>{/if}
 			{#if help}{help}{/if}
 		</p>

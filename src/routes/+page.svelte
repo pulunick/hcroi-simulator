@@ -4,7 +4,10 @@
 	import { computeMetrics, diagnose, gradeOf, validateInputs } from '$lib/hcroi/formulas';
 	import { trendInsights } from '$lib/hcroi/insights';
 	import {
+		amountUnitLabel,
 		formatHeadcount,
+		formatAmount,
+		formatAmountBare,
 		formatKrwCompact,
 		formatMultiple,
 		formatPct,
@@ -17,6 +20,18 @@
 	import InsightList from '$lib/components/ui/InsightList.svelte';
 	import LineChart from '$lib/components/charts/LineChart.svelte';
 	import StackedBarChart from '$lib/components/charts/StackedBarChart.svelte';
+
+	/** 금액 표기 — 작업공간의 표시 단위 설정을 따른다 (저장값은 언제나 원 단위 정수) */
+	const won = (v: number | null | undefined, suffix = '원') =>
+		formatAmount(v, workspace.amountUnit, suffix);
+
+	/** 표 칸용 금액 — 고정 단위를 고르면 단위는 열 머리글이 밝히고 칸에는 숫자만 둔다 */
+	const cellWon = (v: number | null | undefined) =>
+		workspace.amountUnit === 'auto' ? won(v) : formatAmountBare(v, workspace.amountUnit);
+	/** 열 머리글에 붙일 단위 — 자동 축약일 때는 붙이지 않는다 */
+	const colUnit = $derived(
+		workspace.amountUnit === 'auto' ? '' : ` (${amountUnitLabel(workspace.amountUnit)})`
+	);
 
 	let selectedId = $state<string | null>(null);
 	const year = $derived(workspace.years.find((y) => y.id === selectedId) ?? workspace.latestYear);
@@ -199,7 +214,7 @@
 							label="영업비용 (인건비 포함)"
 							bind:value={year.inputs.operatingCost}
 							min={0}
-							help="영업이익 {formatKrwCompact(metrics.operatingProfit)}"
+							help="영업이익 {won(metrics.operatingProfit)}"
 						/>
 					{:else}
 						<NumberField
@@ -208,7 +223,7 @@
 								() => year.inputs.revenue - year.inputs.operatingCost,
 								(v) => (year.inputs.operatingCost = year.inputs.revenue - v)
 							}
-							help="영업비용 {formatKrwCompact(year.inputs.operatingCost)}"
+							help="영업비용 {won(year.inputs.operatingCost)}"
 						/>
 					{/if}
 				</div>
@@ -265,46 +280,36 @@
 					{diag?.summary ?? '총 인건비가 0이어서 HCROI 를 계산할 수 없습니다.'}
 				</p>
 				<p class="tabular mt-2 text-sm text-muted">
-					산식: (영업이익 {formatKrwCompact(metrics.operatingProfit)} + 총 인건비 {formatKrwCompact(
-						year.inputs.hcCost
-					)}) ÷ 총 인건비 {formatKrwCompact(year.inputs.hcCost)}
+					산식: (영업이익 {won(metrics.operatingProfit)} + 총 인건비 {won(year.inputs.hcCost)}) ÷ 총
+					인건비 {won(year.inputs.hcCost)}
 				</p>
 			</section>
 
 			<div class="grid gap-4 sm:grid-cols-3">
 				<StatTile
 					label="HCVA (인당 부가가치)"
-					value={formatKrwCompact(metrics.hcva)}
+					value={won(metrics.hcva)}
 					sub="/인"
-					delta={delta(metrics.hcva, prevMetrics?.hcva, (n) => formatKrwCompact(n))}
+					delta={delta(metrics.hcva, prevMetrics?.hcva, (n) => won(n))}
 				/>
 				<StatTile
 					label="인당 매출액"
-					value={formatKrwCompact(metrics.revenuePerHead)}
+					value={won(metrics.revenuePerHead)}
 					sub="/인"
-					delta={delta(metrics.revenuePerHead, prevMetrics?.revenuePerHead, (n) =>
-						formatKrwCompact(n)
-					)}
+					delta={delta(metrics.revenuePerHead, prevMetrics?.revenuePerHead, (n) => won(n))}
 				/>
 				<StatTile
 					label="인당 인건비"
-					value={formatKrwCompact(metrics.hcCostPerHead)}
+					value={won(metrics.hcCostPerHead)}
 					sub="/인"
-					delta={delta(
-						metrics.hcCostPerHead,
-						prevMetrics?.hcCostPerHead,
-						(n) => formatKrwCompact(n),
-						false
-					)}
+					delta={delta(metrics.hcCostPerHead, prevMetrics?.hcCostPerHead, (n) => won(n), false)}
 				/>
 			</div>
 			<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
 				<StatTile
 					label="영업이익"
-					value={formatKrwCompact(metrics.operatingProfit)}
-					delta={delta(metrics.operatingProfit, prevMetrics?.operatingProfit, (n) =>
-						formatKrwCompact(n)
-					)}
+					value={won(metrics.operatingProfit)}
+					delta={delta(metrics.operatingProfit, prevMetrics?.operatingProfit, (n) => won(n))}
 				/>
 				<StatTile
 					label="영업이익률"
@@ -377,12 +382,12 @@
 				<thead>
 					<tr class="border-y border-line bg-surface-2 text-left text-sm text-ink-2">
 						<th scope="col" class="px-4 py-2 font-semibold">연도</th>
-						<th scope="col" class="px-3 py-2 text-right font-semibold">매출액</th>
-						<th scope="col" class="px-3 py-2 text-right font-semibold">영업이익</th>
-						<th scope="col" class="px-3 py-2 text-right font-semibold">총 인건비</th>
+						<th scope="col" class="px-3 py-2 text-right font-semibold">매출액{colUnit}</th>
+						<th scope="col" class="px-3 py-2 text-right font-semibold">영업이익{colUnit}</th>
+						<th scope="col" class="px-3 py-2 text-right font-semibold">총 인건비{colUnit}</th>
 						<th scope="col" class="px-3 py-2 text-right font-semibold">인원</th>
 						<th scope="col" class="px-3 py-2 text-right font-semibold">HCROI</th>
-						<th scope="col" class="px-3 py-2 text-right font-semibold">HCVA</th>
+						<th scope="col" class="px-3 py-2 text-right font-semibold">HCVA{colUnit}</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -394,12 +399,12 @@
 								: ''}"
 						>
 							<th scope="row" class="px-4 py-2 text-left font-semibold text-ink">{y.year}</th>
-							<td class="tabular px-3 py-2 text-right">{formatKrwCompact(y.inputs.revenue)}</td>
-							<td class="tabular px-3 py-2 text-right">{formatKrwCompact(m.operatingProfit)}</td>
-							<td class="tabular px-3 py-2 text-right">{formatKrwCompact(y.inputs.hcCost)}</td>
+							<td class="tabular px-3 py-2 text-right">{cellWon(y.inputs.revenue)}</td>
+							<td class="tabular px-3 py-2 text-right">{cellWon(m.operatingProfit)}</td>
+							<td class="tabular px-3 py-2 text-right">{cellWon(y.inputs.hcCost)}</td>
 							<td class="tabular px-3 py-2 text-right">{formatHeadcount(y.inputs.headcount)}</td>
 							<td class="tabular px-3 py-2 text-right font-semibold">{formatMultiple(m.hcroi)}</td>
-							<td class="tabular px-3 py-2 text-right">{formatKrwCompact(m.hcva)}</td>
+							<td class="tabular px-3 py-2 text-right">{cellWon(m.hcva)}</td>
 						</tr>
 					{/each}
 				</tbody>

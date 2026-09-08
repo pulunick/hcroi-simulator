@@ -8,7 +8,7 @@ import {
 	validateInputs
 } from './formulas';
 import { splitHcCost, sampleYears } from './defaults';
-import { formatKrwCompact, formatSigned, niceTicks } from './format';
+import { amountUnitLabel, formatAmount, formatKrwCompact, formatSigned, niceTicks } from './format';
 import type { BaseInputs } from './types';
 
 const base: BaseInputs = { revenue: 100, operatingCost: 90, hcCost: 30, headcount: 10 };
@@ -108,6 +108,25 @@ describe('format', () => {
 		expect(formatKrwCompact(9_999)).toBe('9,999원');
 		expect(formatKrwCompact(-1_200_000_000)).toBe('-12.0억원');
 		expect(formatKrwCompact(null)).toBe('—');
+	});
+	it('표시 단위 옵션 — 저장값(원)은 그대로 두고 표기만 바꾼다', () => {
+		const v = 14_100_000_000; // 141억원
+		expect(formatAmount(v, 'won')).toBe('14,100,000,000원');
+		expect(formatAmount(v, 'thousand')).toBe('14,100,000천원');
+		expect(formatAmount(v, 'million')).toBe('14,100백만원');
+		expect(formatAmount(v, 'billion')).toBe('141.0억원');
+		// 10억 미만(인당 지표)은 소수 둘째 자리까지 — 연도 간 차이가 보이도록
+		expect(formatAmount(117_500_000, 'billion')).toBe('1.18억원');
+		expect(formatAmount(v, 'auto')).toBe(formatKrwCompact(v));
+		// 단위를 헤더·축이 이미 밝힌 경우 통화어를 뗀다
+		expect(formatAmount(v, 'thousand', '')).toBe('14,100,000천');
+		// 음수·결측
+		expect(formatAmount(-2_000_000, 'thousand')).toBe('-2,000천원');
+		expect(formatAmount(null, 'thousand')).toBe('—');
+		// 선택 단위보다 작은 금액은 0 으로 뭉개지 않는다
+		expect(formatAmount(1_200, 'million')).toBe('0.00백만원');
+		expect(amountUnitLabel('thousand')).toBe('천원');
+		expect(amountUnitLabel('auto')).toBe('원');
 	});
 	it('부호 표기', () => {
 		expect(formatSigned(3, (n) => `${n}p`)).toBe('+3p');
