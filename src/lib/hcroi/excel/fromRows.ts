@@ -7,8 +7,10 @@ import {
 	type HcCostBreakdown,
 	type HeadcountBasis,
 	type HeadcountBreakdown,
-	type YearRecord
+	type Period,
+	type PeriodRecord
 } from '../types';
+import { comparePeriods, isValidPeriod, parsePeriodText, periodKey, periodLabel } from '../period';
 import {
 	BASIS_SHEET,
 	INPUT_COLUMN_BY_HEADER,
@@ -21,20 +23,21 @@ import {
 } from './schema';
 
 /**
- * 시트 ② 행 → YearRecord (순수 함수, exceljs 무관).
+ * 시트 ② 행 → PeriodRecord (순수 함수, exceljs 무관).
  * 입력: 셀 원시값 2차원 배열 (rows[0] = 엑셀 1행, rows[r][0] = A열). io.ts 가 exceljs 셀을 원시값으로 풀어서 넘긴다.
  */
 
 export interface ParsedRecord {
 	/** 엑셀 행 번호 (1-based) */
 	row: number;
-	record: Omit<YearRecord, 'id'>;
+	record: Omit<PeriodRecord, 'id'>;
 	warnings: string[];
 }
 
 export interface RowError {
 	row: number;
-	year: number | null;
+	/** 읽힌 기간 (연도조차 못 읽었으면 null) */
+	period: Period | null;
 	messages: string[];
 }
 
@@ -100,7 +103,7 @@ export function parseInputRows(
 
 	const records: ParsedRecord[] = [];
 	const errors: RowError[] = [];
-	const seenYears = new Map<number, number>();
+	const seen = new Map<string, number>();
 
 	for (let r = INPUT_FIRST_DATA_ROW - 1; r < rows.length; r++) {
 		const cells = rows[r] ?? [];
@@ -118,8 +121,20 @@ export function parseInputRows(
 			year > 2100
 		)
 			messages.push('연도는 1990~2100 사이의 정수여야 합니다.');
-		else if (seenYears.has(year))
-			messages.push(`${year}년이 ${seenYears.get(year)}행에도 있습니다 (파일 내 중복).`);
+
+		// 기간: 빈 칸 = 연간. 옛 파일(기간 열 없음)도 자연히 연간으로 읽힌다
+		const pt = parsePeriodText(cell(cells, 'period'));
+		if (pt === null)
+			messages.push(
+				`기간 "${String(cell(cells, 'period')).trim()}" 을(를) 읽을 수 없습니다 (1분기~4분기 · 상반기/하반기 · 연간 또는 빈 칸).`
+			);
+		const period: Period | null =
+			year !== null && !Number.isNaN(year) && pt ? { year, ...pt } : null;
+		if (period && !isValidPeriod(period)) messages.push('기간이 올바르지 않습니다.');
+		else if (period && seen.has(periodKey(period)))
+			messages.push(
+				`${periodLabel(period)}이(가) ${seen.get(periodKey(period))}행에도 있습니다 (파일 내 중복).`
+			);
 
 		const revenue = parseNumber(cell(cells, 'revenue'));
 		if (revenue === null) messages.push('매출액이 비어 있습니다.');
@@ -224,41 +239,41 @@ export function parseInputRows(
 			};
 			messages.push(...validateInputs(inputs));
 			if (messages.length === 0) {
-				seenYears.set(year as number, rowNo);
+				seen.set(periodKey(period as Period), rowNo);
 				records.push({
 					row: rowNo,
-					record: { year: year as number, inputs, breakdown, headcountBreakdown, memo },
+					record: { period: period as Period, inputs, breakdown, headcountBreakdown, memo },
 					warnings
 				});
 				continue;
 			}
 		}
-		errors.push({ row: rowNo, year: year !== null && !Number.isNaN(year) ? year : null, messages });
+		errors.push({ row: rowNo, period, messages });
 	}
 
 	return { records, errors, headerError: null };
 }
 
 export interface MergeOptions {
-	/** 같은 연도가 이미 있으면 덮어쓴다 (false 면 건너뜀) */
+	/** 같은 기간이 이미 있으면 덮어쓴다 (false 면 건너뜀) */
 	overwrite: boolean;
 	newId: () => string;
 }
 
 export interface MergeResult {
-	years: YearRecord[];
+	records: PeriodRecord[];
 	added: number;
 	updated: number;
 	skipped: number;
 }
 
-/** 파싱된 레코드를 기존 연도 목록에 병합 (순수 함수). 연도로 매칭하며 덮어쓸 때 기존 id 를 유지한다 */
-export function mergeYears(
-	existing: YearRecord[],
+/** 파싱된 레코드를 기존 목록에 병합 (순수 함수). 기간(연도+유형+순번)으로 매칭하며 덮어쓸 때 기존 id 를 유지한다 */
+export function mergeRecords(
+	existing: PeriodRecord[],
 	parsed: ParsedRecord[],
 	opt: MergeOptions
 ): MergeResult {
-	const years = existing.map((y) => ({
+	const records = existing.map((y) => ({
 		...y,
 		inputs: { ...y.inputs },
 		breakdown: y.breakdown ? { ...y.breakdown } : null
@@ -267,21 +282,22 @@ export function mergeYears(
 		updated = 0,
 		skipped = 0;
 	for (const p of parsed) {
-		const i = years.findIndex((y) => y.year === p.record.year);
+		const key = periodKey(p.record.period);
+		const i = records.findIndex((y) => periodKey(y.period) === key);
 		if (i >= 0) {
 			if (!opt.overwrite) {
 				skipped++;
 				continue;
 			}
-			years[i] = { ...p.record, id: years[i].id };
+			records[i] = { ...p.record, id: records[i].id };
 			updated++;
 		} else {
-			years.push({ ...p.record, id: opt.newId() });
+			records.push({ ...p.record, id: opt.newId() });
 			added++;
 		}
 	}
-	years.sort((a, b) => a.year - b.year);
-	return { years, added, updated, skipped };
+	records.sort((a, b) => comparePeriods(a.period, b.period));
+	return { records, added, updated, skipped };
 }
 
 /** 조직명 최대 길이 — 대시보드 제목이 한 줄을 넘지 않도록 자른다 */

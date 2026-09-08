@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sampleYears } from './defaults';
+import { sampleRecords } from './defaults';
 import { scenarioInsights, trendInsights } from './insights';
 import { DEFAULT_SCENARIO_PARAMS, runScenario } from './scenario';
 import type { BaseInputs } from './types';
@@ -104,12 +104,22 @@ describe('scenarioInsights', () => {
 });
 
 describe('trendInsights', () => {
-	it('샘플 3개년은 2년 연속 하락으로 진단된다', () => {
-		const ins = trendInsights(sampleYears());
+	const annual = () => sampleRecords().filter((r) => r.period.type === 'Y');
+	const quarterly = () => sampleRecords().filter((r) => r.period.type === 'Q');
+
+	it('샘플 연간 3개년은 2년 연속 하락으로 진단된다', () => {
+		const ins = trendInsights(annual());
 		expect(ins[0].title).toBe('HCROI 2년 연속 하락');
+		expect(ins[0].body).toMatch(/^2023년 .* → 2025년/);
 		expect(ins.some((i) => i.title.includes('인건비 증가율'))).toBe(true);
 	});
-	it('1개년 이하이면 비어 있다', () => {
-		expect(trendInsights(sampleYears().slice(0, 1))).toEqual([]);
+	it('분기 시리즈는 "전기 대비" 문구와 분기 라벨을 쓴다', () => {
+		const ins = trendInsights(quarterly());
+		expect(ins[0].title).toMatch(/전기 대비 HCROI/);
+		expect(ins[0].body).toMatch(/2025년 3분기 .* → 2025년 4분기/);
+		expect(ins.some((i) => i.body.includes('전기 대비'))).toBe(true);
+	});
+	it('1개 기간 이하이면 비어 있다', () => {
+		expect(trendInsights(annual().slice(0, 1))).toEqual([]);
 	});
 });

@@ -1,6 +1,14 @@
 import { HCROI_THRESHOLDS, computeMetrics, gradeOf } from './formulas';
+import { comparePeriods, periodLabel, periodUnitWord, prevWord } from './period';
 import { formatAmount, formatMultiple, formatPct, formatSigned, type AmountUnit } from './format';
-import type { BaseInputs, HcroiGrade, Insight, Metrics, ScenarioResult, YearRecord } from './types';
+import type {
+	BaseInputs,
+	HcroiGrade,
+	Insight,
+	Metrics,
+	ScenarioResult,
+	PeriodRecord
+} from './types';
 
 const GRADE_RANK: HcroiGrade[] = ['critical', 'warning', 'excellent'];
 const GRADE_KO: Record<HcroiGrade, string> = {
@@ -175,13 +183,24 @@ function neededNonHcCostCut(r: ScenarioResult, targetHcroi: number): number | nu
 	return r.metrics.nonHcCost - allowedNonHc;
 }
 
-/** 연도별 추이 인사이트 */
-export function trendInsights(years: YearRecord[]): Insight[] {
-	const sorted = [...years].sort((a, b) => a.year - b.year);
-	const rows = sorted.map((y) => ({ year: y.year, m: computeMetrics(y.inputs), i: y.inputs }));
+/**
+ * 기간별 추이 인사이트.
+ * 호출 쪽이 **같은 유형(연간/반기/분기)** 의 레코드만 넘겨야 한다 — 유형이 섞이면 분기와 연간을 비교하게 된다.
+ * 문구는 유형에 맞춘다: 연간 "전년 대비·N년 연속", 반기·분기 "전기 대비·N기 연속".
+ */
+export function trendInsights(records: PeriodRecord[]): Insight[] {
+	const sorted = [...records].sort((a, b) => comparePeriods(a.period, b.period));
+	const rows = sorted.map((y) => ({
+		label: periodLabel(y.period),
+		m: computeMetrics(y.inputs),
+		i: y.inputs
+	}));
 	const out: Insight[] = [];
 	if (rows.length < 2) return out;
 
+	const type = sorted[sorted.length - 1].period.type;
+	const unit = periodUnitWord(type);
+	const prevW = prevWord(type);
 	const last = rows[rows.length - 1];
 	const prev = rows[rows.length - 2];
 	if (last.m.hcroi !== null && prev.m.hcroi !== null) {
@@ -191,20 +210,20 @@ export function trendInsights(years: YearRecord[]): Insight[] {
 			const from = rows[rows.length - 1 - streak];
 			out.push({
 				tone: 'warning',
-				title: `HCROI ${streak}년 연속 하락`,
-				body: `${from.year}년 ${formatMultiple(from.m.hcroi)} → ${last.year}년 ${formatMultiple(last.m.hcroi)}. 인건비 증가율과 인적자본 부가가치 증가율의 격차를 점검하세요.`
+				title: `HCROI ${streak}${unit} 연속 하락`,
+				body: `${from.label} ${formatMultiple(from.m.hcroi)} → ${last.label} ${formatMultiple(last.m.hcroi)}. 인건비 증가율과 인적자본 부가가치 증가율의 격차를 점검하세요.`
 			});
 		} else if (d < -0.005) {
 			out.push({
 				tone: 'warning',
-				title: '전년 대비 HCROI 하락',
-				body: `${prev.year}년 ${formatMultiple(prev.m.hcroi)} → ${last.year}년 ${formatMultiple(last.m.hcroi)} (${formatSigned(d, pp)}).`
+				title: `${prevW} 대비 HCROI 하락`,
+				body: `${prev.label} ${formatMultiple(prev.m.hcroi)} → ${last.label} ${formatMultiple(last.m.hcroi)} (${formatSigned(d, pp)}).`
 			});
 		} else if (d > 0.005) {
 			out.push({
 				tone: 'positive',
-				title: '전년 대비 HCROI 개선',
-				body: `${prev.year}년 ${formatMultiple(prev.m.hcroi)} → ${last.year}년 ${formatMultiple(last.m.hcroi)} (${formatSigned(d, pp)}).`
+				title: `${prevW} 대비 HCROI 개선`,
+				body: `${prev.label} ${formatMultiple(prev.m.hcroi)} → ${last.label} ${formatMultiple(last.m.hcroi)} (${formatSigned(d, pp)}).`
 			});
 		}
 	}
@@ -216,7 +235,7 @@ export function trendInsights(years: YearRecord[]): Insight[] {
 		out.push({
 			tone: worse ? 'warning' : 'positive',
 			title: '인건비 증가율 vs 부가가치 증가율',
-			body: `${last.year}년 총 인건비는 전년 대비 ${formatSigned(hcGrowth, (n) => formatPct(n))}, 인적자본 투입 전 이익(영업이익+인건비)은 ${formatSigned(pbhGrowth, (n) => formatPct(n))} 변동했습니다. ${
+			body: `${last.label} 총 인건비는 ${prevW} 대비 ${formatSigned(hcGrowth, (n) => formatPct(n))}, 인적자본 투입 전 이익(영업이익+인건비)은 ${formatSigned(pbhGrowth, (n) => formatPct(n))} 변동했습니다. ${
 				worse
 					? '인건비가 부가가치보다 빠르게 늘어 HCROI 를 압박합니다.'
 					: '부가가치가 인건비보다 빠르게 늘어 HCROI 에 우호적입니다.'

@@ -8,7 +8,7 @@ import {
 	sumHeadcount,
 	validateInputs
 } from './formulas';
-import { splitHcCost, sampleYears } from './defaults';
+import { splitHcCost, sampleRecords } from './defaults';
 import {
 	amountUnitLabel,
 	formatAmount,
@@ -37,7 +37,7 @@ describe('computeMetrics — 핵심 수식', () => {
 	});
 
 	it('[매출액 - (영업비용 - 인건비)] 와 [영업이익 + 인건비] 두 표현이 항상 일치한다', () => {
-		for (const y of sampleYears()) {
+		for (const y of sampleRecords()) {
 			const m = computeMetrics(y.inputs);
 			expect(m.profitBeforeHc).toBeCloseTo(m.operatingProfit + y.inputs.hcCost, 6);
 		}

@@ -1,4 +1,4 @@
-import type { BaseInputs, HcCostBreakdown, YearRecord } from './types';
+import type { BaseInputs, HcCostBreakdown, Period, PeriodRecord } from './types';
 
 /**
  * 표준 HR 레퍼런스 기본값 (요구사항 §응답규칙: 데이터 누락 시 기본값 안내)
@@ -53,25 +53,37 @@ export function estimateFromRevenue(revenue: number, headcount?: number): BaseIn
 	};
 }
 
-/** 샘플 데이터 — 첫 방문 시 화면이 비어 보이지 않도록 하는 가상의 회사 (3개년) */
-export function sampleYears(): YearRecord[] {
+/**
+ * 샘플 데이터 — 첫 방문 시 화면이 비어 보이지 않도록 하는 가상의 회사.
+ * 연간 3개년 + 2025년 분기 4개. 분기 합계는 2025년 연간과 일치한다(매출·영업이익·인건비).
+ * 인원은 기간 평균이라 분기마다 조금씩 다르다.
+ */
+export function sampleRecords(): PeriodRecord[] {
 	const mk = (
 		id: string,
-		year: number,
+		period: Period,
 		revenue: number,
 		operatingProfit: number,
 		hcCost: number,
 		headcount: number
-	): YearRecord => ({
+	): PeriodRecord => ({
 		id,
-		year,
+		period,
 		inputs: { revenue, operatingCost: revenue - operatingProfit, hcCost, headcount },
 		breakdown: splitHcCost(hcCost),
+		headcountBreakdown: null,
 		memo: '샘플 데이터 — 자사 실적으로 교체하세요'
 	});
+	const Y = (year: number): Period => ({ year, type: 'Y', index: 1 });
+	const Q = (year: number, index: number): Period => ({ year, type: 'Q', index });
 	return [
-		mk('sample-2023', 2023, 12_000_000_000, 960_000_000, 2_640_000_000, 30),
-		mk('sample-2024', 2024, 13_200_000_000, 924_000_000, 3_036_000_000, 33),
-		mk('sample-2025', 2025, 14_100_000_000, 846_000_000, 3_384_000_000, 36)
+		mk('sample-2023', Y(2023), 12_000_000_000, 960_000_000, 2_640_000_000, 30),
+		mk('sample-2024', Y(2024), 13_200_000_000, 924_000_000, 3_036_000_000, 33),
+		mk('sample-2025', Y(2025), 14_100_000_000, 846_000_000, 3_384_000_000, 36),
+		// 2025 분기 — 하반기로 갈수록 매출·이익이 커지는 계절성. 합계 = 연간
+		mk('sample-2025-q1', Q(2025, 1), 3_200_000_000, 150_000_000, 820_000_000, 34),
+		mk('sample-2025-q2', Q(2025, 2), 3_400_000_000, 190_000_000, 830_000_000, 35),
+		mk('sample-2025-q3', Q(2025, 3), 3_600_000_000, 230_000_000, 850_000_000, 36),
+		mk('sample-2025-q4', Q(2025, 4), 3_900_000_000, 276_000_000, 884_000_000, 37)
 	];
 }

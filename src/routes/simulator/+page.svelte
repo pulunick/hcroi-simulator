@@ -4,6 +4,7 @@
 	import { compareScenarios } from '$lib/hcroi/scenario';
 	import { scenarioInsights } from '$lib/hcroi/insights';
 	import { gradeOf } from '$lib/hcroi/formulas';
+	import { periodLabel, periodShortLabel } from '$lib/hcroi/period';
 	import {
 		amountUnitLabel,
 		formatHeadcount,
@@ -33,12 +34,12 @@
 
 	const SERIES_COLORS = ['var(--color-series-1)', 'var(--color-series-2)', 'var(--color-series-3)'];
 
-	const base = $derived(workspace.baseYear);
+	const base = $derived(workspace.base);
 	const cmp = $derived(base ? compareScenarios(base.inputs, workspace.scenarios) : null);
 	const b = $derived(cmp?.baseline.metrics ?? null);
 
 	const legend = $derived([
-		{ label: `기준 (${base?.year ?? '—'})`, color: SERIES_COLORS[0] },
+		{ label: `기준 (${base ? periodShortLabel(base.period) : '—'})`, color: SERIES_COLORS[0] },
 		...workspace.scenarios.map((s, i) => ({ label: s.name, color: SERIES_COLORS[i + 1] }))
 	]);
 
@@ -134,15 +135,14 @@
 		</p>
 	</div>
 	<label class="flex items-center gap-2 text-sm font-semibold text-ink-2">
-		기준연도
+		기준 기간
 		<select
 			class="field-input w-auto py-1.5"
 			value={base?.id ?? ''}
-			onchange={(e) =>
-				(workspace.baseYearId = (e.currentTarget as HTMLSelectElement).value || null)}
+			onchange={(e) => (workspace.baseId = (e.currentTarget as HTMLSelectElement).value || null)}
 		>
-			{#each workspace.sortedYears as y (y.id)}
-				<option value={y.id}>{y.year}년</option>
+			{#each workspace.sorted as y (y.id)}
+				<option value={y.id}>{periodLabel(y.period)}</option>
 			{/each}
 		</select>
 	</label>
@@ -150,7 +150,7 @@
 
 {#if !base || !cmp || !b}
 	<div class="card px-6 py-10 text-center">
-		<p class="text-ink-2">기준연도 데이터가 없습니다.</p>
+		<p class="text-ink-2">기준 기간 데이터가 없습니다.</p>
 		<a href={resolve('/data')} class="mt-4 btn btn-primary">데이터 입력하기</a>
 	</div>
 {:else}
@@ -162,7 +162,7 @@
 					class="mr-1.5 inline-block h-3 w-3 rounded-sm align-middle"
 					style="background:{SERIES_COLORS[0]}"
 				></span>
-				기준선 (Baseline) — {base.year}년
+				기준선 (Baseline) — {periodLabel(base.period)}
 			</h2>
 			<GradeBadge grade={gradeOf(b.hcroi)} />
 		</div>
@@ -426,7 +426,9 @@
 			<thead>
 				<tr class="border-y border-line bg-surface-2 text-left text-sm text-ink-2">
 					<th scope="col" class="px-5 py-2 font-semibold">지표</th>
-					<th scope="col" class="px-4 py-2 text-right font-semibold">기준 ({base.year})</th>
+					<th scope="col" class="px-4 py-2 text-right font-semibold"
+						>기준 ({periodShortLabel(base.period)})</th
+					>
 					{#each cmp.results as r (r.scenario.id)}
 						<th scope="col" class="px-4 py-2 text-right font-semibold">{r.scenario.name}</th>
 						<th scope="col" class="px-4 py-2 text-right font-semibold text-muted">증감</th>

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { sampleYears } from '../defaults';
+import { sampleRecords } from '../defaults';
 import { computeMetrics } from '../formulas';
 import { compareScenarios } from '../scenario';
 import { DEFAULT_SCENARIO_PARAMS } from '../scenario';
 import {
 	ORG_NAME_MAX,
-	mergeYears,
+	mergeRecords,
 	parseHeadcountBasis,
 	parseInputRows,
 	parseNumber,
@@ -15,6 +15,7 @@ import { buildTemplateBuffer, buildWorkbookBuffer, readInputSheet, readWorkbook 
 import { BASIS_SHEET, INPUT_COLUMNS, ORG_SHEET, headerText } from './schema';
 import { inputRows, scenarioSheet, summaryRows } from './toRows';
 import { DEFAULT_HEADCOUNT_BASIS, type HeadcountBasis } from '../types';
+import { comparePeriods, periodKey } from '../period';
 
 const header = INPUT_COLUMNS.map(headerText);
 const col = (key: string) => INPUT_COLUMNS.findIndex((c) => c.key === key);
@@ -56,7 +57,7 @@ describe('parseInputRows', () => {
 		expect(r.records).toHaveLength(1);
 		const rec = r.records[0].record;
 		expect(rec).toEqual({
-			year: 2025,
+			period: { year: 2025, type: 'Y', index: 1 },
 			inputs: {
 				revenue: 14100000000,
 				operatingCost: 13254000000,
@@ -125,7 +126,7 @@ describe('parseInputRows', () => {
 				row({ year: 2027, revenue: 10_000, headcount: 10, hcCost: 2_000 })
 			)
 		);
-		expect(r.records.map((x) => x.record.year)).toEqual([2023]);
+		expect(r.records.map((x) => x.record.period.year)).toEqual([2023]);
 		expect(r.errors.map((e) => e.row)).toEqual([5, 6, 7, 8, 9]);
 		expect(r.errors[0].messages[0]).toContain('중복');
 		expect(r.errors[1].messages[0]).toContain('매출액이 비어');
@@ -163,39 +164,60 @@ describe('parseInputRows', () => {
 
 describe('toRows ↔ fromRows 왕복', () => {
 	it('샘플 3개년을 내보낸 행을 다시 파싱하면 입력값이 그대로 복원된다', () => {
-		const years = sampleYears();
-		const rows = inputRows(years).map((r) => INPUT_COLUMNS.map((c) => r[c.key]));
+		const records = sampleRecords();
+		const rows = inputRows(records).map((r) => INPUT_COLUMNS.map((c) => r[c.key]));
+		// 기간 열에는 "연간"·"1분기" 같은 텍스트가 실린다
+		expect(rows.map((r) => r[col('period')])).toEqual([
+			'연간',
+			'연간',
+			'1분기',
+			'2분기',
+			'3분기',
+			'4분기',
+			'연간'
+		]);
 		const parsed = parseInputRows(sheet(...rows));
 		expect(parsed.errors).toEqual([]);
 		expect(parsed.records.map((p) => p.record)).toEqual(
-			years.map(({ year, inputs, breakdown, memo }) => ({
-				year,
-				inputs,
-				breakdown,
-				headcountBreakdown: null,
-				memo
-			}))
+			[...records]
+				.sort((a, b) => comparePeriods(a.period, b.period))
+				.map(({ period, inputs, breakdown, memo }) => ({
+					period,
+					inputs,
+					breakdown,
+					headcountBreakdown: null,
+					memo
+				}))
 		);
 	});
 
-	it('summaryRows 는 지표 값을 계산해 넣는다 (2025 HCROI 1.25)', () => {
-		const rows = summaryRows(sampleYears());
-		expect(rows).toHaveLength(3);
-		expect(rows[2][0]).toBe(2025);
-		expect(rows[2][1]).toBeCloseTo(1.25, 2);
-		expect(rows[2][3]).toBe('보통');
+	it('summaryRows 는 지표 값을 계산해 넣는다 (2025년 HCROI 1.25) — 기간 열은 라벨 텍스트', () => {
+		const rows = summaryRows(sampleRecords());
+		expect(rows).toHaveLength(7);
+		expect(rows.map((r) => r[0])).toEqual([
+			'2023년',
+			'2024년',
+			'2025년 1분기',
+			'2025년 2분기',
+			'2025년 3분기',
+			'2025년 4분기',
+			'2025년'
+		]);
+		const y2025 = rows.find((r) => r[0] === '2025년')!;
+		expect(y2025[1]).toBeCloseTo(1.25, 2);
+		expect(y2025[3]).toBe('보통');
 	});
 
 	it('scenarioSheet 는 파라미터 8행 + 지표 9행, 증감은 시나리오−기준', () => {
-		const base = sampleYears()[2];
+		const base = sampleRecords()[2];
 		const cmp = compareScenarios(base.inputs, [
 			{ id: 'a', name: 'A', params: { ...DEFAULT_SCENARIO_PARAMS, headcountPct: 10 } },
 			{ id: 'b', name: 'B', params: { ...DEFAULT_SCENARIO_PARAMS, headcountPct: -5 } }
 		]);
-		const s = scenarioSheet(base.year, cmp);
+		const s = scenarioSheet('2025년', cmp);
 		expect(s.paramHeader).toEqual(['항목', 'A', 'B']);
 		expect(s.params).toHaveLength(8);
-		expect(s.metricHeader).toEqual(['지표', '기준(2025)', 'A', '증감', 'B', '증감']);
+		expect(s.metricHeader).toEqual(['지표', '기준(2025년)', 'A', '증감', 'B', '증감']);
 		expect(s.metrics).toHaveLength(9);
 		const hc = s.metrics.find((m) => m.label.startsWith('총 임직원'))!;
 		expect(hc.values).toEqual([36, 40, 4, 34, -2]);
@@ -329,8 +351,8 @@ describe('parseOrgName', () => {
 	});
 });
 
-describe('mergeYears', () => {
-	const existing = sampleYears();
+describe('mergeRecords', () => {
+	const existing = sampleRecords().filter((r) => r.period.type === 'Y');
 	const parsed = parseInputRows(
 		sheet(
 			row({ year: 2025, revenue: 1, operatingCost: 1, headcount: 1, hcCost: 1 }),
@@ -338,32 +360,48 @@ describe('mergeYears', () => {
 		)
 	).records;
 
-	it('덮어쓰기: 기존 연도는 id 유지하고 교체, 새 연도는 추가, 연도순 정렬', () => {
-		const r = mergeYears(existing, parsed, { overwrite: true, newId: () => 'new' });
+	it('덮어쓰기: 기존 기간은 id 유지하고 교체, 새 기간은 추가, 시간순 정렬', () => {
+		const r = mergeRecords(existing, parsed, { overwrite: true, newId: () => 'new' });
 		expect([r.added, r.updated, r.skipped]).toEqual([1, 1, 0]);
-		expect(r.years.map((y) => y.year)).toEqual([2023, 2024, 2025, 2026]);
-		expect(r.years[2]).toMatchObject({ id: 'sample-2025', inputs: { revenue: 1 } });
-		expect(r.years[3].id).toBe('new');
+		expect(r.records.map((y) => y.period.year)).toEqual([2023, 2024, 2025, 2026]);
+		expect(r.records[2]).toMatchObject({ id: 'sample-2025', inputs: { revenue: 1 } });
+		expect(r.records[3].id).toBe('new');
 		expect(existing[2].inputs.revenue).toBe(14_100_000_000); // 원본 불변
 	});
 
-	it('덮어쓰기 끔: 기존 연도는 건너뛴다', () => {
-		const r = mergeYears(existing, parsed, { overwrite: false, newId: () => 'new' });
+	it('덮어쓰기 끔: 기존 기간은 건너뛴다', () => {
+		const r = mergeRecords(existing, parsed, { overwrite: false, newId: () => 'new' });
 		expect([r.added, r.updated, r.skipped]).toEqual([1, 0, 1]);
-		expect(r.years[2].inputs.revenue).toBe(14_100_000_000);
+		expect(r.records[2].inputs.revenue).toBe(14_100_000_000);
+	});
+
+	it('같은 연도라도 분기와 연간은 다른 기간이다', () => {
+		const q = parseInputRows(
+			sheet(
+				row({ year: 2025, period: '1분기', revenue: 5, operatingCost: 4, headcount: 1, hcCost: 1 })
+			)
+		).records;
+		const r = mergeRecords(existing, q, { overwrite: true, newId: () => 'q1' });
+		expect([r.added, r.updated, r.skipped]).toEqual([1, 0, 0]);
+		expect(r.records.map((y) => periodKey(y.period))).toEqual([
+			'2023-Y1',
+			'2024-Y1',
+			'2025-Q1',
+			'2025-Y1'
+		]);
 	});
 });
 
 // exceljs 번들 첫 로드가 수 초 걸린다
 describe('exceljs 입출력 (node)', { timeout: 30_000 }, () => {
 	it('내보낸 xlsx 를 다시 읽으면 입력 시트가 왕복된다', async () => {
-		const years = sampleYears();
+		const records = sampleRecords();
 		const buf = await buildWorkbookBuffer({
-			years,
+			records,
 			scenarios: [
 				{ id: 'a', name: '시나리오 A', params: { ...DEFAULT_SCENARIO_PARAMS, headcountPct: 10 } }
 			],
-			baseYear: years[2],
+			base: records[2],
 			orgName: '가나다 주식회사'
 		});
 		expect(buf.byteLength).toBeGreaterThan(5_000);
@@ -372,17 +410,22 @@ describe('exceljs 입출력 (node)', { timeout: 30_000 }, () => {
 		const parsed = parseInputRows(rows);
 		expect(parsed.headerError).toBeNull();
 		expect(parsed.errors).toEqual([]);
-		expect(parsed.records.map((p) => p.record.inputs)).toEqual(years.map((y) => y.inputs));
-		expect(parsed.records.map((p) => p.record.breakdown)).toEqual(years.map((y) => y.breakdown));
+		const byKey = new Map(records.map((y) => [periodKey(y.period), y]));
+		expect(parsed.records).toHaveLength(records.length);
+		for (const p of parsed.records) {
+			const src = byKey.get(periodKey(p.record.period))!;
+			expect(p.record.inputs).toEqual(src.inputs);
+			expect(p.record.breakdown).toEqual(src.breakdown);
+		}
 	});
 
 	it('조직 정보 시트로 회사명이 왕복된다', async () => {
-		const years = sampleYears();
+		const records = sampleRecords();
 		const withName = await readWorkbook(
 			await buildWorkbookBuffer({
-				years,
+				records,
 				scenarios: [],
-				baseYear: null,
+				base: null,
 				orgName: '가나다 주식회사'
 			})
 		);
@@ -390,7 +433,7 @@ describe('exceljs 입출력 (node)', { timeout: 30_000 }, () => {
 
 		// 회사명 없이 내보내면 시트는 있고 값만 비어 있다 → 빈 문자열(기본 제목)
 		const blank = await readWorkbook(
-			await buildWorkbookBuffer({ years, scenarios: [], baseYear: null })
+			await buildWorkbookBuffer({ records, scenarios: [], base: null })
 		);
 		expect(parseOrgName(blank.org)).toBe('');
 
@@ -401,15 +444,17 @@ describe('exceljs 입출력 (node)', { timeout: 30_000 }, () => {
 	});
 
 	it('인원 구분과 산정 기준이 파일로 왕복된다', async () => {
-		const years = sampleYears().map((y) => ({
-			...y,
-			headcountBreakdown: {
-				regular: y.inputs.headcount - 6,
-				contract: 4,
-				dispatched: 0,
-				executive: 2
-			}
-		}));
+		const years = sampleRecords()
+			.filter((y) => y.period.type === 'Y')
+			.map((y) => ({
+				...y,
+				headcountBreakdown: {
+					regular: y.inputs.headcount - 6,
+					contract: 4,
+					dispatched: 0,
+					executive: 2
+				}
+			}));
 		const basis: HeadcountBasis = {
 			method: 'periodEnd',
 			include: { contract: true, dispatched: false, executive: false }
@@ -419,9 +464,9 @@ describe('exceljs 입출력 (node)', { timeout: 30_000 }, () => {
 
 		const read = await readWorkbook(
 			await buildWorkbookBuffer({
-				years,
+				records: years,
 				scenarios: [],
-				baseYear: null,
+				base: null,
 				orgName: '가나다 주식회사',
 				headcountBasis: basis
 			})
@@ -443,7 +488,7 @@ describe('exceljs 입출력 (node)', { timeout: 30_000 }, () => {
 
 	it('템플릿(샘플 포함/빈)도 같은 헤더로 읽힌다', async () => {
 		const withSample = await readInputSheet(await buildTemplateBuffer({ withSample: true }));
-		expect(parseInputRows(withSample).records).toHaveLength(3);
+		expect(parseInputRows(withSample).records).toHaveLength(7); // 연간 3 + 2025 분기 4
 		const empty = await readInputSheet(await buildTemplateBuffer({ withSample: false }));
 		const p = parseInputRows(empty);
 		expect(p.headerError).toBeNull();

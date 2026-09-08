@@ -3,6 +3,8 @@
 	import { workspace } from '$lib/state/workspace.svelte';
 	import { computeMetrics, diagnose, gradeOf, validateInputs } from '$lib/hcroi/formulas';
 	import { trendInsights } from '$lib/hcroi/insights';
+	import { periodLabel, periodShortLabel } from '$lib/hcroi/period';
+	import { PERIOD_TYPE_LABELS, type PeriodType } from '$lib/hcroi/types';
 	import {
 		amountUnitLabel,
 		formatHeadcount,
@@ -37,17 +39,31 @@
 	);
 
 	let selectedId = $state<string | null>(null);
-	const year = $derived(workspace.years.find((y) => y.id === selectedId) ?? workspace.latestYear);
+	/** 조회 중인 기간 레코드 (연간·반기·분기 중 하나) */
+	const year = $derived(workspace.records.find((y) => y.id === selectedId) ?? workspace.latest);
 	const metrics = $derived(year ? computeMetrics(year.inputs) : null);
 	const diag = $derived(diagnose(metrics?.hcroi ?? null));
 	const errors = $derived(year ? validateInputs(year.inputs) : []);
 
-	const prev = $derived.by(() => {
-		if (!year) return null;
-		const idx = workspace.sortedYears.findIndex((y) => y.id === year.id);
-		return idx > 0 ? workspace.sortedYears[idx - 1] : null;
-	});
+	/** 전기 = 같은 유형의 바로 앞 기간 (연간이면 전년, 분기면 직전 분기) */
+	const prev = $derived(year ? workspace.previousOf(year) : null);
 	const prevMetrics = $derived(prev ? computeMetrics(prev.inputs) : null);
+	/** 전년 동기 — 반기·분기의 계절성 비교용 (연간은 전기와 같아 표시하지 않는다) */
+	const yearAgo = $derived(year && year.period.type !== 'Y' ? workspace.yearAgoOf(year) : null);
+	const yearAgoMetrics = $derived(yearAgo ? computeMetrics(yearAgo.inputs) : null);
+
+	/**
+	 * 추이(차트·표·인사이트)는 한 유형만 본다 — 분기와 연간을 한 줄에 섞으면 비교가 안 된다.
+	 * 기본은 조회 중인 기간의 유형, 유형이 둘 이상이면 셀렉트로 바꿀 수 있다.
+	 */
+	let trendTypeChoice = $state<PeriodType | null>(null);
+	const trendType = $derived<PeriodType>(
+		trendTypeChoice && workspace.periodTypes.includes(trendTypeChoice)
+			? trendTypeChoice
+			: (year?.period.type ?? 'Y')
+	);
+	const series = $derived(workspace.ofType(trendType));
+	const trendTitle = $derived(PERIOD_TYPE_LABELS[trendType]);
 
 	/** 영업비용 ↔ 영업이익 입력 모드 */
 	let costMode = $state<'cost' | 'profit'>('cost');
@@ -61,7 +77,7 @@
 		if (cur == null || before == null) return null;
 		const d = cur - before;
 		return {
-			text: `${formatSigned(d, fmt)} vs ${prev?.year}년`,
+			text: `${formatSigned(d, fmt)} vs ${prev ? periodLabel(prev.period) : '—'}`,
 			direction:
 				Math.abs(d) < 1e-9 ? ('flat' as const) : d > 0 ? ('up' as const) : ('down' as const),
 			goodWhenUp
@@ -70,8 +86,8 @@
 
 	// 차트 데이터
 	const linePoints = $derived(
-		workspace.sortedYears.map((y) => ({
-			label: `${y.year}`,
+		series.map((y) => ({
+			label: periodShortLabel(y.period),
 			value: computeMetrics(y.inputs).hcroi
 		}))
 	);
@@ -81,7 +97,7 @@
 		{ key: 'op', label: '영업이익', color: 'var(--color-series-3)' }
 	];
 	const stackValues = $derived(
-		workspace.sortedYears.map((y) => {
+		series.map((y) => {
 			const m = computeMetrics(y.inputs);
 			return [y.inputs.hcCost, m.nonHcCost, m.operatingProfit];
 		})
@@ -90,7 +106,7 @@
 		{ value: 1.0, label: '보통 1.0' },
 		{ value: 1.5, label: '우수 1.5' }
 	];
-	const trend = $derived(trendInsights(workspace.years));
+	const trend = $derived(trendInsights(series));
 	const oneDecimalBil = (v: number) => (v === 0 ? '0억' : formatKrwCompact(v, ''));
 
 	// 대시보드 제목 커스터마이징 — 회사/조직 이름은 localStorage 작업공간에만 저장 (서버 전송 없음)
@@ -148,16 +164,16 @@
 			</p>
 		{/if}
 	</div>
-	{#if workspace.years.length}
+	{#if workspace.records.length}
 		<label class="flex items-center gap-2 text-sm font-semibold text-ink-2">
-			조회 연도
+			조회 기간
 			<select
 				class="field-input w-auto py-1.5"
 				value={year?.id ?? ''}
 				onchange={(e) => (selectedId = (e.currentTarget as HTMLSelectElement).value || null)}
 			>
-				{#each workspace.sortedYears as y (y.id)}
-					<option value={y.id}>{y.year}년</option>
+				{#each workspace.sorted as y (y.id)}
+					<option value={y.id}>{periodLabel(y.period)}</option>
 				{/each}
 			</select>
 		</label>
@@ -179,7 +195,9 @@
 		<!-- 입력 -->
 		<section class="card h-fit px-5 py-5" aria-labelledby="input-h">
 			<div class="mb-4 flex items-center justify-between">
-				<h2 id="input-h" class="text-lg font-semibold text-ink">{year.year}년 기준 데이터</h2>
+				<h2 id="input-h" class="text-lg font-semibold text-ink">
+					{periodLabel(year.period)} 기준 데이터
+				</h2>
 				<a href={resolve('/data')} class="text-sm font-medium text-brand-ink hover:underline"
 					>세부 관리 →</a
 				>
@@ -285,6 +303,14 @@
 								</div>
 							{/if}
 						{/if}
+						{#if yearAgo && yearAgoMetrics && yearAgoMetrics.hcroi !== null && metrics.hcroi !== null}
+							<!-- 반기·분기는 계절성이 있어 직전 기간보다 전년 동기가 더 공정한 비교다 -->
+							<div class="mt-0.5 text-sm text-muted">
+								{formatSigned(metrics.hcroi - yearAgoMetrics.hcroi, formatMultiple)} vs 전년 동기({periodLabel(
+									yearAgo.period
+								)})
+							</div>
+						{/if}
 					</div>
 					<GradeBadge grade={gradeOf(metrics.hcroi)} size="lg" />
 				</div>
@@ -354,13 +380,32 @@
 	<!-- 차트 -->
 	<div class="mt-6 grid gap-6 xl:grid-cols-2">
 		<section class="card px-5 py-4" aria-labelledby="line-h">
-			<h2 id="line-h" class="text-base font-semibold text-ink">연도별 HCROI 추이</h2>
-			<p class="mb-2 text-sm text-muted">배수 · 가로선은 등급 기준선</p>
+			<div class="flex flex-wrap items-center justify-between gap-2">
+				<h2 id="line-h" class="text-base font-semibold text-ink">{trendTitle} HCROI 추이</h2>
+				{#if workspace.periodTypes.length > 1}
+					<label class="flex items-center gap-1.5 text-xs text-ink-2">
+						추이 단위
+						<select
+							class="field-input w-auto py-0.5 text-xs"
+							value={trendType}
+							onchange={(e) =>
+								(trendTypeChoice = (e.currentTarget as HTMLSelectElement).value as PeriodType)}
+						>
+							{#each workspace.periodTypes as t (t)}
+								<option value={t}>{PERIOD_TYPE_LABELS[t]}</option>
+							{/each}
+						</select>
+					</label>
+				{/if}
+			</div>
+			<p class="mb-2 text-sm text-muted">
+				배수 · 가로선은 등급 기준선{trendType === 'Y' ? '' : ' · 각 기간 실적 기준(연율화 안 함)'}
+			</p>
 			<LineChart
 				points={linePoints}
 				format={(v) => v.toFixed(2)}
 				{thresholds}
-				ariaLabel="연도별 HCROI 추이 라인 차트"
+				ariaLabel="{trendTitle} HCROI 추이 라인 차트"
 			/>
 		</section>
 		<section class="card px-5 py-4" aria-labelledby="stack-h">
@@ -369,12 +414,12 @@
 				매출액 구성 (억원) — 총 인건비 + 비인건비 영업비용 + 영업이익 = 매출액
 			</p>
 			<StackedBarChart
-				categories={workspace.sortedYears.map((y) => `${y.year}`)}
+				categories={series.map((y) => periodShortLabel(y.period))}
 				series={stackSeries}
 				values={stackValues}
 				format={oneDecimalBil}
 				totalLabel="매출액"
-				ariaLabel="연도별 인건비·비인건비·영업이익 누적 막대 차트"
+				ariaLabel="{trendTitle} 인건비·비인건비·영업이익 누적 막대 차트"
 			/>
 		</section>
 	</div>
@@ -385,15 +430,17 @@
 			<h2 id="trend-h" class="mb-3 text-lg font-semibold text-ink">추이 인사이트</h2>
 			<InsightList
 				insights={trend}
-				emptyText="2개년 이상 데이터가 있으면 추이 인사이트가 표시됩니다."
+				emptyText="같은 단위({trendTitle})의 기간이 2개 이상 있으면 추이 인사이트가 표시됩니다."
 			/>
 		</section>
 		<section class="card overflow-x-auto" aria-labelledby="table-h">
-			<h2 id="table-h" class="px-5 pt-4 pb-2 text-lg font-semibold text-ink">연도별 지표 표</h2>
+			<h2 id="table-h" class="px-5 pt-4 pb-2 text-lg font-semibold text-ink">
+				{trendTitle} 지표 표
+			</h2>
 			<table class="w-full min-w-[640px] text-[15px]">
 				<thead>
 					<tr class="border-y border-line bg-surface-2 text-left text-sm text-ink-2">
-						<th scope="col" class="px-4 py-2 font-semibold">연도</th>
+						<th scope="col" class="px-4 py-2 font-semibold">기간</th>
 						<th scope="col" class="px-3 py-2 text-right font-semibold">매출액{colUnit}</th>
 						<th scope="col" class="px-3 py-2 text-right font-semibold">영업이익{colUnit}</th>
 						<th scope="col" class="px-3 py-2 text-right font-semibold">총 인건비{colUnit}</th>
@@ -403,14 +450,16 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each workspace.sortedYears as y (y.id)}
+					{#each series as y (y.id)}
 						{@const m = computeMetrics(y.inputs)}
 						<tr
 							class="border-b border-line last:border-0 {y.id === year.id
 								? 'bg-brand-tint/60'
 								: ''}"
 						>
-							<th scope="row" class="px-4 py-2 text-left font-semibold text-ink">{y.year}</th>
+							<th scope="row" class="px-4 py-2 text-left font-semibold whitespace-nowrap text-ink"
+								>{periodLabel(y.period)}</th
+							>
 							<td class="tabular px-3 py-2 text-right">{cellWon(y.inputs.revenue)}</td>
 							<td class="tabular px-3 py-2 text-right">{cellWon(m.operatingProfit)}</td>
 							<td class="tabular px-3 py-2 text-right">{cellWon(y.inputs.hcCost)}</td>

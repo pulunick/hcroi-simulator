@@ -1,8 +1,9 @@
 import type ExcelJS from 'exceljs';
 import { compareScenarios } from '../scenario';
-import type { HeadcountBasis, Scenario, YearRecord } from '../types';
+import type { HeadcountBasis, PeriodRecord, Scenario } from '../types';
+import { periodLabel } from '../period';
 import { DEFAULT_HEADCOUNT_BASIS, HEADCOUNT_OPTIONAL_KEYS } from '../types';
-import { sampleYears } from '../defaults';
+import { sampleRecords } from '../defaults';
 import {
 	BASIS_SHEET,
 	INPUT_COLUMNS,
@@ -67,7 +68,7 @@ function setCells(
 	});
 }
 
-function addInputSheet(wb: ExcelJS.Workbook, years: YearRecord[]) {
+function addInputSheet(wb: ExcelJS.Workbook, records: PeriodRecord[]) {
 	const ws = wb.addWorksheet(SHEET.input);
 	ws.columns = INPUT_COLUMNS.map((c) => ({ width: c.width }));
 	const header = ws.getRow(INPUT_HEADER_ROW);
@@ -82,7 +83,7 @@ function addInputSheet(wb: ExcelJS.Workbook, years: YearRecord[]) {
 	unit.eachCell((c) => (c.alignment = { wrapText: true, vertical: 'top' }));
 	unit.height = 30;
 
-	const rows = inputRows(years);
+	const rows = inputRows(records);
 	rows.forEach((r, i) => {
 		const row = ws.getRow(INPUT_FIRST_DATA_ROW + i);
 		setCells(
@@ -92,11 +93,13 @@ function addInputSheet(wb: ExcelJS.Workbook, years: YearRecord[]) {
 				const c = INPUT_COLUMNS[col];
 				return c.key === 'year'
 					? NUM_FMT.year
-					: c.unit === '원'
-						? NUM_FMT.won
-						: c.unit === '명'
-							? '0'
-							: '@';
+					: c.key === 'period' || c.key === 'memo'
+						? '@'
+						: c.unit === '원'
+							? NUM_FMT.won
+							: c.unit === '명'
+								? '0'
+								: '@';
 			}
 		);
 	});
@@ -104,7 +107,7 @@ function addInputSheet(wb: ExcelJS.Workbook, years: YearRecord[]) {
 	return ws;
 }
 
-function addSummarySheet(wb: ExcelJS.Workbook, years: YearRecord[]) {
+function addSummarySheet(wb: ExcelJS.Workbook, records: PeriodRecord[]) {
 	const ws = wb.addWorksheet(SHEET.summary);
 	ws.columns = SUMMARY_COLUMNS.map((c) => ({ width: c.width }));
 	const note = ws.getRow(1);
@@ -118,15 +121,15 @@ function addSummarySheet(wb: ExcelJS.Workbook, years: YearRecord[]) {
 		SUMMARY_COLUMNS.map((c) => c.header)
 	);
 	styleHeaderRow(header);
-	summaryRows(years).forEach((vals, i) => {
+	summaryRows(records).forEach((vals, i) => {
 		setCells(ws.getRow(3 + i), vals, (col) => SUMMARY_COLUMNS[col].numFmt);
 	});
 	ws.views = [{ state: 'frozen', xSplit: 1, ySplit: 2 }];
 }
 
-function addScenarioSheet(wb: ExcelJS.Workbook, baseYear: YearRecord, scenarios: Scenario[]) {
+function addScenarioSheet(wb: ExcelJS.Workbook, base: PeriodRecord, scenarios: Scenario[]) {
 	const ws = wb.addWorksheet(SHEET.scenarios);
-	const sheet = scenarioSheet(baseYear.year, compareScenarios(baseYear.inputs, scenarios));
+	const sheet = scenarioSheet(periodLabel(base.period), compareScenarios(base.inputs, scenarios));
 	ws.columns = [
 		{ width: 26 },
 		{ width: 16 },
@@ -138,7 +141,7 @@ function addScenarioSheet(wb: ExcelJS.Workbook, baseYear: YearRecord, scenarios:
 
 	let r = 1;
 	ws.getRow(r).getCell(1).value =
-		`기준연도 ${baseYear.year}년 · 내보내기 시점의 시나리오 파라미터와 결과 (가져오기 시 무시)`;
+		`기준 기간 ${periodLabel(base.period)} · 내보내기 시점의 시나리오 파라미터와 결과 (가져오기 시 무시)`;
 	ws.getRow(r).font = NOTE_FONT;
 	r += 2;
 
@@ -216,10 +219,10 @@ function addOrgSheet(wb: ExcelJS.Workbook, orgName: string, basis: HeadcountBasi
 }
 
 export interface ExportData {
-	years: YearRecord[];
+	records: PeriodRecord[];
 	scenarios: Scenario[];
-	/** 시나리오 시트의 기준연도 (없으면 시나리오 시트 생략) */
-	baseYear: YearRecord | null;
+	/** 시나리오 시트의 기준 기간 (없으면 시나리오 시트 생략) */
+	base: PeriodRecord | null;
 	/** 대시보드 제목에 붙는 회사/조직 이름 (빈 문자열이면 빈 칸으로 내보낸다) */
 	orgName?: string;
 	/** 임직원 수 산정 기준 — 인원 구분을 쓴 연도의 총원이 이 기준으로 정해진다 */
@@ -232,9 +235,9 @@ export async function buildWorkbookBuffer(data: ExportData): Promise<ArrayBuffer
 	const wb = new Excel.Workbook();
 	wb.creator = 'HCROI 시뮬레이터';
 	wb.created = new Date();
-	addSummarySheet(wb, data.years);
-	addInputSheet(wb, data.years);
-	if (data.baseYear) addScenarioSheet(wb, data.baseYear, data.scenarios);
+	addSummarySheet(wb, data.records);
+	addInputSheet(wb, data.records);
+	if (data.base) addScenarioSheet(wb, data.base, data.scenarios);
 	addOrgSheet(wb, data.orgName ?? '', data.headcountBasis ?? DEFAULT_HEADCOUNT_BASIS);
 	addFormulaSheet(wb);
 	return toArrayBuffer(await wb.xlsx.writeBuffer());
@@ -245,7 +248,7 @@ export async function buildTemplateBuffer(opts: { withSample: boolean } = { with
 	const Excel = await loadExcel();
 	const wb = new Excel.Workbook();
 	wb.creator = 'HCROI 시뮬레이터';
-	addInputSheet(wb, opts.withSample ? sampleYears() : []);
+	addInputSheet(wb, opts.withSample ? sampleRecords() : []);
 	addOrgSheet(wb, '', DEFAULT_HEADCOUNT_BASIS);
 	addFormulaSheet(wb);
 	return toArrayBuffer(await wb.xlsx.writeBuffer());

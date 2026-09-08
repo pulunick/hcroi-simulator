@@ -98,11 +98,31 @@ export interface BaseInputs {
 	headcount: number;
 }
 
-/** 연도별 데이터 레코드 (대시보드 추이·시뮬레이터 기준연도) */
-export interface YearRecord {
-	id: string;
-	/** 회계연도 */
+/**
+ * 분석 기간 단위. 연간(Y) · 반기(H) · 분기(Q).
+ * 실무 확인(2026-09-03): 분기 필수, 결산이 없는 분기는 반기 실적만 있음 → 반기 값을 반기 레코드로 그대로 둔다(분기로 쪼개 추정하지 않음).
+ * 월(M)은 요구가 확인되면 같은 구조로 추가한다.
+ */
+export type PeriodType = 'Y' | 'H' | 'Q';
+
+export const PERIOD_TYPES: readonly PeriodType[] = ['Y', 'H', 'Q'];
+
+export const PERIOD_TYPE_LABELS: Record<PeriodType, string> = { Y: '연간', H: '반기', Q: '분기' };
+
+/** 유형별 한 해의 기간 수 = 연율화 계수 N (확장 지침 §1-(1): 연=1, 반기=2, 분기=4) */
+export const PERIODS_PER_YEAR: Record<PeriodType, number> = { Y: 1, H: 2, Q: 4 };
+
+/** 분석 기간 = 회계연도 + 유형 + 순번 (Y 는 항상 1, H 는 1–2, Q 는 1–4) */
+export interface Period {
 	year: number;
+	type: PeriodType;
+	index: number;
+}
+
+/** 기간별 데이터 레코드 (대시보드 추이·시뮬레이터 기준 기간). 값은 모두 **그 기간의 실적**이며 연율화하지 않는다 */
+export interface PeriodRecord {
+	id: string;
+	period: Period;
 	inputs: BaseInputs;
 	/**
 	 * 인건비 세부 내역. 값이 있으면 inputs.hcCost 는 이 합계와 동일해야 한다.

@@ -1,6 +1,7 @@
 import { computeMetrics, GRADE_LABEL, gradeOf } from '../formulas';
 import type { Comparison } from '../scenario';
-import { HC_COST_KEYS, HEADCOUNT_KEYS, type Metrics, type YearRecord } from '../types';
+import { HC_COST_KEYS, HEADCOUNT_KEYS, type Metrics, type PeriodRecord } from '../types';
+import { comparePeriods, periodLabel, periodText } from '../period';
 import { NUM_FMT, type InputColumnKey } from './schema';
 
 /**
@@ -12,12 +13,13 @@ export type CellValue = number | string | null;
 export type InputRow = Record<InputColumnKey, CellValue>;
 
 /** 시트 ② `입력 데이터` — 템플릿과 같은 구조라 그대로 다시 가져올 수 있다 */
-export function inputRows(years: YearRecord[]): InputRow[] {
-	return [...years]
-		.sort((a, b) => a.year - b.year)
+export function inputRows(records: PeriodRecord[]): InputRow[] {
+	return [...records]
+		.sort((a, b) => comparePeriods(a.period, b.period))
 		.map((y) => {
 			const row: InputRow = {
-				year: y.year,
+				year: y.period.year,
+				period: periodText(y.period),
 				revenue: y.inputs.revenue,
 				operatingCost: y.inputs.operatingCost,
 				operatingProfit: y.inputs.revenue - y.inputs.operatingCost,
@@ -44,7 +46,7 @@ export function inputRows(years: YearRecord[]): InputRow[] {
 export interface SummaryColumn {
 	header: string;
 	numFmt: string;
-	pick: (y: YearRecord, m: Metrics) => CellValue;
+	pick: (y: PeriodRecord, m: Metrics) => CellValue;
 	width: number;
 }
 
@@ -55,7 +57,7 @@ const gradeText = (m: Metrics) => {
 
 /** 시트 ① `지표 요약` 열 정의 */
 export const SUMMARY_COLUMNS: readonly SummaryColumn[] = [
-	{ header: '연도', numFmt: NUM_FMT.year, pick: (y) => y.year, width: 8 },
+	{ header: '기간', numFmt: '@', pick: (y) => periodLabel(y.period), width: 14 },
 	{ header: 'HCROI(배)', numFmt: NUM_FMT.multiple, pick: (_, m) => m.hcroi, width: 11 },
 	{
 		header: 'HCROI(%)',
@@ -86,9 +88,9 @@ export const SUMMARY_COLUMNS: readonly SummaryColumn[] = [
 	}
 ];
 
-export function summaryRows(years: YearRecord[]): CellValue[][] {
-	return [...years]
-		.sort((a, b) => a.year - b.year)
+export function summaryRows(records: PeriodRecord[]): CellValue[][] {
+	return [...records]
+		.sort((a, b) => comparePeriods(a.period, b.period))
 		.map((y) => {
 			const m = computeMetrics(y.inputs);
 			return SUMMARY_COLUMNS.map((c) => c.pick(y, m));
@@ -106,13 +108,13 @@ export interface ScenarioSheet {
 	/** 열 헤더: ['항목', '시나리오 A', '시나리오 B'] */
 	paramHeader: string[];
 	params: LabeledRow[];
-	/** 열 헤더: ['지표', '기준(2025)', '시나리오 A', '증감', '시나리오 B', '증감'] */
+	/** 열 헤더: ['지표', '기준(2025년)', '시나리오 A', '증감', '시나리오 B', '증감'] */
 	metricHeader: string[];
 	metrics: LabeledRow[];
 }
 
 /** 시트 ③ `시나리오 비교` — 내보내기 전용(가져오기 대상 아님) */
-export function scenarioSheet(baseYear: number, cmp: Comparison): ScenarioSheet {
+export function scenarioSheet(baseLabel: string, cmp: Comparison): ScenarioSheet {
 	const names = cmp.results.map((r) => r.scenario.name);
 	const p = (f: (r: Comparison['results'][number]) => CellValue) => cmp.results.map(f);
 
@@ -182,7 +184,7 @@ export function scenarioSheet(baseYear: number, cmp: Comparison): ScenarioSheet 
 		metricRow('영업이익률(%)', NUM_FMT.pct, (m) => m.operatingMargin)
 	];
 
-	const metricHeader = ['지표', `기준(${baseYear})`];
+	const metricHeader = ['지표', `기준(${baseLabel})`];
 	for (const n of names) metricHeader.push(n, '증감');
 
 	return { paramHeader: ['항목', ...names], params, metricHeader, metrics };

@@ -61,6 +61,7 @@ export type InputColumnKey =
 	| 'operatingCost'
 	| 'operatingProfit'
 	| 'headcount'
+	| 'period'
 	| 'hcCost'
 	| keyof HcCostBreakdown
 	| keyof HeadcountBreakdown
@@ -101,6 +102,14 @@ const headcountColumns: InputColumn[] = HEADCOUNT_KEYS.map((k) => ({
 
 export const INPUT_COLUMNS: readonly InputColumn[] = [
 	{ key: 'year', header: '연도', unit: '', required: true, note: '예: 2025', width: 8 },
+	{
+		key: 'period',
+		header: '기간',
+		unit: '',
+		required: false,
+		note: '비우면 연간. 1분기~4분기 / 상반기·하반기 (Q1·H1 표기도 됨). 값은 그 기간 실적 그대로',
+		width: 10
+	},
 	{ key: 'revenue', header: '매출액', unit: '원', required: true, note: '원 단위 정수', width: 18 },
 	{
 		key: 'operatingCost',

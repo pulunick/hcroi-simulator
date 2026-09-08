@@ -1,14 +1,16 @@
 import { browser } from '$app/environment';
-import { sampleYears } from '$lib/hcroi/defaults';
+import { sampleRecords } from '$lib/hcroi/defaults';
 import { DEFAULT_SCENARIO_PARAMS } from '$lib/hcroi/scenario';
 import type {
 	HcCostBreakdown,
 	HeadcountBasis,
 	HeadcountBreakdown,
 	Scenario,
-	ScenarioParams,
-	YearRecord
+	Period,
+	PeriodRecord,
+	ScenarioParams
 } from '$lib/hcroi/types';
+import { comparePeriods, isValidPeriod, periodKey, samePeriod } from '$lib/hcroi/period';
 import { DEFAULT_HEADCOUNT_BASIS } from '$lib/hcroi/types';
 import { sumHcCost, sumHeadcount } from '$lib/hcroi/formulas';
 import { DEFAULT_AMOUNT_UNIT, isAmountUnit, type AmountUnit } from '$lib/hcroi/format';
@@ -23,9 +25,14 @@ const STORAGE_KEY = 'hcroi:workspace:v1';
 const UNDO_KEY = 'hcroi:workspace:v1:undo';
 
 interface Persisted {
-	years: YearRecord[];
+	/** 기간 레코드. 옛 저장값(2026-09-08 이전)은 `years` 키에 `year` 필드만 있는 연간 레코드 — load 에서 이행 */
+	records?: PeriodRecord[];
+	years?: unknown[];
 	scenarios: Scenario[];
-	baseYearId: string | null;
+	/** 시뮬레이터 기준 기간 id */
+	baseId?: string | null;
+	/** 옛 키 */
+	baseYearId?: string | null;
 	/** 대시보드 제목에 붙는 회사/조직 이름 (선택) */
 	orgName?: string;
 	/** 금액 표시 단위 (선택). 저장값은 언제나 원 단위 정수 — 이건 보기 설정일 뿐이다 */
@@ -82,13 +89,41 @@ function normalizeBasis(v: unknown): HeadcountBasis {
 function isPersisted(v: unknown): v is Persisted {
 	if (!v || typeof v !== 'object') return false;
 	const o = v as Record<string, unknown>;
-	return Array.isArray(o.years) && Array.isArray(o.scenarios);
+	return (Array.isArray(o.records) || Array.isArray(o.years)) && Array.isArray(o.scenarios);
+}
+
+/**
+ * 저장된 레코드 하나를 현재 스키마로 맞춘다.
+ * - 옛 연간 레코드(`year` 만 있음) → `period: {year, type:'Y', index:1}`
+ * - 기간이 깨진 레코드는 버린다 (null)
+ */
+function normalizeRecord(raw: unknown): PeriodRecord | null {
+	if (!raw || typeof raw !== 'object') return null;
+	const o = raw as Record<string, unknown> & { period?: Partial<Period>; year?: number };
+	const period: Period = o.period
+		? {
+				year: Number(o.period.year),
+				type: o.period.type ?? 'Y',
+				index: Number(o.period.index ?? 1)
+			}
+		: { year: Number(o.year), type: 'Y', index: 1 };
+	if (!isValidPeriod(period) || typeof o.id !== 'string' || !o.inputs) return null;
+	const { year: _year, ...rest } = o;
+	void _year;
+	return { ...(rest as Omit<PeriodRecord, 'period'>), period };
+}
+
+function normalizeRecords(p: Persisted): PeriodRecord[] {
+	const list = p.records ?? p.years ?? [];
+	return list.map(normalizeRecord).filter((r): r is PeriodRecord => r !== null);
 }
 
 class Workspace {
-	years = $state<YearRecord[]>(sampleYears());
+	/** 기간 레코드(연간·반기·분기 혼재 가능). 정렬은 `sorted` 로 */
+	records = $state<PeriodRecord[]>(sampleRecords());
 	scenarios = $state<Scenario[]>(defaultScenarios());
-	baseYearId = $state<string | null>(null);
+	/** 시뮬레이터 기준 기간 id (없으면 최신 기간) */
+	baseId = $state<string | null>(null);
 	/** 대시보드 제목 커스터마이징용 회사/조직 이름 (빈 문자열 = 기본 제목) */
 	orgName = $state('');
 	/** 화면·표에 금액을 어떤 단위로 보여줄지. 계산·저장에는 영향이 없다 */
@@ -103,9 +138,37 @@ class Workspace {
 	/** 되돌릴 수 있는 가져오기 스냅샷이 있는지 */
 	undoAvailable = $state(false);
 
-	sortedYears = $derived([...this.years].sort((a, b) => a.year - b.year));
-	latestYear = $derived(this.sortedYears.at(-1) ?? null);
-	baseYear = $derived(this.years.find((y) => y.id === this.baseYearId) ?? this.latestYear);
+	/** 시간순 (한 해의 분기·반기 뒤에 연간). */
+	sorted = $derived([...this.records].sort((a, b) => comparePeriods(a.period, b.period)));
+	/** 가장 최근 기간 — 같은 끝 월이면 연간이 뒤에 오므로 연간이 우선된다 */
+	latest = $derived(this.sorted.at(-1) ?? null);
+	base = $derived(this.records.find((y) => y.id === this.baseId) ?? this.latest);
+	/** 작업공간에 있는 기간 유형들 (Y → H → Q 순) */
+	periodTypes = $derived(
+		(['Y', 'H', 'Q'] as const).filter((t) => this.records.some((r) => r.period.type === t))
+	);
+
+	/** 같은 유형의 레코드만 시간순으로 — 추이 차트·표·인사이트용 (유형을 섞어 비교하지 않는다) */
+	ofType(type: PeriodRecord['period']['type']): PeriodRecord[] {
+		return this.sorted.filter((r) => r.period.type === type);
+	}
+
+	/** 같은 유형에서 바로 앞 레코드 (전기). 없으면 null */
+	previousOf(rec: PeriodRecord): PeriodRecord | null {
+		const list = this.ofType(rec.period.type);
+		const i = list.findIndex((r) => r.id === rec.id);
+		return i > 0 ? list[i - 1] : null;
+	}
+
+	/** 전년 동기 레코드 (분기·반기의 계절성 비교용). 연간은 previousOf 와 같다 */
+	yearAgoOf(rec: PeriodRecord): PeriodRecord | null {
+		const p = { ...rec.period, year: rec.period.year - 1 };
+		return this.records.find((r) => samePeriod(r.period, p)) ?? null;
+	}
+
+	findByPeriod(period: Period): PeriodRecord | undefined {
+		return this.records.find((r) => samePeriod(r.period, period));
+	}
 
 	load() {
 		if (!browser) return;
@@ -114,9 +177,9 @@ class Workspace {
 			if (raw) {
 				const parsed: unknown = JSON.parse(raw);
 				if (isPersisted(parsed)) {
-					this.years = parsed.years;
+					this.records = normalizeRecords(parsed);
 					this.scenarios = parsed.scenarios.length ? parsed.scenarios : defaultScenarios();
-					this.baseYearId = parsed.baseYearId ?? null;
+					this.baseId = parsed.baseId ?? parsed.baseYearId ?? null;
 					this.orgName = typeof parsed.orgName === 'string' ? parsed.orgName : '';
 					this.amountUnit = isAmountUnit(parsed.amountUnit)
 						? parsed.amountUnit
@@ -138,9 +201,9 @@ class Workspace {
 	save() {
 		if (!browser || !this.loaded) return;
 		const data: Persisted = {
-			years: $state.snapshot(this.years),
+			records: $state.snapshot(this.records),
 			scenarios: $state.snapshot(this.scenarios),
-			baseYearId: this.baseYearId,
+			baseId: this.baseId,
 			orgName: this.orgName,
 			amountUnit: this.amountUnit,
 			headcountBasis: $state.snapshot(this.headcountBasis)
@@ -153,48 +216,53 @@ class Workspace {
 	}
 
 	resetToSample() {
-		this.years = sampleYears();
+		this.records = sampleRecords();
 		this.scenarios = defaultScenarios();
-		this.baseYearId = null;
+		this.baseId = null;
 	}
 
 	clearAll() {
-		this.years = [];
+		this.records = [];
 		this.scenarios = defaultScenarios();
-		this.baseYearId = null;
+		this.baseId = null;
 	}
 
-	addYear(year: number): YearRecord {
-		const prev = this.sortedYears.at(-1);
-		const rec: YearRecord = {
+	/**
+	 * 기간을 추가한다. 같은 유형의 가장 최근 레코드 값을 복사해 시작한다
+	 * (분기를 추가하는데 연간 값을 복사하면 4배가 되어 버린다).
+	 */
+	addPeriod(period: Period): PeriodRecord {
+		const prev = this.ofType(period.type).at(-1) ?? null;
+		const rec: PeriodRecord = {
 			id: newId(),
-			year,
+			period,
 			inputs: prev ? { ...prev.inputs } : { revenue: 0, operatingCost: 0, hcCost: 0, headcount: 1 },
-			breakdown: prev?.breakdown ? { ...prev.breakdown } : null
+			breakdown: prev?.breakdown ? { ...prev.breakdown } : null,
+			headcountBreakdown: prev?.headcountBreakdown ? { ...prev.headcountBreakdown } : null
 		};
-		this.years.push(rec);
+		this.records.push(rec);
 		return rec;
 	}
 
-	removeYear(id: string) {
-		this.years = this.years.filter((y) => y.id !== id);
-		if (this.baseYearId === id) this.baseYearId = null;
+	removeRecord(id: string) {
+		this.records = this.records.filter((y) => y.id !== id);
+		if (this.baseId === id) this.baseId = null;
 	}
 
-	getYear(id: string): YearRecord | undefined {
-		return this.years.find((y) => y.id === id);
+	getRecord(id: string): PeriodRecord | undefined {
+		return this.records.find((y) => y.id === id);
 	}
 
 	/** 세부 내역이 있으면 총 인건비를 합계로 동기화 */
 	setBreakdown(id: string, breakdown: HcCostBreakdown | null) {
-		const y = this.getYear(id);
+		const y = this.getRecord(id);
 		if (!y) return;
 		y.breakdown = breakdown;
 		if (breakdown) y.inputs.hcCost = sumHcCost(breakdown);
 	}
 
 	setHeadcountBreakdown(id: string, breakdown: HeadcountBreakdown | null) {
-		const y = this.getYear(id);
+		const y = this.getRecord(id);
 		if (!y) return;
 		y.headcountBreakdown = breakdown;
 		if (breakdown) y.inputs.headcount = sumHeadcount(breakdown, this.headcountBasis);
@@ -202,15 +270,15 @@ class Workspace {
 
 	/** 산정 기준이 바뀌면 세부 구성을 입력한 연도의 총 임직원 수를 다시 계산한다 */
 	applyHeadcountBasis() {
-		for (const y of this.years) {
+		for (const y of this.records) {
 			if (y.headcountBreakdown) {
 				y.inputs.headcount = sumHeadcount(y.headcountBreakdown, this.headcountBasis);
 			}
 		}
 	}
 
-	hasYear(year: number): boolean {
-		return this.years.some((y) => y.year === year);
+	hasPeriod(period: Period): boolean {
+		return this.records.some((y) => periodKey(y.period) === periodKey(period));
 	}
 
 	updateScenarioParams(id: string, patch: Partial<ScenarioParams>) {
@@ -228,10 +296,10 @@ class Workspace {
 		if (s) s.params = { ...DEFAULT_SCENARIO_PARAMS };
 	}
 
-	/** 연도 목록을 통째로 교체 (엑셀 가져오기 병합 결과 반영) */
-	replaceYears(years: YearRecord[]) {
-		this.years = years;
-		if (this.baseYearId && !years.some((y) => y.id === this.baseYearId)) this.baseYearId = null;
+	/** 레코드 목록을 통째로 교체 (엑셀 가져오기 병합 결과 반영) */
+	replaceRecords(records: PeriodRecord[]) {
+		this.records = records;
+		if (this.baseId && !records.some((y) => y.id === this.baseId)) this.baseId = null;
 	}
 
 	/** 가져오기 반영 전 현재 상태를 보관한다 (1회분, 새로고침 후에도 유지) */
@@ -261,9 +329,9 @@ class Workspace {
 
 	exportJson(): string {
 		const data: Persisted = {
-			years: $state.snapshot(this.years),
+			records: $state.snapshot(this.records),
 			scenarios: $state.snapshot(this.scenarios),
-			baseYearId: this.baseYearId,
+			baseId: this.baseId,
 			orgName: this.orgName,
 			amountUnit: this.amountUnit,
 			headcountBasis: $state.snapshot(this.headcountBasis)
@@ -275,10 +343,10 @@ class Workspace {
 	importJson(text: string): string | null {
 		try {
 			const parsed: unknown = JSON.parse(text);
-			if (!isPersisted(parsed)) return '형식이 올바르지 않습니다 (years, scenarios 배열 필요).';
-			this.years = parsed.years;
+			if (!isPersisted(parsed)) return '형식이 올바르지 않습니다 (records, scenarios 배열 필요).';
+			this.records = normalizeRecords(parsed);
 			this.scenarios = parsed.scenarios.length ? parsed.scenarios : defaultScenarios();
-			this.baseYearId = parsed.baseYearId ?? null;
+			this.baseId = parsed.baseId ?? parsed.baseYearId ?? null;
 			this.orgName = typeof parsed.orgName === 'string' ? parsed.orgName : '';
 			if (isAmountUnit(parsed.amountUnit)) this.amountUnit = parsed.amountUnit;
 			this.headcountBasis = normalizeBasis(parsed.headcountBasis);

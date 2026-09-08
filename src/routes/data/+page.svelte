@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { newId, workspace } from '$lib/state/workspace.svelte';
+	import { isValidPeriod, periodIndexCount, periodKey, periodLabel } from '$lib/hcroi/period';
 	import {
-		mergeYears,
+		mergeRecords,
 		parseInputRows,
 		parseHeadcountBasis,
 		parseOrgName,
@@ -21,7 +22,11 @@
 		HEADCOUNT_KEYS,
 		HEADCOUNT_LABELS,
 		HEADCOUNT_OPTIONAL_KEYS,
-		type HeadcountBasis
+		PERIOD_TYPES,
+		PERIOD_TYPE_LABELS,
+		type HeadcountBasis,
+		type Period,
+		type PeriodType
 	} from '$lib/hcroi/types';
 	import {
 		AMOUNT_UNITS,
@@ -49,40 +54,59 @@
 	);
 
 	let selectedId = $state<string | null>(null);
-	const selected = $derived(
-		workspace.years.find((y) => y.id === selectedId) ?? workspace.latestYear
-	);
+	const selected = $derived(workspace.records.find((y) => y.id === selectedId) ?? workspace.latest);
 	const errors = $derived(selected ? validateInputs(selected.inputs) : []);
 
-	let newYear = $state((workspace.latestYear?.year ?? new Date().getFullYear() - 1) + 1);
+	// --- 기간 추가 (연도 + 유형 + 순번) ---
+	let newYear = $state((workspace.latest?.period.year ?? new Date().getFullYear() - 1) + 1);
+	let newType = $state<PeriodType>('Y');
+	let newIndex = $state(1);
+	const newPeriod = $derived<Period>({ year: newYear, type: newType, index: newIndex });
 	let addError = $state<string | null>(null);
-	function addYear() {
+	function addPeriod() {
 		addError = null;
 		if (!Number.isInteger(newYear) || newYear < 1990 || newYear > 2100) {
 			addError = '연도는 1990~2100 사이의 정수여야 합니다.';
 			return;
 		}
-		if (workspace.hasYear(newYear)) {
-			addError = `${newYear}년 데이터가 이미 있습니다.`;
+		if (!isValidPeriod(newPeriod)) {
+			addError = '기간 순번이 올바르지 않습니다.';
 			return;
 		}
-		const rec = workspace.addYear(newYear);
+		if (workspace.hasPeriod(newPeriod)) {
+			addError = `${periodLabel(newPeriod)} 데이터가 이미 있습니다.`;
+			return;
+		}
+		const rec = workspace.addPeriod({ ...newPeriod });
 		selectedId = rec.id;
-		newYear += 1;
+		// 다음 기간으로 넘긴다: 4분기 다음은 이듬해 1분기
+		if (newIndex < periodIndexCount(newType)) newIndex += 1;
+		else {
+			newIndex = 1;
+			newYear += 1;
+		}
 	}
-	/** 선택 연도의 값을 표준 레퍼런스 기본값으로 되돌린다 (매출액·인원은 유지) */
+	/** 유형을 바꾸면 순번을 범위 안으로 되돌린다 */
+	$effect(() => {
+		if (newIndex > periodIndexCount(newType)) newIndex = 1;
+	});
+	/** 선택 기간의 값을 표준 레퍼런스 기본값으로 되돌린다 (매출액·인원은 유지) */
 	function resetYear() {
 		if (!selected) return;
-		if (!confirm(`${selected.year}년 데이터를 표준 기본값으로 초기화할까요? (매출액·인원은 유지)`))
+		if (
+			!confirm(
+				`${periodLabel(selected.period)} 데이터를 표준 기본값으로 초기화할까요? (매출액·인원은 유지)`
+			)
+		)
 			return;
 		const est = estimateFromRevenue(selected.inputs.revenue, selected.inputs.headcount);
 		selected.inputs.operatingCost = est.operatingCost;
 		selected.inputs.hcCost = est.hcCost;
 		if (selected.breakdown) workspace.setBreakdown(selected.id, splitHcCost(est.hcCost));
 	}
-	function removeYear(id: string, year: number) {
-		if (!confirm(`${year}년 데이터를 삭제할까요?`)) return;
-		workspace.removeYear(id);
+	function removeRecord(id: string, label: string) {
+		if (!confirm(`${label} 데이터를 삭제할까요?`)) return;
+		workspace.removeRecord(id);
 		if (selectedId === id) selectedId = null;
 	}
 
@@ -178,9 +202,9 @@
 		try {
 			const { buildWorkbookBuffer, downloadBuffer } = await import('$lib/hcroi/excel/io');
 			const buf = await buildWorkbookBuffer({
-				years: $state.snapshot(workspace.years),
+				records: $state.snapshot(workspace.records),
 				scenarios: $state.snapshot(workspace.scenarios),
-				baseYear: workspace.baseYear ? $state.snapshot(workspace.baseYear) : null,
+				base: workspace.base ? $state.snapshot(workspace.base) : null,
 				orgName: workspace.orgName,
 				headcountBasis: $state.snapshot(workspace.headcountBasis)
 			});
@@ -235,25 +259,30 @@
 	}
 	type PreviewRow = {
 		row: number;
-		year: number | null;
+		/** 기간 라벨 (연도조차 못 읽은 오류 행은 null) */
+		label: string | null;
 		status: '신규' | '덮어씀' | '건너뜀' | '오류';
 		inputs: { revenue: number; operatingCost: number; hcCost: number; headcount: number } | null;
 		notes: string[];
 	};
 	const previewRows = $derived.by((): PreviewRow[] => {
 		if (!preview) return [];
-		const existing = new Set(workspace.years.map((y) => y.year));
+		const existing = new Set(workspace.records.map((y) => periodKey(y.period)));
 		const rows: PreviewRow[] = [
 			...preview.result.records.map((p): PreviewRow => ({
 				row: p.row,
-				year: p.record.year,
-				status: existing.has(p.record.year) ? (overwrite ? '덮어씀' : '건너뜀') : '신규',
+				label: periodLabel(p.record.period),
+				status: existing.has(periodKey(p.record.period))
+					? overwrite
+						? '덮어씀'
+						: '건너뜀'
+					: '신규',
 				inputs: p.record.inputs,
 				notes: p.warnings
 			})),
 			...preview.result.errors.map((e): PreviewRow => ({
 				row: e.row,
-				year: e.year,
+				label: e.period ? periodLabel(e.period) : null,
 				status: '오류',
 				inputs: null,
 				notes: e.messages
@@ -283,12 +312,12 @@
 	function applyImport() {
 		if (!preview || !canApply) return;
 		workspace.takeSnapshot();
-		const r = mergeYears($state.snapshot(workspace.years), preview.result.records, {
+		const r = mergeRecords($state.snapshot(workspace.records), preview.result.records, {
 			overwrite,
 			newId
 		});
-		workspace.replaceYears(r.years);
-		const parts = [`${r.added}개 연도 추가`, `${r.updated}개 덮어씀`];
+		workspace.replaceRecords(r.records);
+		const parts = [`${r.added}개 기간 추가`, `${r.updated}개 덮어씀`];
 		if (orgNameChange !== null && applyOrgName) {
 			workspace.orgName = orgNameChange;
 			parts.push(orgNameChange ? `제목 "${orgNameChange}"` : '제목 기본값으로');
@@ -297,7 +326,7 @@
 			workspace.headcountBasis = preview.basis;
 			parts.push(`인원 산정 기준 "${basisChange}"`);
 		}
-		if (r.skipped) parts.push(`${r.skipped}개 건너뜀(기존 연도 유지)`);
+		if (r.skipped) parts.push(`${r.skipped}개 건너뜀(기존 기간 유지)`);
 		if (preview.result.errors.length) parts.push(`오류 ${preview.result.errors.length}행 제외`);
 		ioMessage = `${preview.fileName} 반영: ${parts.join(', ')}. 잘못 반영했으면 "되돌리기" 를 누르세요.`;
 		preview = null;
@@ -448,7 +477,7 @@
 						class="rounded border-line-2 text-brand"
 						bind:checked={overwrite}
 					/>
-					기존 연도 덮어쓰기
+					기존 기간 덮어쓰기
 				</label>
 				{#if res.errors.length}
 					<label class="flex items-center gap-2 text-sm text-ink-2">
@@ -517,7 +546,7 @@
 									: ''}"
 							>
 								<td class="tabular px-3 py-2 text-muted">{r.row}</td>
-								<td class="tabular px-3 py-2 font-semibold">{r.year ?? '—'}</td>
+								<td class="px-3 py-2 font-semibold whitespace-nowrap">{r.label ?? '—'}</td>
 								<td class="px-3 py-2">
 									<span
 										class="rounded px-1.5 py-0.5 text-xs font-semibold {r.status === '오류'
@@ -571,25 +600,40 @@
 	<section class="card overflow-hidden" aria-labelledby="years-h">
 		<div class="flex flex-wrap items-center justify-between gap-3 px-5 pt-4 pb-3">
 			<div>
-				<h2 id="years-h" class="text-lg font-semibold text-ink">연도별 데이터</h2>
+				<h2 id="years-h" class="text-lg font-semibold text-ink">기간별 데이터</h2>
 				<p class="text-xs text-muted">행을 클릭하면 오른쪽에서 편집할 수 있습니다</p>
 			</div>
 			<form
-				class="flex items-center gap-2"
+				class="flex flex-wrap items-center gap-2"
 				onsubmit={(e) => {
 					e.preventDefault();
-					addYear();
+					addPeriod();
 				}}
 			>
-				<label class="text-sm font-semibold text-ink-2" for="new-year">연도 추가</label>
+				<label class="text-sm font-semibold text-ink-2" for="new-year">기간 추가</label>
 				<input
 					id="new-year"
 					type="number"
-					class="field-input w-28 py-1.5"
+					class="field-input w-24 py-1.5"
 					min="1990"
 					max="2100"
 					bind:value={newYear}
+					aria-label="연도"
 				/>
+				<select class="field-input w-auto py-1.5" bind:value={newType} aria-label="기간 유형">
+					{#each PERIOD_TYPES as t (t)}
+						<option value={t}>{PERIOD_TYPE_LABELS[t]}</option>
+					{/each}
+				</select>
+				{#if newType !== 'Y'}
+					<select class="field-input w-auto py-1.5" bind:value={newIndex} aria-label="기간 순번">
+						{#each Array.from({ length: periodIndexCount(newType) }, (_, i) => i + 1) as i (i)}
+							<option value={i}
+								>{newType === 'H' ? (i === 1 ? '상반기' : '하반기') : `${i}분기`}</option
+							>
+						{/each}
+					</select>
+				{/if}
 				<button type="submit" class="btn py-1.5 btn-primary">추가</button>
 			</form>
 		</div>
@@ -598,7 +642,7 @@
 			<table class="w-full min-w-[640px] text-[15px]">
 				<thead>
 					<tr class="border-y border-line bg-surface-2 text-sm text-ink-2">
-						<th scope="col" class="px-4 py-2 text-center font-semibold">연도</th>
+						<th scope="col" class="px-4 py-2 text-center font-semibold">기간</th>
 						<th scope="col" class="px-3 py-2 text-center font-semibold">매출액{colUnit}</th>
 						<th scope="col" class="px-3 py-2 text-center font-semibold">영업이익{colUnit}</th>
 						<th scope="col" class="px-3 py-2 text-center font-semibold">총 인건비{colUnit}</th>
@@ -610,7 +654,7 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each workspace.sortedYears as y (y.id)}
+					{#each workspace.sorted as y (y.id)}
 						{@const m = computeMetrics(y.inputs)}
 						<tr
 							class="cursor-pointer border-b border-line transition-colors last:border-0 hover:bg-surface-2 {selected?.id ===
@@ -627,7 +671,7 @@
 								<button
 									type="button"
 									class="underline-offset-2 hover:underline"
-									onclick={() => (selectedId = y.id)}>{y.year}년</button
+									onclick={() => (selectedId = y.id)}>{periodLabel(y.period)}</button
 								>
 								{#if y.id.startsWith('sample-')}<span
 										class="ml-1 text-xs font-normal whitespace-nowrap text-muted">샘플</span
@@ -652,11 +696,11 @@
 								<button
 									type="button"
 									class="btn p-1.5 btn-ghost text-status-critical-ink hover:bg-status-critical-bg"
-									aria-label="{y.year}년 삭제"
-									title="{y.year}년 삭제"
+									aria-label="{periodLabel(y.period)} 삭제"
+									title="{periodLabel(y.period)} 삭제"
 									onclick={(e) => {
 										e.stopPropagation();
-										removeYear(y.id, y.year);
+										removeRecord(y.id, periodLabel(y.period));
 									}}
 								>
 									<svg
@@ -690,7 +734,9 @@
 	<section class="card px-5 py-5" aria-labelledby="edit-h">
 		{#if selected}
 			<div class="mb-4 flex items-center justify-between gap-3">
-				<h2 id="edit-h" class="text-lg font-semibold text-ink">{selected.year}년 데이터 편집</h2>
+				<h2 id="edit-h" class="text-lg font-semibold text-ink">
+					{periodLabel(selected.period)} 데이터 편집
+				</h2>
 				<button
 					type="button"
 					class="btn py-1 text-sm btn-secondary"
