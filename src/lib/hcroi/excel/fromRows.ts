@@ -5,6 +5,7 @@ import {
 	INPUT_COLUMNS,
 	INPUT_FIRST_DATA_ROW,
 	INPUT_HEADER_ROW,
+	ORG_SHEET,
 	normalizeHeader,
 	type InputColumnKey
 } from './schema';
@@ -156,9 +157,16 @@ export function parseInputRows(rows: unknown[][]): ParseResult {
 					warnings.push('비어 있는 인건비 세부 항목은 0으로 처리했습니다.');
 				const sum = sumHcCost(breakdown);
 				if (hcCost === null) hcCost = sum;
-				else if (Math.abs(sum - hcCost) > 1)
+				else if (sum - hcCost > 1)
 					messages.push(
-						`인건비 세부 합계(${sum.toLocaleString()})가 총 인건비(${hcCost.toLocaleString()})와 다릅니다.`
+						`인건비 세부 합계(${sum.toLocaleString()})가 총 인건비(${hcCost.toLocaleString()})보다 큽니다.`
+					);
+				else if (hcCost - sum > 1)
+					// 6항목을 다 쓰지 않는 회사(예: 법정후생비·교육훈련비 미분리)를 위해 허용한다.
+					// 총 인건비를 그대로 쓰고 차액은 미분류로 남긴다 — 지표는 총액으로 계산되므로 영향 없음.
+					warnings.push(
+						`인건비 세부 합계(${sum.toLocaleString()})가 총 인건비(${hcCost.toLocaleString()})보다 ` +
+							`${(hcCost - sum).toLocaleString()} 적습니다. 총 인건비를 사용하고 차액은 미분류로 둡니다.`
 					);
 			}
 		} else if (hcCost === null) {
@@ -236,4 +244,27 @@ export function mergeYears(
 	}
 	years.sort((a, b) => a.year - b.year);
 	return { years, added, updated, skipped };
+}
+
+/** 조직명 최대 길이 — 대시보드 제목이 한 줄을 넘지 않도록 자른다 */
+export const ORG_NAME_MAX = 40;
+
+/**
+ * 시트 ⑤ `조직 정보` → 회사/조직 이름 (순수 함수).
+ * - 시트 자체가 없으면 `null` — 제목을 건드리지 않는다 (조직 정보 시트가 없던 옛 파일 호환)
+ * - 라벨은 있고 값이 비었으면 `''` — 기본 제목("HCROI 대시보드")으로 되돌린다는 뜻
+ */
+export function parseOrgName(rows: unknown[][] | null): string | null {
+	if (!rows) return null;
+	const label = normalizeHeader(ORG_SHEET.label);
+	for (let r = 0; r < Math.min(rows.length, ORG_SHEET.scanRows); r++) {
+		const cells = rows[r] ?? [];
+		const i = cells.findIndex((c) => normalizeHeader(c) === label);
+		if (i < 0) continue;
+		const raw = cells.slice(i + 1).find((c) => c !== null && c !== undefined && String(c).trim());
+		return String(raw ?? '')
+			.trim()
+			.slice(0, ORG_NAME_MAX);
+	}
+	return null;
 }

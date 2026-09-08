@@ -21,3 +21,7 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# 참고용 결산·공시 자료 (타사 PDF, 용량 큼 — 공개 저장소에 올리지 않는다)
+docs/*.pdf
+!docs/Martin*.pdf

@@ -1,6 +1,11 @@
 <script lang="ts">
 	import { newId, workspace } from '$lib/state/workspace.svelte';
-	import { mergeYears, parseInputRows, type ParseResult } from '$lib/hcroi/excel/fromRows';
+	import {
+		mergeYears,
+		parseInputRows,
+		parseOrgName,
+		type ParseResult
+	} from '$lib/hcroi/excel/fromRows';
 	import { computeMetrics, gradeOf, sumHcCost, validateInputs } from '$lib/hcroi/formulas';
 	import { estimateFromRevenue, splitHcCost, REFERENCE_DEFAULTS } from '$lib/hcroi/defaults';
 	import { HC_COST_KEYS, HC_COST_LABELS } from '$lib/hcroi/types';
@@ -46,14 +51,15 @@
 		if (selectedId === id) selectedId = null;
 	}
 
-	// 세부 내역이 있으면 총 인건비를 합계와 동기화
-	$effect(() => {
-		const y = selected;
-		if (y?.breakdown) {
-			const total = sumHcCost(y.breakdown);
-			if (y.inputs.hcCost !== total) y.inputs.hcCost = total;
-		}
-	});
+	// 세부 내역은 6항목을 다 쓰지 않는 회사도 있어 합계 < 총액을 허용한다 (차액 = 미분류).
+	// 총 인건비를 합계로 덮어쓰지 않는다 — 지표 계산의 기준은 언제나 총액이다.
+	const breakdownSum = $derived(selected?.breakdown ? sumHcCost(selected.breakdown) : null);
+	const unclassified = $derived(
+		selected && breakdownSum !== null ? selected.inputs.hcCost - breakdownSum : null
+	);
+	function matchTotalToSum() {
+		if (selected && breakdownSum !== null) selected.inputs.hcCost = breakdownSum;
+	}
 	function toggleBreakdown() {
 		if (!selected) return;
 		if (selected.breakdown) {
@@ -88,9 +94,16 @@
 	}
 	// 엑셀 내보내기 / 템플릿 / 가져오기 (exceljs 는 io.ts 에서 동적 로드)
 	let busy = $state(false);
-	let preview = $state<{ fileName: string; result: ParseResult } | null>(null);
+	let preview = $state<{
+		fileName: string;
+		result: ParseResult;
+		/** 파일의 `조직 정보` 시트에서 읽은 회사명. 시트가 없으면 null */
+		orgName: string | null;
+	} | null>(null);
 	let overwrite = $state(true);
 	let skipErrors = $state(false);
+	/** 미리보기에서 "제목도 바꾸기" 체크 여부 (파일 조직명이 현재와 다를 때만 노출) */
+	let applyOrgName = $state(true);
 	const today = () => new Date().toISOString().slice(0, 10);
 
 	async function exportExcel() {
@@ -100,12 +113,13 @@
 			const buf = await buildWorkbookBuffer({
 				years: $state.snapshot(workspace.years),
 				scenarios: $state.snapshot(workspace.scenarios),
-				baseYear: workspace.baseYear ? $state.snapshot(workspace.baseYear) : null
+				baseYear: workspace.baseYear ? $state.snapshot(workspace.baseYear) : null,
+				orgName: workspace.orgName
 			});
 			const org = workspace.orgName.trim().replace(/[\\/:*?"<>|\s]+/g, '-');
 			const fname = `hcroi-${org ? org + '-' : ''}${today()}.xlsx`;
 			downloadBuffer(buf, fname);
-			ioMessage = `엑셀 파일(${fname})을 내려받았습니다. 시트: 지표 요약 · 입력 데이터 · 시나리오 비교 · 산식·가정`;
+			ioMessage = `엑셀 파일(${fname})을 내려받았습니다. 시트: 지표 요약 · 입력 데이터 · 시나리오 비교 · 조직 정보 · 산식·가정`;
 		} catch (e) {
 			ioMessage = `엑셀 내보내기 실패: ${(e as Error).message}`;
 		} finally {
@@ -118,7 +132,7 @@
 			const { buildTemplateBuffer, downloadBuffer } = await import('$lib/hcroi/excel/io');
 			downloadBuffer(await buildTemplateBuffer({ withSample: true }), 'hcroi-template.xlsx');
 			ioMessage =
-				'입력 템플릿(hcroi-template.xlsx)을 내려받았습니다. 샘플 3행을 자사 값으로 바꿔 "엑셀 가져오기" 하세요.';
+				'입력 템플릿(hcroi-template.xlsx)을 내려받았습니다. 샘플 3행을 자사 값으로 바꾸고, "조직 정보" 시트에 회사 이름을 적으면 대시보드 제목에도 반영됩니다.';
 		} catch (e) {
 			ioMessage = `템플릿 생성 실패: ${(e as Error).message}`;
 		} finally {
@@ -132,9 +146,14 @@
 		busy = true;
 		ioMessage = null;
 		try {
-			const { readInputSheet } = await import('$lib/hcroi/excel/io');
-			const rows = await readInputSheet(await file.arrayBuffer());
-			preview = { fileName: file.name, result: parseInputRows(rows) };
+			const { readWorkbook } = await import('$lib/hcroi/excel/io');
+			const read = await readWorkbook(await file.arrayBuffer());
+			applyOrgName = true;
+			preview = {
+				fileName: file.name,
+				result: parseInputRows(read.input),
+				orgName: parseOrgName(read.org)
+			};
 		} catch (err) {
 			ioMessage = `엑셀 파일을 읽지 못했습니다: ${(err as Error).message}`;
 		} finally {
@@ -170,6 +189,12 @@
 		];
 		return rows.sort((a, b) => a.row - b.row);
 	});
+	/** 파일 조직명이 현재 제목과 달라 물어볼 필요가 있을 때만 값을 갖는다 */
+	const orgNameChange = $derived(
+		preview && preview.orgName !== null && preview.orgName !== workspace.orgName.trim()
+			? preview.orgName
+			: null
+	);
 	const canApply = $derived(
 		!!preview &&
 			!preview.result.headerError &&
@@ -185,6 +210,10 @@
 		});
 		workspace.replaceYears(r.years);
 		const parts = [`${r.added}개 연도 추가`, `${r.updated}개 덮어씀`];
+		if (orgNameChange !== null && applyOrgName) {
+			workspace.orgName = orgNameChange;
+			parts.push(orgNameChange ? `제목 "${orgNameChange}"` : '제목 기본값으로');
+		}
 		if (r.skipped) parts.push(`${r.skipped}개 건너뜀(기존 연도 유지)`);
 		if (preview.result.errors.length) parts.push(`오류 ${preview.result.errors.length}행 제외`);
 		ioMessage = `${preview.fileName} 반영: ${parts.join(', ')}. 잘못 반영했으면 "되돌리기" 를 누르세요.`;
@@ -313,6 +342,18 @@
 							bind:checked={skipErrors}
 						/>
 						오류 행 건너뛰고 반영
+					</label>
+				{/if}
+				{#if orgNameChange !== null}
+					<label class="flex items-center gap-2 text-sm text-ink-2">
+						<input
+							type="checkbox"
+							class="rounded border-line-2 text-brand"
+							bind:checked={applyOrgName}
+						/>
+						<span class="whitespace-nowrap">
+							대시보드 제목도 {orgNameChange ? `"${orgNameChange}"` : '기본값'} 으로
+						</span>
 					</label>
 				{/if}
 				<button type="button" class="btn btn-ghost" onclick={() => (preview = null)}>취소</button>
@@ -576,22 +617,41 @@
 								/>
 							{/each}
 						</div>
-						<div
-							class="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3"
-						>
-							<div class="text-[15px]">
-								합계 <strong class="tabular">{formatWon(selected.inputs.hcCost)}</strong>
-								<span class="text-sm text-muted"
-									>(= {formatKrwCompact(selected.inputs.hcCost)})</span
-								>
+						<div class="mt-3 border-t border-line pt-3">
+							<NumberField label="총 인건비 (총액)" bind:value={selected.inputs.hcCost} min={0} />
+							<div class="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm">
+								<div class="text-ink-2">
+									세부 합계 <strong class="tabular text-ink">{formatWon(breakdownSum ?? 0)}</strong>
+									{#if unclassified !== null && unclassified > 0}
+										<span class="text-muted">·</span> 미분류
+										<strong class="tabular text-ink">{formatWon(unclassified)}</strong>
+									{:else if unclassified !== null && unclassified < 0}
+										<span class="text-status-critical-ink"
+											>· 세부 합계가 총액보다 {formatWon(-unclassified)} 많습니다</span
+										>
+									{/if}
+								</div>
+								<div class="flex flex-wrap gap-2">
+									{#if unclassified !== null && unclassified !== 0}
+										<button
+											type="button"
+											class="btn py-1 text-sm btn-ghost"
+											onclick={matchTotalToSum}>총액을 합계로</button
+										>
+									{/if}
+									<button type="button" class="btn py-1 text-sm btn-ghost" onclick={redistribute}
+										>기본 구성비로 재분배</button
+									>
+								</div>
 							</div>
-							<button type="button" class="btn py-1 text-sm btn-ghost" onclick={redistribute}
-								>기본 구성비로 재분배</button
-							>
 						</div>
 						<p class="mt-2 text-xs text-muted">
-							괄호 안 % 는 표준 레퍼런스 구성비(기본급 62 · 성과급/수당 14 · 퇴직급여 8 · 법정후생비
-							9 · 기타 복리후생 5 · 교육훈련 2)입니다. 자사 실적으로 교체하세요.
+							6항목을 다 쓰지 않아도 됩니다 — 세부 합계가 총액보다 적으면 차액은 <strong
+								>미분류</strong
+							>
+							로 남고, 지표는 <strong>총 인건비</strong> 기준으로 계산됩니다. 괄호 안 % 는 표준 레퍼런스
+							구성비(기본급 62 · 성과급/수당 14 · 퇴직급여 8 · 법정후생비 9 · 기타 복리후생 5 · 교육훈련
+							2)입니다.
 						</p>
 					{:else}
 						<NumberField

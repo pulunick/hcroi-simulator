@@ -3,9 +3,9 @@ import { sampleYears } from '../defaults';
 import { computeMetrics } from '../formulas';
 import { compareScenarios } from '../scenario';
 import { DEFAULT_SCENARIO_PARAMS } from '../scenario';
-import { mergeYears, parseInputRows, parseNumber } from './fromRows';
-import { buildTemplateBuffer, buildWorkbookBuffer, readInputSheet } from './io';
-import { INPUT_COLUMNS, headerText } from './schema';
+import { ORG_NAME_MAX, mergeYears, parseInputRows, parseNumber, parseOrgName } from './fromRows';
+import { buildTemplateBuffer, buildWorkbookBuffer, readInputSheet, readWorkbook } from './io';
+import { INPUT_COLUMNS, ORG_SHEET, headerText } from './schema';
 import { inputRows, scenarioSheet, summaryRows } from './toRows';
 
 const header = INPUT_COLUMNS.map(headerText);
@@ -87,6 +87,7 @@ describe('parseInputRows', () => {
 		expect(ok.records[0].record.inputs.hcCost).toBe(1_000);
 		expect(ok.records[0].record.breakdown).toEqual(parts);
 
+		// 합계가 총액보다 "큰" 경우만 오류 (적은 경우는 미분류 허용 — 아래 별도 describe 참조)
 		const bad = parseInputRows(
 			sheet(
 				row({
@@ -94,13 +95,13 @@ describe('parseInputRows', () => {
 					revenue: 10_000,
 					operatingCost: 9_000,
 					headcount: 10,
-					hcCost: 1_500,
+					hcCost: 800,
 					...parts
 				})
 			)
 		);
 		expect(bad.records).toEqual([]);
-		expect(bad.errors[0].messages[0]).toMatch(/세부 합계\(1,000\)가 총 인건비\(1,500\)/);
+		expect(bad.errors[0].messages[0]).toMatch(/세부 합계\(1,000\)가 총 인건비\(800\)보다 큽니다/);
 	});
 
 	it('필수 누락·비숫자·인건비>영업비용·연도 중복은 행 단위 오류, 빈 행은 무시', () => {
@@ -186,6 +187,64 @@ describe('toRows ↔ fromRows 왕복', () => {
 	});
 });
 
+describe('인건비 세부 항목이 6개 미만인 회사', () => {
+	// 실무 확인(2026-09-03): 기본급·성과급·퇴직급여·기타 복리후생비 4항목만 분리되는 경우가 있다
+	const fourParts = {
+		year: 2025,
+		revenue: 14_100_000_000,
+		operatingCost: 13_254_000_000,
+		headcount: 36,
+		hcCost: 3_384_000_000,
+		baseSalary: 2_100_000_000,
+		incentives: 470_000_000,
+		retirement: 270_000_000,
+		otherWelfare: 170_000_000
+	};
+
+	it('세부 합계가 총액보다 적으면 경고만 내고 총액을 그대로 쓴다', () => {
+		const p = parseInputRows(sheet(row(fourParts)));
+		expect(p.errors).toEqual([]);
+		expect(p.records).toHaveLength(1);
+		const rec = p.records[0];
+		expect(rec.record.inputs.hcCost).toBe(3_384_000_000); // 합계(3,010,000,000)로 덮어쓰지 않는다
+		expect(rec.warnings.join(' ')).toMatch(/미분류/);
+		expect(rec.record.breakdown?.statutoryWelfare).toBe(0);
+	});
+
+	it('세부 합계가 총액보다 크면 여전히 오류다', () => {
+		const p = parseInputRows(sheet(row({ ...fourParts, hcCost: 1_000_000_000 })));
+		expect(p.records).toEqual([]);
+		expect(p.errors[0].messages.join(' ')).toMatch(/보다 큽니다/);
+	});
+
+	it('총액을 비우면 종전대로 세부 합계를 총액으로 쓴다', () => {
+		const p = parseInputRows(sheet(row({ ...fourParts, hcCost: null })));
+		expect(p.errors).toEqual([]);
+		expect(p.records[0].record.inputs.hcCost).toBe(3_010_000_000);
+	});
+});
+
+describe('parseOrgName', () => {
+	const L = ORG_SHEET.label;
+	it('라벨 오른쪽 칸의 이름을 읽는다', () => {
+		expect(parseOrgName([[L, '  가나다 주식회사  ']])).toBe('가나다 주식회사');
+	});
+	it('시트가 없으면 null (제목을 건드리지 않는다)', () => {
+		expect(parseOrgName(null)).toBeNull();
+	});
+	it('라벨을 못 찾으면 null', () => {
+		expect(parseOrgName([['엉뚱한 칸', '값']])).toBeNull();
+	});
+	it('라벨은 있고 값이 비면 빈 문자열 (기본 제목으로 되돌림)', () => {
+		expect(parseOrgName([[L, null]])).toBe('');
+		expect(parseOrgName([[L, '   ']])).toBe('');
+	});
+	it('위쪽에 줄이 끼어 있어도 찾고, 너무 긴 이름은 자른다', () => {
+		expect(parseOrgName([[], ['메모'], [L, '나다라']])).toBe('나다라');
+		expect(parseOrgName([[L, '가'.repeat(80)]])).toHaveLength(ORG_NAME_MAX);
+	});
+});
+
 describe('mergeYears', () => {
 	const existing = sampleYears();
 	const parsed = parseInputRows(
@@ -220,7 +279,8 @@ describe('exceljs 입출력 (node)', { timeout: 30_000 }, () => {
 			scenarios: [
 				{ id: 'a', name: '시나리오 A', params: { ...DEFAULT_SCENARIO_PARAMS, headcountPct: 10 } }
 			],
-			baseYear: years[2]
+			baseYear: years[2],
+			orgName: '가나다 주식회사'
 		});
 		expect(buf.byteLength).toBeGreaterThan(5_000);
 		const rows = await readInputSheet(buf);
@@ -230,6 +290,30 @@ describe('exceljs 입출력 (node)', { timeout: 30_000 }, () => {
 		expect(parsed.errors).toEqual([]);
 		expect(parsed.records.map((p) => p.record.inputs)).toEqual(years.map((y) => y.inputs));
 		expect(parsed.records.map((p) => p.record.breakdown)).toEqual(years.map((y) => y.breakdown));
+	});
+
+	it('조직 정보 시트로 회사명이 왕복된다', async () => {
+		const years = sampleYears();
+		const withName = await readWorkbook(
+			await buildWorkbookBuffer({
+				years,
+				scenarios: [],
+				baseYear: null,
+				orgName: '가나다 주식회사'
+			})
+		);
+		expect(parseOrgName(withName.org)).toBe('가나다 주식회사');
+
+		// 회사명 없이 내보내면 시트는 있고 값만 비어 있다 → 빈 문자열(기본 제목)
+		const blank = await readWorkbook(
+			await buildWorkbookBuffer({ years, scenarios: [], baseYear: null })
+		);
+		expect(parseOrgName(blank.org)).toBe('');
+
+		// 템플릿에도 빈 칸이 들어 있어 사용자가 바로 적을 수 있다
+		const tpl = await readWorkbook(await buildTemplateBuffer({ withSample: true }));
+		expect(tpl.org).not.toBeNull();
+		expect(parseOrgName(tpl.org)).toBe('');
 	});
 
 	it('템플릿(샘플 포함/빈)도 같은 헤더로 읽힌다', async () => {

@@ -8,6 +8,7 @@ import {
 	INPUT_HEADER_ROW,
 	INPUT_UNIT_ROW,
 	NUM_FMT,
+	ORG_SHEET,
 	SHEET,
 	headerText
 } from './schema';
@@ -173,14 +174,35 @@ function addFormulaSheet(wb: ExcelJS.Workbook) {
 	});
 }
 
+/** 시트 ⑤ `조직 정보` — 회사/조직 이름 한 칸. 이 값만 가져오기 때 다시 읽는다 */
+function addOrgSheet(wb: ExcelJS.Workbook, orgName: string) {
+	const ws = wb.addWorksheet(SHEET.org);
+	ws.columns = [{ width: 20 }, { width: 40 }];
+	const row = ws.getRow(1);
+	const label = row.getCell(1);
+	label.value = ORG_SHEET.label;
+	label.font = HEADER_FONT;
+	label.fill = HEADER_FILL;
+	const value = row.getCell(2);
+	value.value = orgName.trim() || null;
+	value.numFmt = '@';
+	const note = ws.getRow(2).getCell(1);
+	note.value = ORG_SHEET.note;
+	note.font = NOTE_FONT;
+	note.alignment = { wrapText: true };
+	ws.mergeCells(2, 1, 2, 2);
+}
+
 export interface ExportData {
 	years: YearRecord[];
 	scenarios: Scenario[];
 	/** 시나리오 시트의 기준연도 (없으면 시나리오 시트 생략) */
 	baseYear: YearRecord | null;
+	/** 대시보드 제목에 붙는 회사/조직 이름 (빈 문자열이면 빈 칸으로 내보낸다) */
+	orgName?: string;
 }
 
-/** 작업공간 전체 → .xlsx (시트 ①②③④) */
+/** 작업공간 전체 → .xlsx (시트 ①②③ + 조직 정보 + 산식) */
 export async function buildWorkbookBuffer(data: ExportData): Promise<ArrayBuffer> {
 	const Excel = await loadExcel();
 	const wb = new Excel.Workbook();
@@ -189,16 +211,18 @@ export async function buildWorkbookBuffer(data: ExportData): Promise<ArrayBuffer
 	addSummarySheet(wb, data.years);
 	addInputSheet(wb, data.years);
 	if (data.baseYear) addScenarioSheet(wb, data.baseYear, data.scenarios);
+	addOrgSheet(wb, data.orgName ?? '');
 	addFormulaSheet(wb);
 	return toArrayBuffer(await wb.xlsx.writeBuffer());
 }
 
-/** 입력 템플릿 (.xlsx) — 시트 ② 구조 + 샘플 3행 + 산식 시트 */
+/** 입력 템플릿 (.xlsx) — 시트 ② 구조 + 샘플 3행 + 조직 정보 + 산식 시트 */
 export async function buildTemplateBuffer(opts: { withSample: boolean } = { withSample: true }) {
 	const Excel = await loadExcel();
 	const wb = new Excel.Workbook();
 	wb.creator = 'HCROI 시뮬레이터';
 	addInputSheet(wb, opts.withSample ? sampleYears() : []);
+	addOrgSheet(wb, '');
 	addFormulaSheet(wb);
 	return toArrayBuffer(await wb.xlsx.writeBuffer());
 }
@@ -218,16 +242,8 @@ export function cellToPrimitive(v: ExcelJS.CellValue): unknown {
 	return String(v);
 }
 
-/**
- * 업로드된 .xlsx 에서 시트 ② 를 2차원 원시값 배열로 읽는다.
- * `입력 데이터` 시트가 없으면 첫 시트를 사용한다 (사용자가 시트명을 바꾼 경우 대비).
- */
-export async function readInputSheet(buffer: ArrayBuffer): Promise<unknown[][]> {
-	const Excel = await loadExcel();
-	const wb = new Excel.Workbook();
-	await wb.xlsx.load(buffer);
-	const ws = wb.getWorksheet(SHEET.input) ?? wb.worksheets[0];
-	if (!ws) return [];
+/** 시트 하나 → 2차원 원시값 배열 (rows[0] = 1행, rows[r][0] = A열) */
+function sheetRows(ws: ExcelJS.Worksheet): unknown[][] {
 	const rows: unknown[][] = [];
 	ws.eachRow({ includeEmpty: true }, (row, rowNumber) => {
 		const cells: unknown[] = [];
@@ -238,6 +254,31 @@ export async function readInputSheet(buffer: ArrayBuffer): Promise<unknown[][]> 
 	});
 	for (let i = 0; i < rows.length; i++) rows[i] ??= [];
 	return rows;
+}
+
+export interface ReadResult {
+	/** 시트 ② `입력 데이터` (없으면 첫 시트) */
+	input: unknown[][];
+	/** 시트 ⑤ `조직 정보` — 시트가 없으면 null (= 제목을 건드리지 않음) */
+	org: unknown[][] | null;
+}
+
+/**
+ * 업로드된 .xlsx 에서 가져오기 대상 시트들을 원시값 배열로 읽는다.
+ * `입력 데이터` 시트가 없으면 첫 시트를 사용한다 (사용자가 시트명을 바꾼 경우 대비).
+ */
+export async function readWorkbook(buffer: ArrayBuffer): Promise<ReadResult> {
+	const Excel = await loadExcel();
+	const wb = new Excel.Workbook();
+	await wb.xlsx.load(buffer);
+	const input = wb.getWorksheet(SHEET.input) ?? wb.worksheets[0];
+	const org = wb.getWorksheet(SHEET.org);
+	return { input: input ? sheetRows(input) : [], org: org ? sheetRows(org) : null };
+}
+
+/** 시트 ② 만 필요할 때 */
+export async function readInputSheet(buffer: ArrayBuffer): Promise<unknown[][]> {
+	return (await readWorkbook(buffer)).input;
 }
 
 function toArrayBuffer(buf: ArrayBuffer | Uint8Array): ArrayBuffer {
