@@ -17,6 +17,7 @@
 		parseInputRows,
 		parseHeadcountBasis,
 		parseOrgName,
+		type ParsedRecord,
 		type ParseResult
 	} from '$lib/hcroi/excel/fromRows';
 	import { computeMetrics, gradeOf, sumHcCost, validateRecord } from '$lib/hcroi/formulas';
@@ -49,6 +50,7 @@
 	} from '$lib/hcroi/format';
 	import NumberField from '$lib/components/ui/NumberField.svelte';
 	import GradeBadge from '$lib/components/ui/GradeBadge.svelte';
+	import PdfImport from '$lib/components/data/PdfImport.svelte';
 
 	// 금액 표기는 작업공간의 표시 단위를 따른다 (저장값은 언제나 원 단위 정수). 규칙은 format.ts 한 곳
 	const won = (v: number | null | undefined, suffix = '원') =>
@@ -201,6 +203,22 @@
 	let applyOrgName = $state(true);
 	/** 미리보기에서 "산정 기준도 파일 기준으로" 체크 여부 (파일 기준이 현재와 다를 때만 노출) */
 	let applyBasisFromFile = $state(true);
+	/** 결산서 PDF 가져오기 패널 */
+	let pdfOpen = $state(false);
+	/** PDF 카드에서 확인한 값 → 엑셀 가져오기와 같은 미리보기·병합·되돌리기 경로 */
+	function fromPdf(fileName: string, records: ParsedRecord[], companyName: string | null) {
+		applyOrgName = true;
+		applyBasisFromFile = true;
+		ioMessage = null;
+		preview = {
+			fileName,
+			result: { records, errors: [], headerError: null },
+			orgName: companyName,
+			basis: null,
+			unit: { label: '원', scale: 1 },
+			cumulative: false
+		};
+	}
 	const today = () => new Date().toISOString().slice(0, 10);
 
 	async function exportExcel() {
@@ -429,6 +447,13 @@
 				onchange={importExcel}
 			/>
 		</label>
+		<button
+			type="button"
+			class="btn btn-secondary"
+			aria-pressed={pdfOpen}
+			onclick={() => (pdfOpen = !pdfOpen)}
+			disabled={busy}>결산서 PDF 가져오기</button
+		>
 		{#if workspace.undoAvailable}
 			<button type="button" class="btn btn-ghost" onclick={undoImport}>되돌리기</button>
 		{/if}
@@ -471,6 +496,10 @@
 	>
 		{ioMessage}
 	</p>
+{/if}
+
+{#if pdfOpen}
+	<PdfImport onpreview={fromPdf} onclose={() => (pdfOpen = false)} />
 {/if}
 
 {#if preview}

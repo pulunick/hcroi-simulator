@@ -6,15 +6,15 @@
 
 ## 현재 상태 (2026-09-09 세션 6 종료 시점)
 
-| 항목            | 상태                                                                                                                                                         |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 단계            | 프로토타입 + 실무 회신 반영 + 전체 검수 + **기간 합산(월→분기→연간)·엑셀 작성 편의**(2026-09-09). 남은 큰 것: 부서별 · 동종업계                              |
-| `npm test`      | ✅ 6 파일 / 112 테스트 (formulas · scenario · insights · period · rollup · excel)                                                                            |
-| `npm run check` | ✅ 0 errors / 0 warnings (360 files)                                                                                                                         |
-| `npm run lint`  | ✅                                                                                                                                                           |
-| git             | 원격 **github.com/pulunick/hcroi-simulator (public)**, 브랜치 `main`. 91dfabe(세션 6 합산·월·엑셀 편의) 까지 push 완료. 작업 트리 클린(state.md 갱신분 제외) |
-| DB              | 없음(보류). 마이그레이션 SQL 준비만 됨, 어느 프로젝트에도 미적용                                                                                             |
-| 원격 저장소     | pulunick/hcroi-simulator (public). push 절차는 brain §1 참조                                                                                                 |
+| 항목            | 상태                                                                                                                                                                                         |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 단계            | 프로토타입 + 실무 회신 반영 + 전체 검수 + **기간 합산(월→분기→연간)·엑셀 작성 편의**(2026-09-09). **결산서 PDF 가져오기 구현**(2026-09-09). 남은 큰 것: 부서별 · 동종업계 · PDF 수동 셀 지정 |
+| `npm test`      | ✅ 8 파일 / 144 passed (formulas · scenario · insights · period · rollup · excel · pdf table · pdf locate) + probe(skip)                                                                     |
+| `npm run check` | ✅ 0 errors / 0 warnings (360 files)                                                                                                                                                         |
+| `npm run lint`  | ✅                                                                                                                                                                                           |
+| git             | 원격 **github.com/pulunick/hcroi-simulator (public)**, 브랜치 `main`. 91dfabe(세션 6 합산·월·엑셀 편의) 까지 push 완료. 작업 트리 클린(state.md 갱신분 제외)                                 |
+| DB              | 없음(보류). 마이그레이션 SQL 준비만 됨, 어느 프로젝트에도 미적용                                                                                                                             |
+| 원격 저장소     | pulunick/hcroi-simulator (public). push 절차는 brain §1 참조                                                                                                                                 |
 
 ### 구현 완료
 
@@ -37,6 +37,8 @@
 - [x] **임직원 수 산정 기준** (2026-09-08): `workspace.headcountBasis`(기간 평균/기말 + 계약직·파견·등기임원 포함 토글) + 연도별 선택 입력 `headcountBreakdown`(정규직·계약직·파견·등기임원). 총원 자동 계산·화면 기준 표기·엑셀 왕복
 - [x] **기간 합산 + 월 단위 + 엑셀 작성 편의** (2026-09-09): `rollup.ts`(합산·차감·불일치), `workspace.effective`, 월(M) 유형, 대시보드/데이터/시뮬레이터에 합산 레코드,
       엑셀 `조직 정보` 금액 단위·누계 칸, 템플릿 드롭다운·유효성·검증 열·조건부 서식·메모·보호. 계획서 docs/plans/rollup-and-excel.md
+- [x] **결산서 PDF 가져오기** (2026-09-09): `src/lib/hcroi/pdf/`(extract·table·locate·map·toRecord) + `components/data/PdfImport.svelte` + `/data` 버튼·미리보기 합류 + `workspace.pdfPrefs`.
+      픽스처 테스트, 실 PDF 프로브(반기보고서 2부 4개 값 정답 일치), 브라우저 E2E 2종. 계획서 docs/plans/pdf-to-excel.md
 - [x] **엑셀 `조직 정보` 시트** (2026-09-03): 회사명을 엑셀이 운반 → 가져오기 시 제목까지 복원(미리보기 체크박스로 확인). `readWorkbook`/`parseOrgName` 추가, 테스트 57건
 
 ### 육안 점검 결과 (2026-09-01, 세션 2)
@@ -80,10 +82,11 @@
 ### 다음
 
 4. ~~분기 단위 지원~~ → **기간 레코드로 구현 완료** (2026-09-08). 월(M) 단위는 요구 확인 시 같은 구조로 추가
-5. **부서별 HCROI** — 배부율 α = 인건비 비중(확정), 단위 본부–팀(보유 확인됨). 부서 마스터 입력 화면 필요
-6. **동종업계 비교 (C안 확정)** — 엑셀에 `동종업계` 시트 추가 후 8개사 수기 입력. 파서 없이 비교 화면·계산부터.
+5. ~~결산서 PDF → 엑셀 입력 시트 변환~~ → **M1–M4 구현 완료**(2026-09-09). 남은 것: (a) 담당자 자사 결산서로 실전 확인(질문지 §6) (b) 내부 결산서 양식이 다르면 계획서 §6 수동 셀 지정 모드 (c) Vercel 배포 후 pdf.js worker 자산 로드 확인
+6. **부서별 HCROI** — 배부율 α = 인건비 비중(확정), 단위 본부–팀(보유 확인됨). 부서 마스터 입력 화면 필요
+7. **동종업계 비교 (C안 확정)** — 엑셀에 `동종업계` 시트 추가 후 8개사 수기 입력. 파서 없이 비교 화면·계산부터.
    테스트용 결산서 2부 수령 완료(루닛·코어라인소프트, `docs/*.pdf` — 커밋 제외)
-7. **DART Open API 자동화 (B안, 선택)** — 6번이 매 분기 반복으로 굳어지면 착수.
+8. **DART Open API 자동화 (B안, 선택)** — 6번이 매 분기 반복으로 굳어지면 착수.
    `fnlttSinglAcntAll`(재무제표) + `empSttus`(직원수·연간급여총액). Vercel 서버 라우트 1개 + 무료 API 키 필요
 
 ### 완료
@@ -248,3 +251,23 @@
   2. 회신 오면 `review-2-questions.md` "회신 받은 뒤" 절대로 → `docs/plans/departments.md` 계획서 → ⑤ 부서별 → ⑥ 동종업계
   3. 작은 것: "마지막 엑셀 내보내기 이후 변경됨" 백업 안내 · 질문 5-2 가 예산 역산이면 시뮬레이터 역산 모드 계획
   4. 회귀 확인 스크립트: 옛 스크래치패드 `c85dd2b1…/scratchpad/check-rollup.mjs`(playwright 설치돼 있음). 샘플 엑셀 생성 스크립트는 세션 6 스크래치패드 `335d81cf…/scratchpad/make-sample.ts`(esbuild 번들 → node)
+
+### 2026-09-09 — 세션 7 (결산서 PDF → 엑셀 기획설계)
+
+- 인사담당자 논의 결과 접수: **PDF 결산서를 엑셀 양식으로 옮기는 수기 작업 제거가 최우선**(부서별·동종업계보다 앞). 기획설계 요청.
+- 2026-09-08 "PDF 파싱 미채택" 근거 재검증: `pdftotext -table` + **pdf.js 4.10 좌표 추출**(스크래치패드 `spike.mjs`, 반기보고서 2부)로 손익계산서·성격별 비용·직원 등 현황 3표가 제자리로 복원됨을 확인.
+  이전 "어긋남"은 `-layout` 줄 접합 문제. 남는 과제는 표 찾기·계정 사전·단위·3개월/누적·연결/별도·다줄 라벨·내부 결산서 양식(미확인).
+- 계획서 `docs/plans/pdf-to-excel.md` 작성: 사용자 흐름(카드 확인 → 기존 미리보기 합류 / 엑셀 저장), 모듈 `src/lib/hcroi/pdf/`(extract·table·locate·map·toRecord, pdf.js 동적 import), 표별 추출 규칙, 마일스톤 M1–M5, 리스크, 확인 질문 6개.
+- brain §11 정정·최우선 요구 추가, decision-log, martin-2.0-extensions 표, review-2-questions §6 갱신. 코드 변경 없음(test/check 영향 없음).
+- **다음**: §9 질문 6개 답 받기(특히 받는 PDF 가 DART 인지 내부 결산서인지 + 샘플 1부) → M1·M2 착수(답 없이도 가능).
+
+### 2026-09-09 — 세션 7 (이어서): 결산서 PDF 가져오기 구현 (M1–M4)
+
+- 사용자 결정: 받은 PDF(DART 반기보고서 2부) 기준으로 바로 착수. LLM 불필요(규칙 기반) 확인.
+- `pdfjs-dist@4.10` 의존성 추가. `src/lib/hcroi/pdf/`: `types.ts` · `table.ts`(y 클러스터·셀 병합·숫자/단위 파싱·두 줄 라벨) · `locate.ts`(표지·손익계산서·성격별·직원 현황, 쪽 이어 읽기, 목차+바닥글로 연결/별도) · `map.ts`(계정 사전·열 선택·후보·`PdfPrefs`) · `toRecord.ts`(레코드+검증 경고) · `extract.ts`(pdf.js 동적 import, worker `?url`).
+- 픽스처 `pdf/fixtures/report-a.json`·`report-b.json`: 실 PDF 좌표 + 4자리 이상 숫자 치환 + 회사명 치환(생성 스크립트는 스크래치패드 `fixture.mjs`). 테스트 144 passed.
+- 실 PDF 프로브(`probe.test.ts`, `HCROI_PDF=`·`HCROI_PDF_OUT=`): 2부 모두 별도 손익계산서·별도 성격별·직원 현황 합계가 정답과 일치, 연결/별도 판별 OK. 발견·수정: 목차 점선과 쪽 번호가 한 셀로 붙음, 표가 다음 쪽으로 이어짐, 급여총액 교차검증은 기간 길이 환산 필요.
+- UI `components/data/PdfImport.svelte`: 파일 여러 개, 카드(회사·보고서·기간 / 별도·연결 / 3개월·누적 / 기간 선택 / 항목별 값·출처·후보 select·직접 입력 / 인건비 체크리스트 / 인원 / 경고) → 기존 미리보기 `fromPdf` 합류. 회사별 설정 기억 `workspace.pdfPrefs`.
+- 브라우저 E2E(스크래치패드 `e2e-pdf.mjs`·`e2e-pdf-prefs.mjs`, Chrome): 182쪽 PDF 2.4초, 값·기간 전환·직접 입력·미리보기·반영·되돌리기·새로고침 후 설정 자동 적용 모두 OK, 콘솔 에러 0(favicon 404 제외).
+- 문서: user-guide §4·§7·§8 재작성, spec §8, README, coverage, CLAUDE.md, brain §11, 계획서 상태, decision-log.
+- dev 서버 5173 켜 둔 상태. **다음**: 담당자에게 배포 링크로 자사 결산서 시험 요청(질문지 §6) → 회신에 따라 수동 셀 지정 모드 / 부서별 착수. 커밋은 지시 대기.

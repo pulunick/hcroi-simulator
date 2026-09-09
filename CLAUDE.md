@@ -29,12 +29,13 @@
 ## 참고 자료 (PDF)
 
 - 결산·공시 PDF 는 `docs/` 에 두되 **커밋하지 않는다**(`.gitignore` `docs/*.pdf`). Claude 는 PDF 를 대화에 올리지 말고 `pdftotext -layout` 로 스크래치패드에 추출한 뒤 `grep`/`sed` 로 필요한 구간만 읽는다(컨텍스트 초과 방지)
-- DART PDF 표는 라벨-숫자 정렬이 깨진다 — 자동 파싱 금지. 동종업계 비교는 엑셀 수기 입력(C안)
+- DART PDF 표는 `pdftotext -layout` 에서만 정렬이 깨진다 — 파싱은 좌표 기반(`-table` / pdf.js)만. **결산서 PDF → 엑셀 입력 시트 변환이 최우선 과제**(계획 docs/plans/pdf-to-excel.md, 사람 확인 필수·자동 반영 금지). 동종업계 비교는 엑셀 수기 입력(C안)
 
 ## 테스트
 
 - `src/lib/hcroi/*.test.ts` — 수식·시나리오·손익분기 역산·인사이트·기간·합산. **계산 로직 변경 시 테스트 없이 커밋 금지**
 - `src/lib/hcroi/excel/excel.test.ts` — 엑셀 행 변환·검증·병합·exceljs 왕복. 시트 구조(`schema.ts`) 변경 시 user-guide §4 도 갱신
+- `src/lib/hcroi/pdf/*.test.ts` — 표 복원·표 찾기·매핑·레코드. 픽스처(`pdf/fixtures/*.json`)는 실 PDF 좌표에 **가상 수치**(4자리 이상 숫자 치환, 회사명 치환) — 실 수치·실 PDF 커밋 금지
 - UI 컴포넌트는 테스트 강제하지 않음
 
 ## 문서
@@ -51,6 +52,8 @@
 Supabase 연동(로그인·조직), LLM 인사이트 서술, PDF 리포트, 부서별 분해, 다년 예측
 
 엑셀 내보내기/가져오기는 **구현 완료**(2026-09-01, `src/lib/hcroi/excel/`). exceljs 는 `excel/io.ts` 에서만 동적 import — 다른 곳에서 정적 import 금지(번들 크기)
+
+결산서 PDF 가져오기는 **구현 완료**(2026-09-09, `src/lib/hcroi/pdf/`, 계획 docs/plans/pdf-to-excel.md). pdfjs-dist 는 `pdf/extract.ts` 에서만 동적 import. 나머지(table·locate·map·toRecord)는 순수 함수 — 규칙을 바꾸면 픽스처 테스트 + 실 PDF 프로브(`HCROI_PDF=… npx vitest run src/lib/hcroi/pdf/probe`) 둘 다 돌릴 것. **자동 반영 금지** — 항상 카드 확인 → 기존 미리보기 경로
 
 ## 세션 운영 (brain / state)
 

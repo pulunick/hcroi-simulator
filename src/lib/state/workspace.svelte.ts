@@ -1,3 +1,4 @@
+import { normalizePdfPrefs, type PdfPrefs } from '$lib/hcroi/pdf/map';
 import { browser } from '$app/environment';
 import { sampleRecords } from '$lib/hcroi/defaults';
 import { DEFAULT_SCENARIO_PARAMS } from '$lib/hcroi/scenario';
@@ -50,6 +51,8 @@ interface Persisted {
 	amountUnit?: AmountUnit;
 	/** 임직원 수 산정 기준 (선택). 없으면 기본값(기간 평균 · 정규직만) */
 	headcountBasis?: HeadcountBasis;
+	/** 결산서 PDF 읽기 설정 (회사명별, 선택) */
+	pdfPrefs?: Record<string, PdfPrefs>;
 }
 
 export function newId(): string {
@@ -139,6 +142,7 @@ interface Migrated {
 	orgName: string;
 	amountUnit: AmountUnit | null;
 	headcountBasis: HeadcountBasis;
+	pdfPrefs: Record<string, PdfPrefs>;
 }
 
 /** 저장값(localStorage · JSON 파일 · 되돌리기 스냅샷)을 현재 스키마로 한 번에 옮긴다 — load/importJson 공통 */
@@ -152,7 +156,8 @@ function migratePersisted(p: Persisted): Migrated {
 		baseId: p.baseId ?? p.baseYearId ?? null,
 		orgName: typeof p.orgName === 'string' ? p.orgName : '',
 		amountUnit: isAmountUnit(p.amountUnit) ? p.amountUnit : null,
-		headcountBasis: normalizeBasis(p.headcountBasis)
+		headcountBasis: normalizeBasis(p.headcountBasis),
+		pdfPrefs: normalizePdfPrefs(p.pdfPrefs)
 	};
 }
 
@@ -174,6 +179,8 @@ class Workspace {
 	 * 산정 방식(기간 평균/기말)은 상위 기간을 합산할 때 인원을 어떻게 모을지 정한다.
 	 */
 	headcountBasis = $state<HeadcountBasis>(structuredClone(DEFAULT_HEADCOUNT_BASIS));
+	/** 결산서 PDF 읽기 설정 — 회사명별(연결/별도 · 3개월/누적 · 인건비 항목). PDF 카드에서 보낼 때 기억된다 */
+	pdfPrefs = $state<Record<string, PdfPrefs>>({});
 	/** localStorage 로드 완료 여부 — 로드 전에는 저장하지 않는다 */
 	loaded = $state(false);
 	/** 되돌릴 수 있는 가져오기 스냅샷이 있는지 */
@@ -252,6 +259,7 @@ class Workspace {
 		this.orgName = m.orgName;
 		this.amountUnit = m.amountUnit ?? this.amountUnit;
 		this.headcountBasis = m.headcountBasis;
+		this.pdfPrefs = m.pdfPrefs;
 		this.applyHeadcountBasis();
 	}
 
@@ -282,7 +290,8 @@ class Workspace {
 			baseId: this.baseId,
 			orgName: this.orgName,
 			amountUnit: this.amountUnit,
-			headcountBasis: $state.snapshot(this.headcountBasis)
+			headcountBasis: $state.snapshot(this.headcountBasis),
+			pdfPrefs: $state.snapshot(this.pdfPrefs)
 		};
 		try {
 			localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -440,7 +449,8 @@ class Workspace {
 			baseId: this.baseId,
 			orgName: this.orgName,
 			amountUnit: this.amountUnit,
-			headcountBasis: $state.snapshot(this.headcountBasis)
+			headcountBasis: $state.snapshot(this.headcountBasis),
+			pdfPrefs: $state.snapshot(this.pdfPrefs)
 		};
 		return JSON.stringify(data, null, 2);
 	}
