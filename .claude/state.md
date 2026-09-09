@@ -12,7 +12,7 @@
 | `npm test`      | ✅ 8 파일 / 144 passed (formulas · scenario · insights · period · rollup · excel · pdf table · pdf locate) + probe(skip)                                                                     |
 | `npm run check` | ✅ 0 errors / 0 warnings (360 files)                                                                                                                                                         |
 | `npm run lint`  | ✅                                                                                                                                                                                           |
-| git             | 원격 **github.com/pulunick/hcroi-simulator (public)**, 브랜치 `main`. 91dfabe(세션 6 합산·월·엑셀 편의) 까지 push 완료. 작업 트리 클린(state.md 갱신분 제외)                                 |
+| git             | 원격 **github.com/pulunick/hcroi-simulator (public)**, 브랜치 `main`. f69acfd(세션 7 결산서 PDF 가져오기) push 완료. 작업 트리 클린                                                          |
 | DB              | 없음(보류). 마이그레이션 SQL 준비만 됨, 어느 프로젝트에도 미적용                                                                                                                             |
 | 원격 저장소     | pulunick/hcroi-simulator (public). push 절차는 brain §1 참조                                                                                                                                 |
 
@@ -270,4 +270,5 @@
 - UI `components/data/PdfImport.svelte`: 파일 여러 개, 카드(회사·보고서·기간 / 별도·연결 / 3개월·누적 / 기간 선택 / 항목별 값·출처·후보 select·직접 입력 / 인건비 체크리스트 / 인원 / 경고) → 기존 미리보기 `fromPdf` 합류. 회사별 설정 기억 `workspace.pdfPrefs`.
 - 브라우저 E2E(스크래치패드 `e2e-pdf.mjs`·`e2e-pdf-prefs.mjs`, Chrome): 182쪽 PDF 2.4초, 값·기간 전환·직접 입력·미리보기·반영·되돌리기·새로고침 후 설정 자동 적용 모두 OK, 콘솔 에러 0(favicon 404 제외).
 - 문서: user-guide §4·§7·§8 재작성, spec §8, README, coverage, CLAUDE.md, brain §11, 계획서 상태, decision-log.
-- dev 서버 5173 켜 둔 상태. **다음**: 담당자에게 배포 링크로 자사 결산서 시험 요청(질문지 §6) → 회신에 따라 수동 셀 지정 모드 / 부서별 착수. 커밋은 지시 대기.
+- 커밋 `f69acfd` push 완료(pulunick → 회사 계정 복귀), dev 서버 종료. 담당자 전달문은 채팅으로 정리(배포 링크 + 사용 순서 + 질문지 §6).
+- **다음 세션 시작점**: ① Vercel 재배포 후 `/data` 에서 PDF 가져오기 1회 실측(worker 자산 로드) ② 담당자 회신(질문지 §6: 자사 PDF 종류·샘플) → 필요 시 계획서 §6 수동 셀 지정 모드 ③ 그 뒤 ⑤ 부서별 → ⑥ 동종업계
