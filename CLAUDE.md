@@ -16,11 +16,19 @@
 - 금액은 원 단위 정수, 비율은 % 숫자(3 → 3%)로 통일. 화면 표기는 `src/lib/hcroi/format.ts` 사용, 단위(원·%·명·배) 항상 명시
 - 시나리오 가정 변경 시 `scenario.ts` 주석 + docs/spec.md §4 + 테스트를 함께 갱신
 - 지표는 저장하지 않는다(입력값만 저장, 항상 재계산)
+- 데이터 단위는 **기간 레코드**(`PeriodRecord.period = {year, type: Y|H|Q, index}`). 라벨·정렬·기간 텍스트 파싱·전기/전년 동기는 `src/lib/hcroi/period.ts` 만 쓴다. 값은 기간 실적 그대로(연율화 금지), 추이는 한 유형만
+- 레코드 검증은 `validateRecord`(formulas.ts) 한 곳 — 화면과 엑셀 가져오기가 같은 규칙. 인원 총원 = 산정 기준 적용 합계 는 레이아웃 `$effect(applyHeadcountBasis)` 가 유지하므로 화면에서 따로 맞추지 말 것
+- 표기 규칙(표 칸/열 머리글/입력 힌트 단위)은 `format.ts` 의 `formatCellAmount·columnUnitSuffix·hintAmountUnit` 만 — 화면에 복제 금지
 - 차트: 이중축 금지, 범주형 색 고정 순서(Baseline=series-1, A=series-2, B=series-3), 범례+직접 라벨+표 병행
 - **DB 는 아직 없음.** `supabase/migrations` 는 준비만 된 상태. 대상은 **개발자 개인 Supabase 계정**(프로젝트 ref 는 연동 착수 시 확정). 연동 절차: `supabase init`(config.toml 생성, 기존 migrations 폴더 유지) → `supabase link --project-ref <ref>` → `supabase db push` → Data API exposed schemas 에 `hcroi` 추가. **push 는 사람이 직접 실행**, Claude 가 임의 실행 금지
 - ⚠️ 이 개발자의 다른 프로젝트용 Supabase MCP/프로젝트가 같은 계정에 있을 수 있음 — 사용자가 지정한 ref 외에는 연결·조회하지 말 것
 - 상태는 `src/lib/state/workspace.svelte.ts` 한 곳 (localStorage). DB 연동 시 이 모듈만 교체
 - 원격은 개인 계정 `pulunick/hcroi-simulator`(public). push 는 `gh auth switch --user pulunick` 후에만, 끝나면 회사 계정으로 복귀 (.claude/brain.md §1)
+
+## 참고 자료 (PDF)
+
+- 결산·공시 PDF 는 `docs/` 에 두되 **커밋하지 않는다**(`.gitignore` `docs/*.pdf`). Claude 는 PDF 를 대화에 올리지 말고 `pdftotext -layout` 로 스크래치패드에 추출한 뒤 `grep`/`sed` 로 필요한 구간만 읽는다(컨텍스트 초과 방지)
+- DART PDF 표는 라벨-숫자 정렬이 깨진다 — 자동 파싱 금지. 동종업계 비교는 엑셀 수기 입력(C안)
 
 ## 테스트
 
