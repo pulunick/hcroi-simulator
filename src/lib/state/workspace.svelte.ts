@@ -8,6 +8,7 @@ import type {
 	Scenario,
 	Period,
 	PeriodRecord,
+	PeriodType,
 	ScenarioParams
 } from '$lib/hcroi/types';
 import {
@@ -17,15 +18,18 @@ import {
 	samePeriod,
 	yearAgoPeriod
 } from '$lib/hcroi/period';
-import { PERIODS_PER_YEAR } from '$lib/hcroi/types';
+import { PERIODS_PER_YEAR, PERIOD_TYPES } from '$lib/hcroi/types';
 import { DEFAULT_HEADCOUNT_BASIS } from '$lib/hcroi/types';
 import { sumHcCost, sumHeadcount } from '$lib/hcroi/formulas';
+import { rollup, rollupMismatch, type RollupMismatch } from '$lib/hcroi/rollup';
 import { DEFAULT_AMOUNT_UNIT, isAmountUnit, type AmountUnit } from '$lib/hcroi/format';
 
 /**
  * 프로토타입 단계의 작업공간 상태.
  * - 저장소: localStorage (브라우저 단일 사용자). DB 연동 시 이 모듈만 교체한다 (supabase/README.md 참조)
  * - 스키마 버전을 키에 포함해 구조 변경 시 안전하게 폐기한다.
+ * - `records` 는 **직접 입력한** 기간만 담는다. 상위 기간(분기→반기→연간)은 `effective` 가 읽을 때 계산한다
+ *   (`rollup.ts`) — 계산 레코드는 저장하지 않는다.
  */
 const STORAGE_KEY = 'hcroi:workspace:v1';
 /** 엑셀 가져오기 반영 직전 상태 (되돌리기 1회분) */
@@ -103,6 +107,7 @@ function isPersisted(v: unknown): v is Persisted {
  * 저장된 레코드 하나를 현재 스키마로 맞춘다.
  * - 옛 연간 레코드(`year` 만 있음) → `period: {year, type:'Y', index:1}`
  * - 기간이 깨졌거나(알 수 없는 유형 포함) id·inputs 가 없으면 null — 호출 쪽이 개수를 세어 알린다
+ * - `derived` 표시는 버린다(계산 레코드는 저장 대상이 아니다)
  */
 function normalizeRecord(raw: unknown): PeriodRecord | null {
 	if (!raw || typeof raw !== 'object') return null;
@@ -154,10 +159,10 @@ function migratePersisted(p: Persisted): Migrated {
 export type ImportResult = { ok: true; warning: string | null } | { ok: false; error: string };
 
 class Workspace {
-	/** 기간 레코드(연간·반기·분기 혼재 가능). 정렬은 `sorted` 로 */
+	/** 직접 입력한 기간 레코드(연간·반기·분기·월 혼재 가능). 정렬은 `sorted`, 합산 포함 목록은 `effective` */
 	records = $state<PeriodRecord[]>(sampleRecords());
 	scenarios = $state<Scenario[]>(defaultScenarios());
-	/** 시뮬레이터 기준 기간 id (없으면 최신 기간) */
+	/** 시뮬레이터 기준 기간 id (없으면 최신 기간). 합산 레코드의 id(`derived:…`)도 될 수 있다 */
 	baseId = $state<string | null>(null);
 	/** 대시보드 제목 커스터마이징용 회사/조직 이름 (빈 문자열 = 기본 제목) */
 	orgName = $state('');
@@ -165,7 +170,8 @@ class Workspace {
 	amountUnit = $state<AmountUnit>(DEFAULT_AMOUNT_UNIT);
 	/**
 	 * 임직원 수 산정 기준. 연도마다 다르면 추이 비교가 무의미해지므로 작업공간 단위로 둔다.
-	 * 인원 세부 구성을 입력한 연도는 이 설정에 따라 총 임직원 수가 다시 계산된다.
+	 * 인원 세부 구성을 입력한 기간은 이 설정에 따라 총 임직원 수가 다시 계산되고,
+	 * 산정 방식(기간 평균/기말)은 상위 기간을 합산할 때 인원을 어떻게 모을지 정한다.
 	 */
 	headcountBasis = $state<HeadcountBasis>(structuredClone(DEFAULT_HEADCOUNT_BASIS));
 	/** localStorage 로드 완료 여부 — 로드 전에는 저장하지 않는다 */
@@ -173,19 +179,24 @@ class Workspace {
 	/** 되돌릴 수 있는 가져오기 스냅샷이 있는지 */
 	undoAvailable = $state(false);
 
-	/** 시간순 (한 해의 분기·반기 뒤에 연간). */
+	/** 직접 입력한 레코드만 시간순 (한 해의 분기·반기 뒤에 연간). 엑셀 `입력 데이터` 가 이것을 내보낸다 */
 	sorted = $derived([...this.records].sort((a, b) => comparePeriods(a.period, b.period)));
-	/** 가장 최근 기간 — 같은 끝 월이면 연간이 뒤에 오므로 연간이 우선된다 */
-	latest = $derived(this.sorted.at(-1) ?? null);
-	base = $derived(this.records.find((y) => y.id === this.baseId) ?? this.latest);
-	/** 작업공간에 있는 기간 유형들 (Y → H → Q 순) */
+	/**
+	 * 직접 입력 + 하위 기간에서 계산된 상위 기간(`derived` 표시) — 대시보드·시뮬레이터·표가 쓰는 전체 목록.
+	 * 직접 입력 레코드는 같은 객체라 여기서 고쳐도 저장된다. 계산 레코드는 편집 대상이 아니다.
+	 */
+	effective = $derived(rollup(this.records, this.headcountBasis));
+	/** 가장 최근 기간 — 같은 끝 월이면 연간이 뒤에 오므로 연간(합산 포함)이 우선된다 */
+	latest = $derived(this.effective.at(-1) ?? null);
+	base = $derived(this.effective.find((y) => y.id === this.baseId) ?? this.latest);
+	/** 작업공간에 있는 기간 유형들 (Y → H → Q → M 순, 합산으로 생긴 유형 포함) */
 	periodTypes = $derived(
-		(['Y', 'H', 'Q'] as const).filter((t) => this.records.some((r) => r.period.type === t))
+		PERIOD_TYPES.filter((t) => this.effective.some((r) => r.period.type === t))
 	);
 
 	/** 같은 유형의 레코드만 시간순으로 — 추이 차트·표·인사이트용 (유형을 섞어 비교하지 않는다) */
-	ofType(type: PeriodRecord['period']['type']): PeriodRecord[] {
-		return this.sorted.filter((r) => r.period.type === type);
+	ofType(type: PeriodType): PeriodRecord[] {
+		return this.effective.filter((r) => r.period.type === type);
 	}
 
 	/**
@@ -201,8 +212,36 @@ class Workspace {
 		return this.findByPeriod(yearAgoPeriod(rec.period)) ?? null;
 	}
 
+	/** 합산 레코드까지 포함해 찾는다 */
 	findByPeriod(period: Period): PeriodRecord | undefined {
-		return this.records.find((r) => samePeriod(r.period, period));
+		return this.effective.find((r) => samePeriod(r.period, period));
+	}
+
+	/** 직접 입력한 레코드 중 하위 기간 합산과 값이 다른 항목 (경고용). 합산 레코드나 하위 기간이 없으면 빈 배열 */
+	mismatchOf(rec: PeriodRecord): RollupMismatch[] {
+		if (rec.derived) return [];
+		return rollupMismatch(rec, this.records, this.headcountBasis);
+	}
+
+	/**
+	 * 합산 레코드를 직접 입력 레코드로 복사한다 (값을 손볼 때). 이후 이 기간은 합산 대신 직접 입력이 우선된다.
+	 * 이미 직접 입력이면 그대로 돌려준다.
+	 */
+	materialize(id: string): PeriodRecord | null {
+		const src = this.effective.find((r) => r.id === id);
+		if (!src) return null;
+		if (!src.derived) return src;
+		const rec: PeriodRecord = {
+			id: newId(),
+			period: { ...src.period },
+			inputs: { ...src.inputs },
+			breakdown: src.breakdown ? { ...src.breakdown } : null,
+			headcountBreakdown: src.headcountBreakdown ? { ...src.headcountBreakdown } : null,
+			memo: '하위 기간 합산값에서 직접 입력으로 전환'
+		};
+		this.records.push(rec);
+		if (this.baseId === id) this.baseId = rec.id;
+		return rec;
 	}
 
 	/** 이행된 저장값을 상태에 싣는다. 인원 구분을 쓴 레코드는 실린 기준으로 총원을 다시 맞춘다 */
@@ -265,8 +304,9 @@ class Workspace {
 	}
 
 	/**
-	 * 기간을 추가한다. 같은 유형의 가장 최근 레코드 값을 복사해 시작한다
+	 * 기간을 추가한다. 같은 유형의 가장 최근 레코드(합산 포함) 값을 복사해 시작한다
 	 * (분기를 추가하는데 연간 값을 복사하면 4배가 되어 버린다).
+	 * 합산으로만 있던 기간을 추가하면 그 기간은 직접 입력이 우선된다.
 	 */
 	addPeriod(period: Period): PeriodRecord {
 		// 같은 유형이 없으면 가장 최근 레코드를 기간 길이에 맞춰 환산해 시작한다(연간 → 분기는 ÷4).
@@ -302,6 +342,7 @@ class Workspace {
 		if (this.baseId === id) this.baseId = null;
 	}
 
+	/** 직접 입력한 레코드만 (편집용). 합산 레코드는 `effective` 에서 */
 	getRecord(id: string): PeriodRecord | undefined {
 		return this.records.find((y) => y.id === id);
 	}
@@ -339,8 +380,9 @@ class Workspace {
 		}
 	}
 
+	/** 직접 입력한 기간인지 (합산으로만 있는 기간은 false — 추가하면 직접 입력이 된다) */
 	hasPeriod(period: Period): boolean {
-		return this.findByPeriod(period) !== undefined;
+		return this.records.some((r) => samePeriod(r.period, period));
 	}
 
 	updateScenarioParams(id: string, patch: Partial<ScenarioParams>) {
@@ -361,7 +403,7 @@ class Workspace {
 	/** 레코드 목록을 통째로 교체 (엑셀 가져오기 병합 결과 반영) */
 	replaceRecords(records: PeriodRecord[]) {
 		this.records = records;
-		if (this.baseId && !records.some((y) => y.id === this.baseId)) this.baseId = null;
+		if (this.baseId && !this.effective.some((y) => y.id === this.baseId)) this.baseId = null;
 		// 가져온 행은 파일의 기준으로 합계가 났을 수 있다 — 지금 기준으로 다시 맞춘다
 		this.applyHeadcountBasis();
 	}

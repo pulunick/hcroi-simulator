@@ -57,7 +57,12 @@ const gradeText = (m: Metrics) => {
 
 /** 시트 ① `지표 요약` 열 정의 */
 export const SUMMARY_COLUMNS: readonly SummaryColumn[] = [
-	{ header: '기간', numFmt: '@', pick: (y) => periodLabel(y.period), width: 14 },
+	{
+		header: '기간',
+		numFmt: '@',
+		pick: (y) => `${periodLabel(y.period)}${y.derived ? ' (합산)' : ''}`,
+		width: 16
+	},
 	{ header: 'HCROI(배)', numFmt: NUM_FMT.multiple, pick: (_, m) => m.hcroi, width: 11 },
 	{
 		header: 'HCROI(%)',

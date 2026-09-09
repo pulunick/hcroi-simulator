@@ -112,18 +112,24 @@ export interface BaseInputs {
 }
 
 /**
- * 분석 기간 단위. 연간(Y) · 반기(H) · 분기(Q).
- * 실무 확인(2026-09-03): 분기 필수, 결산이 없는 분기는 반기 실적만 있음 → 반기 값을 반기 레코드로 그대로 둔다(분기로 쪼개 추정하지 않음).
- * 월(M)은 요구가 확인되면 같은 구조로 추가한다.
+ * 분석 기간 단위. 연간(Y) · 반기(H) · 분기(Q) · 월(M).
+ * 실무 확인(2026-09-03): 분기 필수, 월 선택. 결산이 없는 분기는 반기 실적만 있음 → 반기 값을 반기 레코드로 그대로 둔다(분기로 쪼개 추정하지 않음).
+ * 상위 기간(분기→반기→연간)은 저장하지 않고 `rollup.ts` 가 하위 기간에서 읽을 때 계산한다(2026-09-09).
  */
-export type PeriodType = 'Y' | 'H' | 'Q';
+export type PeriodType = 'Y' | 'H' | 'Q' | 'M';
 
-export const PERIOD_TYPES: readonly PeriodType[] = ['Y', 'H', 'Q'];
+/** 굵은 단위부터 (셀렉트·추이 단위 순서) */
+export const PERIOD_TYPES: readonly PeriodType[] = ['Y', 'H', 'Q', 'M'];
 
-export const PERIOD_TYPE_LABELS: Record<PeriodType, string> = { Y: '연간', H: '반기', Q: '분기' };
+export const PERIOD_TYPE_LABELS: Record<PeriodType, string> = {
+	Y: '연간',
+	H: '반기',
+	Q: '분기',
+	M: '월'
+};
 
-/** 유형별 한 해의 기간 수 = 연율화 계수 N (확장 지침 §1-(1): 연=1, 반기=2, 분기=4) */
-export const PERIODS_PER_YEAR: Record<PeriodType, number> = { Y: 1, H: 2, Q: 4 };
+/** 유형별 한 해의 기간 수 = 연율화 계수 N (확장 지침 §1-(1): 연=1, 반기=2, 분기=4, 월=12) */
+export const PERIODS_PER_YEAR: Record<PeriodType, number> = { Y: 1, H: 2, Q: 4, M: 12 };
 
 /** 분석 기간 = 회계연도 + 유형 + 순번 (Y 는 항상 1, H 는 1–2, Q 는 1–4) */
 export interface Period {
@@ -149,6 +155,19 @@ export interface PeriodRecord {
 	 */
 	headcountBreakdown: HeadcountBreakdown | null;
 	memo?: string;
+	/**
+	 * 하위 기간에서 계산된 레코드 표시 (`rollup.ts`). 직접 입력한 레코드에는 없다.
+	 * 계산 레코드는 저장하지 않으며 id 는 `derived:<periodKey>` 로 고정된다.
+	 */
+	derived?: DerivedInfo;
+}
+
+/** 합산 출처: `sum` = 하위 기간 합계, `diff` = 직접 입력한 상위 기간 − 나머지 하위 기간 */
+export interface DerivedInfo {
+	method: 'sum' | 'diff';
+	/** 합산에 쓴 하위 기간 유형과 개수 (diff 면 상위 기간 유형) */
+	from: PeriodType;
+	count: number;
 }
 
 export type HcroiGrade = 'critical' | 'warning' | 'excellent';

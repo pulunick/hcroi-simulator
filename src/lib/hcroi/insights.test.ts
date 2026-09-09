@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { rollup } from './rollup';
+import { DEFAULT_HEADCOUNT_BASIS } from './types';
 import { sampleRecords } from './defaults';
 import { scenarioInsights, trendInsights } from './insights';
 import { DEFAULT_SCENARIO_PARAMS, runScenario } from './scenario';
@@ -104,7 +106,9 @@ describe('scenarioInsights', () => {
 });
 
 describe('trendInsights', () => {
-	const annual = () => sampleRecords().filter((r) => r.period.type === 'Y');
+	// 샘플의 2025년 연간은 분기 4개에서 합산된다 (rollup)
+	const annual = () =>
+		rollup(sampleRecords(), DEFAULT_HEADCOUNT_BASIS).filter((r) => r.period.type === 'Y');
 	const quarterly = () => sampleRecords().filter((r) => r.period.type === 'Q');
 
 	it('샘플 연간 3개년은 2년 연속 하락으로 진단된다', () => {

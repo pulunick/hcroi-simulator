@@ -17,6 +17,7 @@
 		hintAmountUnit,
 		formatHeadcount,
 		headcountBasisLabel,
+		derivedLabel,
 		formatAmount,
 		formatKrwCompact,
 		formatMultiple,
@@ -41,8 +42,15 @@
 	const basisLabel = $derived(headcountBasisLabel(workspace.headcountBasis));
 
 	let selectedId = $state<string | null>(null);
-	/** 조회 중인 기간 레코드 (연간·반기·분기 중 하나) */
-	const rec = $derived(workspace.records.find((y) => y.id === selectedId) ?? workspace.latest);
+	/** 조회 중인 기간 레코드 (연간·반기·분기·월 중 하나, 하위 기간에서 합산된 것 포함) */
+	const rec = $derived(workspace.effective.find((y) => y.id === selectedId) ?? workspace.latest);
+	/** 직접 입력한 값이 하위 기간 합산과 다른 항목 (값은 직접 입력이 우선) */
+	const mismatch = $derived(rec ? workspace.mismatchOf(rec) : []);
+	function editDerived() {
+		if (!rec?.derived) return;
+		const m = workspace.materialize(rec.id);
+		if (m) selectedId = m.id;
+	}
 	const metrics = $derived(rec ? computeMetrics(rec.inputs) : null);
 	const diag = $derived(diagnose(metrics?.hcroi ?? null));
 	const errors = $derived(rec ? validateRecord(rec) : []);
@@ -169,8 +177,8 @@
 				value={rec?.id ?? ''}
 				onchange={(e) => (selectedId = (e.currentTarget as HTMLSelectElement).value || null)}
 			>
-				{#each workspace.sorted as y (y.id)}
-					<option value={y.id}>{periodLabel(y.period)}</option>
+				{#each workspace.effective as y (y.id)}
+					<option value={y.id}>{periodLabel(y.period)}{y.derived ? ' · 합산' : ''}</option>
 				{/each}
 			</select>
 		</label>
@@ -199,8 +207,23 @@
 					>세부 관리 →</a
 				>
 			</div>
+			{#if rec.derived}
+				<p class="mb-3 rounded-md border border-line bg-surface-2 px-3 py-2 text-sm text-ink-2">
+					<strong class="text-ink">{derivedLabel(rec.derived)}</strong> — 하위 기간에서 계산된
+					값이라 여기서는 고칠 수 없습니다. 개별 기간을 데이터 관리에서 수정하거나,
+					<button type="button" class="font-semibold text-brand-ink underline" onclick={editDerived}
+						>직접 입력으로 전환</button
+					>하세요.
+				</p>
+			{/if}
 			<div class="space-y-4">
-				<NumberField {hintUnit} label="매출액" bind:value={rec.inputs.revenue} min={0} />
+				<NumberField
+					{hintUnit}
+					label="매출액"
+					bind:value={rec.inputs.revenue}
+					min={0}
+					readonly={!!rec.derived}
+				/>
 				<div>
 					<div class="mb-1.5 flex items-center justify-between">
 						<span class="text-sm font-semibold text-ink-2">비용 입력 방식</span>
@@ -233,6 +256,7 @@
 							label="영업비용 (인건비 포함)"
 							bind:value={rec.inputs.operatingCost}
 							min={0}
+							readonly={!!rec.derived}
 							help="영업이익 {won(metrics.operatingProfit)}"
 						/>
 					{:else}
@@ -243,6 +267,7 @@
 								() => rec.inputs.revenue - rec.inputs.operatingCost,
 								(v) => (rec.inputs.operatingCost = rec.inputs.revenue - v)
 							}
+							readonly={!!rec.derived}
 							help="영업비용 {won(rec.inputs.operatingCost)}"
 						/>
 					{/if}
@@ -252,6 +277,7 @@
 					label="총 인건비"
 					bind:value={rec.inputs.hcCost}
 					min={0}
+					readonly={!!rec.derived}
 					help={rec.breakdown
 						? `세부 합계 ${won(sumHcCost(rec.breakdown))}${
 								rec.inputs.hcCost - sumHcCost(rec.breakdown) > 0
@@ -266,7 +292,7 @@
 					bind:value={rec.inputs.headcount}
 					unit="명"
 					min={1}
-					readonly={!!rec.headcountBreakdown}
+					readonly={!!rec.headcountBreakdown || !!rec.derived}
 					help={rec.headcountBreakdown
 						? `인원 구분 합계 · ${basisLabel} (데이터 관리에서 수정)`
 						: basisLabel}
@@ -278,6 +304,26 @@
 				>
 					{#each errors as e (e)}<li>{e}</li>{/each}
 				</ul>
+			{/if}
+			{#if mismatch.length}
+				<div
+					class="mt-4 rounded-md border border-status-warning/40 bg-status-warning-bg px-4 py-3 text-sm text-status-warning-ink"
+				>
+					<p class="font-semibold">
+						직접 입력한 값이 하위 기간 합산과 다릅니다 (직접 입력을 씁니다)
+					</p>
+					<ul class="mt-1 space-y-0.5">
+						{#each mismatch as m (m.field)}
+							<li>
+								{m.label}: 입력 {m.field === 'headcount'
+									? formatHeadcount(m.manual)
+									: won(m.manual)} · 합산 {m.field === 'headcount'
+									? formatHeadcount(m.derived)
+									: won(m.derived)}
+							</li>
+						{/each}
+					</ul>
+				</div>
 			{/if}
 		</section>
 
@@ -459,7 +505,10 @@
 							class="border-b border-line last:border-0 {y.id === rec.id ? 'bg-brand-tint/60' : ''}"
 						>
 							<th scope="row" class="px-4 py-2 text-left font-semibold whitespace-nowrap text-ink"
-								>{periodLabel(y.period)}</th
+								>{periodLabel(y.period)}{#if y.derived}<span
+										class="ml-1 text-xs font-normal text-muted"
+										title={derivedLabel(y.derived)}>합산</span
+									>{/if}</th
 							>
 							<td class="tabular px-3 py-2 text-right">{cellWon(y.inputs.revenue)}</td>
 							<td class="tabular px-3 py-2 text-right">{cellWon(m.operatingProfit)}</td>

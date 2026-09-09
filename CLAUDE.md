@@ -16,7 +16,8 @@
 - 금액은 원 단위 정수, 비율은 % 숫자(3 → 3%)로 통일. 화면 표기는 `src/lib/hcroi/format.ts` 사용, 단위(원·%·명·배) 항상 명시
 - 시나리오 가정 변경 시 `scenario.ts` 주석 + docs/spec.md §4 + 테스트를 함께 갱신
 - 지표는 저장하지 않는다(입력값만 저장, 항상 재계산)
-- 데이터 단위는 **기간 레코드**(`PeriodRecord.period = {year, type: Y|H|Q, index}`). 라벨·정렬·기간 텍스트 파싱·전기/전년 동기는 `src/lib/hcroi/period.ts` 만 쓴다. 값은 기간 실적 그대로(연율화 금지), 추이는 한 유형만
+- 데이터 단위는 **기간 레코드**(`PeriodRecord.period = {year, type: Y|H|Q|M, index}`). 라벨·정렬·기간 텍스트 파싱·전기/전년 동기·상하위 관계는 `src/lib/hcroi/period.ts` 만 쓴다. 값은 기간 실적 그대로(연율화 금지), 추이는 한 유형만
+- **상위 기간은 저장하지 않는다.** 직접 입력한 레코드(`workspace.records`)에서 `src/lib/hcroi/rollup.ts` 가 읽을 때 합산한다. 화면은 `workspace.effective`, 저장·엑셀 입력 시트·JSON 은 `records`. 합산 규칙(직접 입력 우선·차감·인원 산정 방식) 변경 시 rollup 테스트 + docs/spec.md §2 함께
 - 레코드 검증은 `validateRecord`(formulas.ts) 한 곳 — 화면과 엑셀 가져오기가 같은 규칙. 인원 총원 = 산정 기준 적용 합계 는 레이아웃 `$effect(applyHeadcountBasis)` 가 유지하므로 화면에서 따로 맞추지 말 것
 - 표기 규칙(표 칸/열 머리글/입력 힌트 단위)은 `format.ts` 의 `formatCellAmount·columnUnitSuffix·hintAmountUnit` 만 — 화면에 복제 금지
 - 차트: 이중축 금지, 범주형 색 고정 순서(Baseline=series-1, A=series-2, B=series-3), 범례+직접 라벨+표 병행
@@ -32,7 +33,7 @@
 
 ## 테스트
 
-- `src/lib/hcroi/*.test.ts` — 수식·시나리오·손익분기 역산·인사이트. **계산 로직 변경 시 테스트 없이 커밋 금지**
+- `src/lib/hcroi/*.test.ts` — 수식·시나리오·손익분기 역산·인사이트·기간·합산. **계산 로직 변경 시 테스트 없이 커밋 금지**
 - `src/lib/hcroi/excel/excel.test.ts` — 엑셀 행 변환·검증·병합·exceljs 왕복. 시트 구조(`schema.ts`) 변경 시 user-guide §4 도 갱신
 - UI 컴포넌트는 테스트 강제하지 않음
 

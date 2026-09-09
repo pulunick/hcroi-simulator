@@ -23,15 +23,18 @@ import {
 	isValidYear,
 	parsePeriodText,
 	periodKey,
-	periodLabel
+	periodLabel,
+	periodText
 } from '../period';
 import {
 	BASIS_SHEET,
+	CUMULATIVE_SHEET,
 	INPUT_COLUMN_BY_HEADER,
 	INPUT_COLUMNS,
 	INPUT_FIRST_DATA_ROW,
 	INPUT_HEADER_ROW,
 	ORG_SHEET,
+	UNIT_SHEET,
 	normalizeHeader,
 	type InputColumnKey
 } from './schema';
@@ -60,6 +63,16 @@ export interface ParseResult {
 	errors: RowError[];
 	/** 헤더 자체를 못 찾은 경우 — records/errors 는 비어 있다 */
 	headerError: string | null;
+}
+
+/** 파싱 옵션 — `조직 정보` 시트가 나르는 값들 (없으면 기본: 정규직만 · 원 · 기간 실적) */
+export interface ParseOptions {
+	/** 인원 구분 합계를 낼 때 쓸 산정 기준 (파일의 `조직 정보` 시트 값 → 없으면 현재 설정) */
+	basis?: HeadcountBasis;
+	/** 금액 칸에 곱할 배수 (천원이면 1000). 기본 1 */
+	scale?: number;
+	/** 손익(매출·영업비용·영업이익·인건비·세부)이 누계로 적혀 있으면 true — 앞 순번을 빼서 기간 실적으로 만든다 */
+	cumulative?: boolean;
 }
 
 /** 숫자 셀 파싱: 숫자 그대로, 문자열은 콤마·공백·단위 제거. 빈 값은 null, 해석 불가면 NaN */
@@ -122,11 +135,21 @@ export function mapHeader(headerCells: unknown[]): {
 	return { index, error: null };
 }
 
+/** 옛 호출 형태(두 번째 인자가 산정 기준)도 받는다 */
+function toOptions(o: HeadcountBasis | ParseOptions | undefined): Required<ParseOptions> {
+	const opts: ParseOptions = o && 'method' in o ? { basis: o } : (o ?? {});
+	return {
+		basis: opts.basis ?? DEFAULT_HEADCOUNT_BASIS,
+		scale: opts.scale && Number.isFinite(opts.scale) && opts.scale > 0 ? opts.scale : 1,
+		cumulative: opts.cumulative ?? false
+	};
+}
+
 export function parseInputRows(
 	rows: unknown[][],
-	/** 인원 구분 합계를 낼 때 쓸 산정 기준 (파일의 `조직 정보` 시트 값 → 없으면 현재 설정) */
-	basis: HeadcountBasis = DEFAULT_HEADCOUNT_BASIS
+	options?: HeadcountBasis | ParseOptions
 ): ParseResult {
+	const { basis, scale, cumulative } = toOptions(options);
 	const headerCells = rows[INPUT_HEADER_ROW - 1] ?? [];
 	const { index, error } = mapHeader(headerCells);
 	if (error) return { records: [], errors: [], headerError: error };
@@ -134,6 +157,11 @@ export function parseInputRows(
 	const cell = (r: unknown[], key: InputColumnKey): unknown => {
 		const i = index[key];
 		return i === undefined ? null : r[i];
+	};
+	// 금액 칸은 파일 단위(원·천원·백만원)를 원으로 환산해 읽는다
+	const amount = (r: unknown[], key: InputColumnKey): number | null => {
+		const v = parseNumber(cell(r, key));
+		return isNum(v) ? v * scale : v;
 	};
 
 	const records: ParsedRecord[] = [];
@@ -154,7 +182,7 @@ export function parseInputRows(
 		const pt = parsePeriodText(cell(cells, 'period'));
 		if (pt === null)
 			messages.push(
-				`기간 "${String(cell(cells, 'period')).trim()}" 을(를) 읽을 수 없습니다 (1분기~4분기 · 상반기/하반기 · 연간 또는 빈 칸).`
+				`기간 "${String(cell(cells, 'period')).trim()}" 을(를) 읽을 수 없습니다 (1분기~4분기 · 상반기/하반기 · 1월~12월 · 연간 또는 빈 칸).`
 			);
 		// 연도·기간 텍스트가 모두 유효할 때만 기간이 만들어진다 (파서가 낸 유형·순번은 항상 범위 안)
 		const period: Period | null = isValidYear(year) && pt ? { year, ...pt } : null;
@@ -163,7 +191,7 @@ export function parseInputRows(
 				`${periodLabel(period)}이(가) ${seen.get(periodKey(period))}행에도 있습니다 (파일 내 중복).`
 			);
 
-		const revenue = parseNumber(cell(cells, 'revenue'));
+		const revenue = amount(cells, 'revenue');
 		if (revenue === null) messages.push('매출액이 비어 있습니다.');
 		else if (Number.isNaN(revenue)) messages.push('매출액을 숫자로 읽을 수 없습니다.');
 
@@ -199,8 +227,8 @@ export function parseInputRows(
 		}
 
 		// 영업비용 or 영업이익
-		const opCost = parseNumber(cell(cells, 'operatingCost'));
-		const opProfit = parseNumber(cell(cells, 'operatingProfit'));
+		const opCost = amount(cells, 'operatingCost');
+		const opProfit = amount(cells, 'operatingProfit');
 		if (Number.isNaN(opCost)) messages.push('영업비용을 숫자로 읽을 수 없습니다.');
 		if (Number.isNaN(opProfit)) messages.push('영업이익을 숫자로 읽을 수 없습니다.');
 		let operatingCost: number | null = null;
@@ -217,10 +245,10 @@ export function parseInputRows(
 		}
 
 		// 총 인건비 / 세부 6항목
-		const hcTotalCell = parseNumber(cell(cells, 'hcCost'));
+		const hcTotalCell = amount(cells, 'hcCost');
 		if (Number.isNaN(hcTotalCell)) messages.push('총 인건비를 숫자로 읽을 수 없습니다.');
 		const cp = parseParts(
-			HC_COST_KEYS.map((k) => parseNumber(cell(cells, k))),
+			HC_COST_KEYS.map((k) => amount(cells, k)),
 			HC_COST_KEYS,
 			'인건비 세부 항목'
 		);
@@ -254,12 +282,19 @@ export function parseInputRows(
 				hcCost: Math.round(hcCost as number),
 				headcount: headcount as number
 			};
-			messages.push(...validateInputs(inputs), ...validateBreakdown(inputs, breakdown));
+			const rounded = breakdown ? roundParts(breakdown, HC_COST_KEYS) : null;
+			messages.push(...validateInputs(inputs), ...validateBreakdown(inputs, rounded));
 			if (messages.length === 0) {
 				seen.set(periodKey(period as Period), rowNo);
 				records.push({
 					row: rowNo,
-					record: { period: period as Period, inputs, breakdown, headcountBreakdown, memo },
+					record: {
+						period: period as Period,
+						inputs,
+						breakdown: rounded,
+						headcountBreakdown,
+						memo
+					},
 					warnings
 				});
 				continue;
@@ -268,7 +303,76 @@ export function parseInputRows(
 		errors.push({ row: rowNo, period, messages });
 	}
 
+	if (cumulative) return { ...deCumulate(records), headerError: null };
 	return { records, errors, headerError: null };
+}
+
+function roundParts<K extends string>(
+	parts: Record<K, number>,
+	keys: readonly K[]
+): Record<K, number> {
+	return Object.fromEntries(keys.map((k) => [k, Math.round(parts[k])])) as Record<K, number>;
+}
+
+/**
+ * 누계 → 기간 실적. 같은 연도·같은 유형 안에서 순번 i 의 손익 = 누계 i − 누계 i−1 (1순번은 그대로).
+ * 앞 순번이 파일에 없으면 그 행은 오류(추정하지 않는다). 인원은 누계가 아니므로 손대지 않는다.
+ */
+function deCumulate(parsed: ParsedRecord[]): { records: ParsedRecord[]; errors: RowError[] } {
+	const byKey = new Map(parsed.map((p) => [periodKey(p.record.period), p]));
+	const records: ParsedRecord[] = [];
+	const errors: RowError[] = [];
+	for (const p of parsed) {
+		const { period } = p.record;
+		if (period.type === 'Y' || period.index === 1) {
+			records.push(p);
+			continue;
+		}
+		const prevPeriod: Period = { ...period, index: period.index - 1 };
+		const prev = byKey.get(periodKey(prevPeriod));
+		if (!prev) {
+			errors.push({
+				row: p.row,
+				period,
+				messages: [
+					`누계 입력인데 앞 순번(${periodText(prevPeriod)})이 파일에 없어 ${periodText(period)} 실적을 만들 수 없습니다.`
+				]
+			});
+			continue;
+		}
+		const a = p.record;
+		const b = prev.record; // 누계값 그대로 (byKey 는 변환 전 레코드를 가리킨다)
+		const inputs = {
+			revenue: a.inputs.revenue - b.inputs.revenue,
+			operatingCost: a.inputs.operatingCost - b.inputs.operatingCost,
+			hcCost: a.inputs.hcCost - b.inputs.hcCost,
+			headcount: a.inputs.headcount
+		};
+		const breakdown =
+			a.breakdown && b.breakdown
+				? (Object.fromEntries(
+						HC_COST_KEYS.map((k) => [
+							k,
+							(a.breakdown as HcCostBreakdown)[k] - (b.breakdown as HcCostBreakdown)[k]
+						])
+					) as unknown as HcCostBreakdown)
+				: a.breakdown;
+		const messages = [...validateInputs(inputs), ...validateBreakdown(inputs, breakdown)];
+		if (messages.length) {
+			errors.push({
+				row: p.row,
+				period,
+				messages: [`누계에서 앞 순번을 뺀 값이 이상합니다: ${messages.join(' ')}`]
+			});
+			continue;
+		}
+		records.push({
+			row: p.row,
+			record: { ...a, inputs, breakdown },
+			warnings: [...p.warnings, `누계 − ${periodText(prevPeriod)} 누계로 기간 실적을 만들었습니다.`]
+		});
+	}
+	return { records, errors };
 }
 
 export interface MergeOptions {
@@ -326,7 +430,7 @@ export const ORG_NAME_MAX = 40;
 
 /**
  * `조직 정보` 시트에서 라벨 칸을 찾아 그 오른쪽 첫 비어 있지 않은 칸을 돌려준다.
- * 라벨이 없으면 null, 라벨은 있고 값이 비었으면 ''. parseOrgName·parseHeadcountBasis 가 같은 규칙을 쓴다.
+ * 라벨이 없으면 null, 라벨은 있고 값이 비었으면 ''. parseOrgName·parseHeadcountBasis 등이 같은 규칙을 쓴다.
  */
 function findLabelValue(rows: unknown[][], label: string): string | null {
 	const want = normalizeHeader(label);
@@ -374,4 +478,21 @@ export function parseHeadcountBasis(rows: unknown[][] | null): HeadcountBasis | 
 		basis.include[k] = normalizeHeader(v) === yes;
 	}
 	return found ? basis : null;
+}
+
+/** `조직 정보` 시트의 금액 단위. 라벨이 없거나 비었거나 모르는 값이면 원(1) — 옛 파일은 전부 원 단위였다 */
+export function parseAmountUnit(rows: unknown[][] | null): { label: string; scale: number } {
+	const fallback = { label: UNIT_SHEET.options[0].label, scale: 1 };
+	if (!rows) return fallback;
+	const v = findLabelValue(rows, UNIT_SHEET.label);
+	if (!v) return fallback;
+	const hit = UNIT_SHEET.options.find((o) => normalizeHeader(o.label) === normalizeHeader(v));
+	return hit ? { label: hit.label, scale: hit.scale } : fallback;
+}
+
+/** `조직 정보` 시트의 손익 입력 방식. "누계" 일 때만 true */
+export function parseCumulative(rows: unknown[][] | null): boolean {
+	if (!rows) return false;
+	const v = findLabelValue(rows, CUMULATIVE_SHEET.label);
+	return v !== null && normalizeHeader(v) === normalizeHeader(CUMULATIVE_SHEET.cumulative);
 }

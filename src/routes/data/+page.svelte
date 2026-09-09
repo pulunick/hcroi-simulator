@@ -12,6 +12,8 @@
 	} from '$lib/hcroi/period';
 	import {
 		mergeRecords,
+		parseAmountUnit,
+		parseCumulative,
 		parseInputRows,
 		parseHeadcountBasis,
 		parseOrgName,
@@ -36,6 +38,7 @@
 	import {
 		AMOUNT_UNITS,
 		columnUnitSuffix,
+		derivedLabel,
 		formatAmount,
 		headcountBasisLabel,
 		formatCellAmount,
@@ -55,8 +58,18 @@
 	const hintUnit = $derived(hintAmountUnit(workspace.amountUnit));
 
 	let selectedId = $state<string | null>(null);
-	const selected = $derived(workspace.records.find((y) => y.id === selectedId) ?? workspace.latest);
+	/** 선택된 기간 — 합산 레코드도 고를 수 있다(읽기 전용 패널) */
+	const selected = $derived(
+		workspace.effective.find((y) => y.id === selectedId) ?? workspace.latest
+	);
 	const errors = $derived(selected ? validateRecord(selected) : []);
+	/** 직접 입력한 값이 하위 기간 합산과 다른 항목 */
+	const mismatch = $derived(selected ? workspace.mismatchOf(selected) : []);
+	function editDerived() {
+		if (!selected?.derived) return;
+		const m = workspace.materialize(selected.id);
+		if (m) selectedId = m.id;
+	}
 
 	// --- 기간 추가 (연도 + 유형 + 순번) ---
 	// 연도 칸은 사용자가 손대기 전까지 "가장 최근 기간의 이듬해"를 따른다
@@ -177,6 +190,10 @@
 		orgName: string | null;
 		/** 파일이 나른 임직원 수 산정 기준. 기준 행이 없는 옛 파일이면 null */
 		basis: HeadcountBasis | null;
+		/** 파일의 금액 단위 (조직 정보 시트) */
+		unit: { label: string; scale: number };
+		/** 손익이 누계로 적혀 있어 앞 순번을 빼서 읽었는지 */
+		cumulative: boolean;
 	} | null>(null);
 	let overwrite = $state(true);
 	let skipErrors = $state(false);
@@ -195,7 +212,8 @@
 				scenarios: $state.snapshot(workspace.scenarios),
 				base: workspace.base ? $state.snapshot(workspace.base) : null,
 				orgName: workspace.orgName,
-				headcountBasis: $state.snapshot(workspace.headcountBasis)
+				headcountBasis: $state.snapshot(workspace.headcountBasis),
+				summaryRecords: $state.snapshot(workspace.effective)
 			});
 			const org = workspace.orgName.trim().replace(/[\\/:*?"<>|\s]+/g, '-');
 			const fname = `hcroi-${org ? org + '-' : ''}${today()}.xlsx`;
@@ -213,7 +231,7 @@
 			const { buildTemplateBuffer, downloadBuffer } = await import('$lib/hcroi/excel/io');
 			downloadBuffer(await buildTemplateBuffer({ withSample: true }), 'hcroi-template.xlsx');
 			ioMessage =
-				'입력 템플릿(hcroi-template.xlsx)을 내려받았습니다. 샘플 3행을 자사 값으로 바꾸고, "조직 정보" 시트에 회사 이름을 적으면 대시보드 제목에도 반영됩니다.';
+				'입력 템플릿(hcroi-template.xlsx)을 내려받았습니다. 샘플 행을 자사 값으로 바꾸세요. 기간은 드롭다운, 맨 끝 "검증" 열이 틀린 행을 붉게 표시합니다. "조직 정보" 시트에서 회사 이름·금액 단위(천원 등)·누계 입력 여부를 정합니다.';
 		} catch (e) {
 			ioMessage = `템플릿 생성 실패: ${(e as Error).message}`;
 		} finally {
@@ -233,11 +251,19 @@
 			applyBasisFromFile = true;
 			// 인원 구분 합계는 산정 기준에 따라 달라지므로 파일이 나른 기준을 우선 적용해 파싱한다
 			const fileBasis = parseHeadcountBasis(read.org);
+			const unit = parseAmountUnit(read.org);
+			const cumulative = parseCumulative(read.org);
 			preview = {
 				fileName: file.name,
-				result: parseInputRows(read.input, fileBasis ?? $state.snapshot(workspace.headcountBasis)),
+				result: parseInputRows(read.input, {
+					basis: fileBasis ?? $state.snapshot(workspace.headcountBasis),
+					scale: unit.scale,
+					cumulative
+				}),
 				orgName: parseOrgName(read.org),
-				basis: fileBasis
+				basis: fileBasis,
+				unit,
+				cumulative
 			};
 		} catch (err) {
 			ioMessage = `엑셀 파일을 읽지 못했습니다: ${(err as Error).message}`;
@@ -306,13 +332,16 @@
 		});
 		workspace.replaceRecords(r.records);
 		const parts = [`${r.added}개 기간 추가`, `${r.updated}개 덮어씀`];
-		if (orgNameChange !== null && applyOrgName) {
-			workspace.orgName = orgNameChange;
-			parts.push(orgNameChange ? `제목 "${orgNameChange}"` : '제목 기본값으로');
+		// $derived 는 상태를 바꾸는 순간 다시 계산되므로 반영 전에 값을 잡아 둔다
+		const newOrgName = orgNameChange;
+		const newBasis = basisChange;
+		if (newOrgName !== null && applyOrgName) {
+			workspace.orgName = newOrgName;
+			parts.push(newOrgName ? `제목 "${newOrgName}"` : '제목 기본값으로');
 		}
-		if (basisChange !== null && applyBasisFromFile) {
-			workspace.setHeadcountBasis(basisChange);
-			parts.push(`인원 산정 기준 "${headcountBasisLabel(basisChange)}"`);
+		if (newBasis !== null && applyBasisFromFile) {
+			workspace.setHeadcountBasis(newBasis);
+			parts.push(`인원 산정 기준 "${headcountBasisLabel(newBasis)}"`);
 		}
 		if (r.skipped) parts.push(`${r.skipped}개 건너뜀(기존 기간 유지)`);
 		if (preview.result.errors.length) parts.push(`오류 ${preview.result.errors.length}행 제외`);
@@ -350,8 +379,9 @@
 	<div>
 		<h1 class="text-2xl font-bold text-ink">데이터 관리</h1>
 		<p class="mt-1 text-[15px] text-ink-2">
-			기간별(연간·반기·분기) 재무·HR 데이터를 입력합니다. 총 인건비는 6개 항목으로, 임직원 수는 4개
-			구분으로 나눠 관리할 수 있습니다.
+			기간별(연간·반기·분기·월) 재무·HR 데이터를 입력합니다. 잘게 넣으면 상위 기간(분기 → 반기 →
+			연간)은 자동으로 합산됩니다. 총 인건비는 6개 항목으로, 임직원 수는 4개 구분으로 나눠 관리할 수
+			있습니다.
 		</p>
 		<label class="mt-3 flex flex-wrap items-center gap-2 text-sm text-ink-2">
 			<span class="font-medium text-ink">금액 표시 단위</span>
@@ -452,6 +482,12 @@
 				<p class="text-sm text-muted">
 					{preview.fileName} — 정상 {res.records.length}행 · 오류 {res.errors.length}행. 아직
 					반영되지 않았습니다.
+					{#if preview.unit.scale !== 1}
+						금액은 <strong class="text-ink">{preview.unit.label}</strong> 단위로 읽어 ×{preview.unit.scale.toLocaleString()}
+						했습니다.
+					{/if}
+					{#if preview.cumulative}<strong class="text-ink">누계</strong> 입력이라 앞 순번을 빼서 기간
+						실적으로 만들었습니다.{/if}
 				</p>
 			</div>
 			<div class="flex flex-wrap items-center gap-3">
@@ -587,7 +623,11 @@
 		<div class="flex flex-wrap items-center justify-between gap-3 px-5 pt-4 pb-3">
 			<div>
 				<h2 id="years-h" class="text-lg font-semibold text-ink">기간별 데이터</h2>
-				<p class="text-xs text-muted">행을 클릭하면 오른쪽에서 편집할 수 있습니다</p>
+				<p class="text-xs text-muted">
+					행을 클릭하면 오른쪽에서 편집할 수 있습니다. <span class="rounded bg-surface-2 px-1"
+						>합산</span
+					> 은 하위 기간에서 계산된 기간(저장되지 않음)
+				</p>
 			</div>
 			<form
 				class="flex flex-wrap items-center gap-2"
@@ -644,13 +684,15 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each workspace.sorted as y (y.id)}
+					{#each workspace.effective as y (y.id)}
 						{@const m = computeMetrics(y.inputs)}
 						<tr
 							class="cursor-pointer border-b border-line transition-colors last:border-0 hover:bg-surface-2 {selected?.id ===
 							y.id
 								? 'bg-brand-tint/60 hover:bg-brand-tint/60'
-								: ''}"
+								: y.derived
+									? 'text-ink-2'
+									: ''}"
 							aria-selected={selected?.id === y.id}
 							onclick={() => (selectedId = y.id)}
 						>
@@ -663,7 +705,10 @@
 									class="underline-offset-2 hover:underline"
 									onclick={() => (selectedId = y.id)}>{periodLabel(y.period)}</button
 								>
-								{#if y.id.startsWith('sample-')}<span
+								{#if y.derived}<span
+										class="ml-1 rounded bg-surface-2 px-1.5 py-0.5 text-xs font-normal whitespace-nowrap text-muted"
+										title={derivedLabel(y.derived)}>합산</span
+									>{:else if y.id.startsWith('sample-')}<span
 										class="ml-1 text-xs font-normal whitespace-nowrap text-muted">샘플</span
 									>{/if}
 							</th>
@@ -683,29 +728,31 @@
 								></td
 							>
 							<td class="px-2 py-2 text-right align-middle">
-								<button
-									type="button"
-									class="btn p-1.5 btn-ghost text-status-critical-ink hover:bg-status-critical-bg"
-									aria-label="{periodLabel(y.period)} 삭제"
-									title="{periodLabel(y.period)} 삭제"
-									onclick={(e) => {
-										e.stopPropagation();
-										removeRecord(y.id, periodLabel(y.period));
-									}}
-								>
-									<svg
-										width="16"
-										height="16"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										aria-hidden="true"
-										><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" /></svg
+								{#if !y.derived}
+									<button
+										type="button"
+										class="btn p-1.5 btn-ghost text-status-critical-ink hover:bg-status-critical-bg"
+										aria-label="{periodLabel(y.period)} 삭제"
+										title="{periodLabel(y.period)} 삭제"
+										onclick={(e) => {
+											e.stopPropagation();
+											removeRecord(y.id, periodLabel(y.period));
+										}}
 									>
-								</button>
+										<svg
+											width="16"
+											height="16"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											aria-hidden="true"
+											><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" /></svg
+										>
+									</button>
+								{/if}
 							</td>
 						</tr>
 					{:else}
@@ -722,7 +769,48 @@
 
 	<!-- 편집 패널 -->
 	<section class="card px-5 py-5" aria-labelledby="edit-h">
-		{#if selected}
+		{#if selected?.derived}
+			{@const m = computeMetrics(selected.inputs)}
+			<h2 id="edit-h" class="text-lg font-semibold text-ink">
+				{periodLabel(selected.period)}
+				<span class="ml-1 text-sm font-normal text-muted">{derivedLabel(selected.derived)}</span>
+			</h2>
+			<p class="mt-2 text-sm text-ink-2">
+				하위 기간에서 계산된 값입니다. 금액은 합계, 임직원 수는 <strong
+					>{basisLabel.split(' · ')[0]}</strong
+				>
+				방식으로 모았습니다. 저장되지 않고 하위 기간이 바뀌면 함께 바뀝니다.
+			</p>
+			<dl class="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+				<dt class="text-ink-2">매출액</dt>
+				<dd class="tabular font-semibold">{won(selected.inputs.revenue)}</dd>
+				<dt class="text-ink-2">영업비용 (인건비 포함)</dt>
+				<dd class="tabular font-semibold">{won(selected.inputs.operatingCost)}</dd>
+				<dt class="text-ink-2">영업이익</dt>
+				<dd class="tabular font-semibold">{won(m.operatingProfit)}</dd>
+				<dt class="text-ink-2">총 인건비</dt>
+				<dd class="tabular font-semibold">
+					{won(selected.inputs.hcCost)}{#if !selected.breakdown}<span
+							class="ml-1 text-xs text-muted">(세부는 하위 기간이 모두 세부를 쓸 때만)</span
+						>{/if}
+				</dd>
+				<dt class="text-ink-2">총 임직원 수</dt>
+				<dd class="tabular font-semibold">
+					{formatHeadcount(selected.inputs.headcount)}
+					<span class="text-xs font-normal text-muted">· {basisLabel}</span>
+				</dd>
+				<dt class="text-ink-2">HCROI</dt>
+				<dd class="tabular font-semibold">{formatMultiple(m.hcroi)}</dd>
+			</dl>
+			<div class="mt-4 flex flex-wrap items-center gap-2">
+				<button type="button" class="btn py-1.5 text-sm btn-secondary" onclick={editDerived}
+					>직접 입력으로 전환</button
+				>
+				<span class="text-xs text-muted"
+					>복사본을 만들어 값을 고칩니다. 이후 이 기간은 직접 입력이 우선됩니다.</span
+				>
+			</div>
+		{:else if selected}
 			<div class="mb-4 flex items-center justify-between gap-3">
 				<h2 id="edit-h" class="text-lg font-semibold text-ink">
 					{periodLabel(selected.period)} 데이터 편집
@@ -883,6 +971,27 @@
 					/>
 				</label>
 
+				{#if mismatch.length}
+					<div
+						class="rounded-md border border-status-warning/40 bg-status-warning-bg px-4 py-3 text-sm text-status-warning-ink"
+					>
+						<p class="font-semibold">하위 기간 합산과 다릅니다 — 직접 입력한 값을 씁니다</p>
+						<ul class="mt-1 space-y-0.5">
+							{#each mismatch as mm (mm.field)}
+								<li>
+									{mm.label}: 입력 {mm.field === 'headcount'
+										? formatHeadcount(mm.manual)
+										: won(mm.manual)}
+									· 합산 {mm.field === 'headcount' ? formatHeadcount(mm.derived) : won(mm.derived)}
+								</li>
+							{/each}
+						</ul>
+						<p class="mt-1 text-xs">
+							결산 조정으로 확정치가 다르면 그대로 두고, 입력 실수면 이 기간을 삭제해 합산값을
+							쓰세요.
+						</p>
+					</div>
+				{/if}
 				{#if errors.length}
 					<ul
 						class="space-y-1 rounded-md border border-status-critical/40 bg-status-critical-bg px-4 py-3 text-sm text-status-critical-ink"

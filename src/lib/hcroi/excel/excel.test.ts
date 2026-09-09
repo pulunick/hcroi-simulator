@@ -6,16 +6,26 @@ import { DEFAULT_SCENARIO_PARAMS } from '../scenario';
 import {
 	ORG_NAME_MAX,
 	mergeRecords,
+	parseAmountUnit,
+	parseCumulative,
 	parseHeadcountBasis,
 	parseInputRows,
 	parseNumber,
 	parseOrgName
 } from './fromRows';
 import { buildTemplateBuffer, buildWorkbookBuffer, readInputSheet, readWorkbook } from './io';
-import { BASIS_SHEET, INPUT_COLUMNS, ORG_SHEET, headerText } from './schema';
+import {
+	BASIS_SHEET,
+	CUMULATIVE_SHEET,
+	INPUT_COLUMNS,
+	ORG_SHEET,
+	UNIT_SHEET,
+	headerText
+} from './schema';
 import { inputRows, scenarioSheet, summaryRows } from './toRows';
 import { DEFAULT_HEADCOUNT_BASIS, type HeadcountBasis } from '../types';
 import { comparePeriods, periodKey } from '../period';
+import { rollup } from '../rollup';
 
 const header = INPUT_COLUMNS.map(headerText);
 const col = (key: string) => INPUT_COLUMNS.findIndex((c) => c.key === key);
@@ -25,6 +35,13 @@ function row(values: Partial<Record<string, unknown>>): unknown[] {
 	return r;
 }
 const sheet = (...data: unknown[][]) => [header, header.map(() => '단위 설명'), ...data];
+/** 샘플 + 합산 레코드 (2025 반기·연간) */
+const sampleEffective = () => rollup(sampleRecords(), DEFAULT_HEADCOUNT_BASIS);
+/** 연간 3개년을 직접 입력 레코드로 (2025 는 합산값을 복사해 id 'sample-2025') */
+const sampleAnnual = () =>
+	sampleEffective()
+		.filter((r) => r.period.type === 'Y')
+		.map((r) => (r.derived ? { ...r, id: 'sample-2025', derived: undefined } : r));
 
 describe('parseNumber', () => {
 	it('숫자·콤마 문자열·단위 접미사·빈값·해석불가를 구분한다', () => {
@@ -163,18 +180,17 @@ describe('parseInputRows', () => {
 });
 
 describe('toRows ↔ fromRows 왕복', () => {
-	it('샘플 3개년을 내보낸 행을 다시 파싱하면 입력값이 그대로 복원된다', () => {
+	it('샘플(연간 2 + 2025 분기 4)을 내보낸 행을 다시 파싱하면 입력값이 그대로 복원된다', () => {
 		const records = sampleRecords();
 		const rows = inputRows(records).map((r) => INPUT_COLUMNS.map((c) => r[c.key]));
-		// 기간 열에는 "연간"·"1분기" 같은 텍스트가 실린다
+		// 기간 열에는 "연간"·"1분기" 같은 텍스트가 실린다. 합산되는 2025년 연간은 내보내지 않는다
 		expect(rows.map((r) => r[col('period')])).toEqual([
 			'연간',
 			'연간',
 			'1분기',
 			'2분기',
 			'3분기',
-			'4분기',
-			'연간'
+			'4분기'
 		]);
 		const parsed = parseInputRows(sheet(...rows));
 		expect(parsed.errors).toEqual([]);
@@ -191,25 +207,27 @@ describe('toRows ↔ fromRows 왕복', () => {
 		);
 	});
 
-	it('summaryRows 는 지표 값을 계산해 넣는다 (2025년 HCROI 1.25) — 기간 열은 라벨 텍스트', () => {
-		const rows = summaryRows(sampleRecords());
-		expect(rows).toHaveLength(7);
+	it('summaryRows 는 지표 값을 계산해 넣는다 (2025년 HCROI 1.25) — 기간 열은 라벨 텍스트, 합산은 표시', () => {
+		const rows = summaryRows(sampleEffective());
+		expect(rows).toHaveLength(9);
 		expect(rows.map((r) => r[0])).toEqual([
 			'2023년',
 			'2024년',
 			'2025년 1분기',
 			'2025년 2분기',
+			'2025년 상반기 (합산)',
 			'2025년 3분기',
 			'2025년 4분기',
-			'2025년'
+			'2025년 하반기 (합산)',
+			'2025년 (합산)'
 		]);
-		const y2025 = rows.find((r) => r[0] === '2025년')!;
+		const y2025 = rows.find((r) => r[0] === '2025년 (합산)')!;
 		expect(y2025[1]).toBeCloseTo(1.25, 2);
 		expect(y2025[3]).toBe('보통');
 	});
 
 	it('scenarioSheet 는 파라미터 8행 + 지표 9행, 증감은 시나리오−기준', () => {
-		const base = sampleRecords()[2];
+		const base = sampleEffective().find((r) => r.period.type === 'Y' && r.period.year === 2025)!;
 		const cmp = compareScenarios(base.inputs, [
 			{ id: 'a', name: 'A', params: { ...DEFAULT_SCENARIO_PARAMS, headcountPct: 10 } },
 			{ id: 'b', name: 'B', params: { ...DEFAULT_SCENARIO_PARAMS, headcountPct: -5 } }
@@ -363,7 +381,7 @@ describe('parseOrgName', () => {
 });
 
 describe('mergeRecords', () => {
-	const existing = sampleRecords().filter((r) => r.period.type === 'Y');
+	const existing = sampleAnnual();
 	const parsed = parseInputRows(
 		sheet(
 			row({ year: 2025, revenue: 1, operatingCost: 1, headcount: 1, hcCost: 1 }),
@@ -509,10 +527,130 @@ describe('exceljs 입출력 (node)', { timeout: 30_000 }, () => {
 
 	it('템플릿(샘플 포함/빈)도 같은 헤더로 읽힌다', async () => {
 		const withSample = await readInputSheet(await buildTemplateBuffer({ withSample: true }));
-		expect(parseInputRows(withSample).records).toHaveLength(7); // 연간 3 + 2025 분기 4
+		expect(parseInputRows(withSample).records).toHaveLength(6); // 연간 2 + 2025 분기 4
 		const empty = await readInputSheet(await buildTemplateBuffer({ withSample: false }));
 		const p = parseInputRows(empty);
 		expect(p.headerError).toBeNull();
 		expect(p.records).toEqual([]);
+	});
+});
+
+describe('금액 단위 · 누계 · 월 (조직 정보 시트 옵션)', () => {
+	const base = { year: 2025, headcount: 10, operatingProfit: 100 };
+	it('천원 단위면 금액 칸에 ×1,000 — 인원은 그대로', () => {
+		const p = parseInputRows(
+			sheet(row({ ...base, revenue: 1_000, hcCost: 300, baseSalary: 200 })),
+			{
+				scale: 1000
+			}
+		);
+		expect(p.errors).toEqual([]);
+		expect(p.records[0].record.inputs).toEqual({
+			revenue: 1_000_000,
+			operatingCost: 900_000,
+			hcCost: 300_000,
+			headcount: 10
+		});
+		expect(p.records[0].record.breakdown?.baseSalary).toBe(200_000);
+	});
+	it('누계면 같은 연도·단위 안에서 앞 순번을 뺀다 (1순번·연간은 그대로, 인원은 그대로)', () => {
+		const p = parseInputRows(
+			sheet(
+				row({ ...base, period: '1분기', revenue: 100, operatingProfit: 10, hcCost: 40 }),
+				row({
+					...base,
+					period: '2분기',
+					revenue: 210,
+					operatingProfit: 22,
+					hcCost: 81,
+					headcount: 12
+				}),
+				row({ ...base, period: '3분기', revenue: 330, operatingProfit: 36, hcCost: 123 }),
+				row({ ...base, revenue: 460, operatingProfit: 52, hcCost: 166 })
+			),
+			{ cumulative: true }
+		);
+		expect(p.errors).toEqual([]);
+		const by = (t: string) =>
+			p.records.find((r) => periodKey(r.record.period) === t)!.record.inputs;
+		expect(by('2025-Q2')).toEqual({ revenue: 110, operatingCost: 98, hcCost: 41, headcount: 12 });
+		expect(by('2025-Q3')).toEqual({ revenue: 120, operatingCost: 106, hcCost: 42, headcount: 10 });
+		expect(by('2025-Q1').revenue).toBe(100);
+		expect(by('2025-Y1').revenue).toBe(460);
+		expect(
+			p.records.find((r) => periodKey(r.record.period) === '2025-Q2')!.warnings.at(-1)
+		).toMatch(/누계/);
+	});
+	it('누계인데 앞 순번이 없으면 그 행은 오류', () => {
+		const p = parseInputRows(
+			sheet(row({ ...base, period: '3분기', revenue: 330, operatingProfit: 36, hcCost: 123 })),
+			{ cumulative: true }
+		);
+		expect(p.records).toEqual([]);
+		expect(p.errors[0].messages[0]).toMatch(/앞 순번\(2분기\)/);
+	});
+	it('월 단위 행이 읽히고 텍스트로 왕복된다', () => {
+		const p = parseInputRows(
+			sheet(
+				row({ ...base, period: '3월', revenue: 1000, hcCost: 400 }),
+				row({ ...base, period: 'M4', revenue: 1000, hcCost: 400 })
+			)
+		);
+		expect(p.errors).toEqual([]);
+		expect(p.records.map((r) => periodKey(r.record.period))).toEqual(['2025-M3', '2025-M4']);
+		const back = inputRows(p.records.map((r, i) => ({ ...r.record, id: String(i) })));
+		expect(back.map((r) => r.period)).toEqual(['3월', '4월']);
+	});
+	it('조직 정보 시트의 금액 단위·입력 방식을 읽는다 (없으면 원·기간 실적)', () => {
+		const org = [
+			[UNIT_SHEET.label, '천원'],
+			[CUMULATIVE_SHEET.label, CUMULATIVE_SHEET.cumulative]
+		];
+		expect(parseAmountUnit(org)).toEqual({ label: '천원', scale: 1000 });
+		expect(parseCumulative(org)).toBe(true);
+		expect(parseAmountUnit(null)).toEqual({ label: '원', scale: 1 });
+		expect(parseAmountUnit([[UNIT_SHEET.label, '억원']])).toEqual({ label: '원', scale: 1 });
+		expect(parseCumulative([[CUMULATIVE_SHEET.label, CUMULATIVE_SHEET.period]])).toBe(false);
+		expect(parseCumulative(null)).toBe(false);
+	});
+});
+
+describe('exceljs — 작성 편의 장치', { timeout: 30_000 }, () => {
+	it('템플릿에 기간 드롭다운·유효성·검증 열·보호가 들어 있고, 조직 정보에 단위·입력 방식 칸이 있다', async () => {
+		const ExcelJS = (await import('exceljs')).default ?? (await import('exceljs'));
+		const buf = await buildTemplateBuffer({ withSample: true });
+		const wb = new ExcelJS.Workbook();
+		await wb.xlsx.load(buf);
+		const ws = wb.getWorksheet('입력 데이터')!;
+		const periodCol = INPUT_COLUMNS.findIndex((c) => c.key === 'period') + 1;
+		type Dv = { type: string; formulae: unknown[] };
+		const dv = (ws as unknown as { dataValidations: { model: Record<string, Dv> } }).dataValidations
+			.model;
+		const periodRule = Object.entries(dv).find(([ref]) =>
+			ref.startsWith(ws.getColumn(periodCol).letter + '3')
+		);
+		expect(periodRule?.[1].type).toBe('list');
+		expect(String(periodRule?.[1].formulae[0])).toContain('12월');
+		// 검증 열 = 마지막 열, 수식
+		const checkCell = ws.getRow(3).getCell(INPUT_COLUMNS.length + 1);
+		expect(ws.getRow(1).getCell(INPUT_COLUMNS.length + 1).value).toBe('검증');
+		expect(
+			typeof checkCell.value === 'object' && checkCell.value && 'formula' in checkCell.value
+		).toBe(true);
+		expect(String((checkCell.value as { formula: string }).formula)).toContain("'조직 정보'!$B$5");
+		expect(ws.getRow(1).getCell(1).note).toBeTruthy();
+		// 보호: 입력 칸은 열려 있고 머리글은 잠겨 있다
+		expect((ws as unknown as { sheetProtection?: unknown }).sheetProtection).toBeTruthy();
+		expect(ws.getRow(3).getCell(1).protection?.locked).toBe(false);
+		expect(ws.getRow(1).getCell(1).protection?.locked ?? true).toBe(true);
+		const org = wb.getWorksheet('조직 정보')!;
+		expect(org.getCell('A10').value).toBe(UNIT_SHEET.label);
+		expect(org.getCell('B10').value).toBe('원');
+		expect(org.getCell('A13').value).toBe(CUMULATIVE_SHEET.label);
+		expect(org.getCell('B13').value).toBe(CUMULATIVE_SHEET.period);
+		// 앱 가져오기는 검증 열·빈 수식 행을 무시하고 샘플 6행만 읽는다
+		const parsed = parseInputRows(await readInputSheet(buf));
+		expect(parsed.errors).toEqual([]);
+		expect(parsed.records).toHaveLength(6);
 	});
 });

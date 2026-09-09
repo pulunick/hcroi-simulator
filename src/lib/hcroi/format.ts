@@ -3,6 +3,8 @@ import {
 	HEADCOUNT_LABELS,
 	HEADCOUNT_METHOD_LABELS,
 	HEADCOUNT_OPTIONAL_KEYS,
+	PERIOD_TYPE_LABELS,
+	type DerivedInfo,
 	type HeadcountBasis
 } from './types';
 
@@ -199,4 +201,11 @@ export function niceTicks(min: number, max: number, count = 5, includeZero = tru
 	const ticks: number[] = [];
 	for (let t = start; t <= end + step / 2; t += step) ticks.push(Number(t.toFixed(10)));
 	return ticks;
+}
+
+/** 합산 레코드 표기: "합산 (분기 4개)" · "차감 (연간 − 나머지 분기)" */
+export function derivedLabel(d: DerivedInfo): string {
+	return d.method === 'sum'
+		? `합산 (${PERIOD_TYPE_LABELS[d.from]} ${d.count}개)`
+		: `차감 (${PERIOD_TYPE_LABELS[d.from]} − 나머지)`;
 }

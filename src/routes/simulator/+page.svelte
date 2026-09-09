@@ -5,6 +5,7 @@
 	import { scenarioInsights } from '$lib/hcroi/insights';
 	import { gradeOf } from '$lib/hcroi/formulas';
 	import { periodLabel, periodShortLabel } from '$lib/hcroi/period';
+	import { derivedLabel } from '$lib/hcroi/format';
 	import {
 		amountUnitLabel,
 		formatHeadcount,
@@ -138,8 +139,8 @@
 			value={base?.id ?? ''}
 			onchange={(e) => (workspace.baseId = (e.currentTarget as HTMLSelectElement).value || null)}
 		>
-			{#each workspace.sorted as y (y.id)}
-				<option value={y.id}>{periodLabel(y.period)}</option>
+			{#each workspace.effective as y (y.id)}
+				<option value={y.id}>{periodLabel(y.period)}{y.derived ? ' · 합산' : ''}</option>
 			{/each}
 		</select>
 	</label>
@@ -159,7 +160,10 @@
 					class="mr-1.5 inline-block h-3 w-3 rounded-sm align-middle"
 					style="background:{SERIES_COLORS[0]}"
 				></span>
-				기준선 (Baseline) — {periodLabel(base.period)}
+				기준선 (Baseline) — {periodLabel(base.period)}{#if base.derived}<span
+						class="ml-2 rounded bg-surface-2 px-1.5 py-0.5 text-xs font-normal text-muted"
+						>{derivedLabel(base.derived)}</span
+					>{/if}
 			</h2>
 			<GradeBadge grade={gradeOf(b.hcroi)} />
 		</div>

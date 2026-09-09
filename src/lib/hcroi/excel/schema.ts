@@ -10,10 +10,10 @@ import {
 
 /**
  * 엑셀 파일 구조 정의 — 내보내기·템플릿·가져오기가 모두 이 정의를 공유한다.
- * (docs/plans/excel-export-import.md §3)
+ * (docs/plans/excel-export-import.md §3, docs/plans/rollup-and-excel.md §6)
  *
- * - 시트 ② `입력 데이터` 만 가져오기 대상. 나머지 시트는 계산 결과 스냅샷(읽기 전용).
- * - 금액은 원 단위 정수. 억 단위 입력은 받지 않는다 (헤더·단위 행에 명시).
+ * - 시트 ② `입력 데이터` 와 `조직 정보` 만 가져오기 대상. 나머지 시트는 계산 결과 스냅샷(읽기 전용).
+ * - 금액 단위는 `조직 정보` 시트의 "금액 단위" 칸이 정한다(원·천원·백만원). 내보내기는 언제나 원.
  */
 export const SHEET = {
 	summary: '지표 요약',
@@ -31,7 +31,7 @@ export const ORG_SHEET = {
 	label: '회사/조직 이름',
 	note: '대시보드 제목에 붙습니다. 비워 두면 기본 제목("HCROI 대시보드")을 씁니다.',
 	/** 라벨을 찾을 때 훑는 행 수 (사용자가 위에 줄을 넣었을 수 있음) */
-	scanRows: 12
+	scanRows: 20
 } as const;
 
 /**
@@ -48,13 +48,59 @@ export const BASIS_SHEET = {
 	},
 	yes: '예',
 	no: '아니오',
-	note: '인원 구분을 입력한 기간의 총 임직원 수는 이 기준으로 계산됩니다.'
+	note: '인원 구분을 입력한 기간의 총 임직원 수는 이 기준으로 계산됩니다. 기간 평균/기말은 상위 기간을 합산할 때 인원을 모으는 방식이기도 합니다.'
+} as const;
+
+/**
+ * `조직 정보` 시트의 **금액 단위** — 입력 데이터 시트의 금액 칸이 어느 단위인지.
+ * 결산서(대개 천원)를 그대로 붙여 넣을 수 있게 한다. 가져오기가 배수를 곱하고, 내보내기는 언제나 원.
+ */
+export const UNIT_SHEET = {
+	label: '금액 단위',
+	options: [
+		{ label: '원', scale: 1 },
+		{ label: '천원', scale: 1_000 },
+		{ label: '백만원', scale: 1_000_000 }
+	] as const,
+	note: '입력 데이터 시트의 금액 칸 단위입니다. 결산서 단위 그대로 붙여 넣고 여기만 맞추세요. 비우면 원.'
+} as const;
+
+/**
+ * `조직 정보` 시트의 **손익 입력 방식** — 기간 실적 / 누계.
+ * 분기·반기 보고서의 누계 열을 그대로 붙일 때 "누계" 로 두면 가져오기가 앞 순번을 빼서 기간 실적으로 만든다.
+ */
+export const CUMULATIVE_SHEET = {
+	label: '손익 입력 방식',
+	period: '기간 실적',
+	cumulative: '누계',
+	note: '누계면 같은 연도·같은 단위 안에서 앞 순번을 뺀 값을 기간 실적으로 씁니다(1분기는 그대로). 인원은 누계가 아니라 그대로 읽습니다. 비우면 기간 실적.'
+} as const;
+
+/** `조직 정보` 시트의 행 배치 — 쓰기와 검증 수식(`'조직 정보'!$B$5`)이 같은 행 번호를 쓴다 */
+export const ORG_ROWS = {
+	name: 1,
+	method: 4,
+	include: { contract: 5, dispatched: 6, executive: 7 } as const,
+	unit: 10,
+	cumulative: 13
 } as const;
 
 /** 시트 ② 행 구조: 1행 헤더, 2행 단위·설명, 3행부터 데이터 */
 export const INPUT_HEADER_ROW = 1;
 export const INPUT_UNIT_ROW = 2;
 export const INPUT_FIRST_DATA_ROW = 3;
+/** 유효성 검사·검증 수식·보호 해제를 미리 넣어 두는 데이터 행 수 (월 단위 3개년 = 36행이므로 넉넉히) */
+export const INPUT_PREPARED_ROWS = 300;
+
+/**
+ * 시트 ② 맨 끝 **검증** 열 — 엑셀 수식으로 행마다 검사해 붉게 표시한다(안내용, 붙여넣기로 뚫린다).
+ * 규칙의 원본은 앱의 `validateRecord`. 가져오기는 이 열을 읽지 않는다.
+ */
+export const CHECK_COLUMN = {
+	header: '검증',
+	note: '자동 검사(수식). 비어 있으면 정상. 가져오기 때 읽지 않습니다',
+	width: 34
+} as const;
 
 export type InputColumnKey =
 	| 'year'
@@ -108,10 +154,17 @@ export const INPUT_COLUMNS: readonly InputColumn[] = [
 		header: '기간',
 		unit: '',
 		required: false,
-		note: '비우면 연간. 1분기~4분기 / 상반기·하반기 (Q1·H1 표기도 됨). 값은 그 기간 실적 그대로',
+		note: '비우면 연간. 목록에서 고르세요: 상반기·하반기 / 1~4분기 / 1~12월. 값은 그 기간 실적 그대로(누계면 조직 정보 시트에서 설정)',
 		width: 10
 	},
-	{ key: 'revenue', header: '매출액', unit: '원', required: true, note: '원 단위 정수', width: 18 },
+	{
+		key: 'revenue',
+		header: '매출액',
+		unit: '원',
+		required: true,
+		note: '금액 단위는 조직 정보 시트(기본 원)',
+		width: 18
+	},
 	{
 		key: 'operatingCost',
 		header: '영업비용(인건비 포함)',
@@ -165,6 +218,18 @@ export function normalizeHeader(v: unknown): string {
 export const INPUT_COLUMN_BY_HEADER: ReadonlyMap<string, InputColumn> = new Map(
 	INPUT_COLUMNS.map((c) => [normalizeHeader(c.header), c])
 );
+
+/** 열 인덱스(0부터) → 엑셀 열 문자 (0 → A, 26 → AA) */
+export function columnLetter(index: number): string {
+	let n = index + 1;
+	let s = '';
+	while (n > 0) {
+		const r = (n - 1) % 26;
+		s = String.fromCharCode(65 + r) + s;
+		n = Math.floor((n - 1) / 26);
+	}
+	return s;
+}
 
 /** 엑셀 숫자 서식 */
 export const NUM_FMT = {
