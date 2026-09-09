@@ -1,5 +1,10 @@
 /** 숫자 표기 유틸 — 모든 결과 표시는 단위(원, %, 명)를 명시한다. */
-import { HEADCOUNT_LABELS, HEADCOUNT_OPTIONAL_KEYS, type HeadcountBasis } from './types';
+import {
+	HEADCOUNT_LABELS,
+	HEADCOUNT_METHOD_LABELS,
+	HEADCOUNT_OPTIONAL_KEYS,
+	type HeadcountBasis
+} from './types';
 
 const nf0 = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 0 });
 const nf1 = new Intl.NumberFormat('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -44,28 +49,42 @@ export function formatKrwCompact(v: number | null | undefined, unit = '원'): st
  * `auto` 는 조/억/만 자동 축약(`formatKrwCompact`), 나머지는 고정 단위로 나눠 표기한다.
  */
 export type AmountUnit = 'auto' | 'won' | 'thousand' | 'million' | 'billion';
+type FixedUnit = Exclude<AmountUnit, 'auto'>;
 
-export const AMOUNT_UNITS: {
-	key: AmountUnit;
-	/** 선택 UI 라벨 */
-	label: string;
-	/** 원 → 표시값 나눗수 (auto 는 없음) */
-	divisor?: number;
-	/** 숫자 뒤 자릿수 단위어 ("천", "백만" …). auto 는 값에 따라 달라져 비운다 */
-	word?: string;
-	digits?: 0 | 1;
-}[] = [
+/** 고정 단위 정의: 나눗수 · 숫자 뒤 단위어 · 기본 소수 자릿수 */
+const FIXED_UNITS: Record<FixedUnit, { divisor: number; word: string; digits: 0 | 1 }> = {
+	won: { divisor: 1, word: '', digits: 0 },
+	thousand: { divisor: 1e3, word: '천', digits: 0 },
+	million: { divisor: 1e6, word: '백만', digits: 0 },
+	billion: { divisor: 1e8, word: '억', digits: 1 }
+};
+
+/** 선택 UI 용 목록 */
+export const AMOUNT_UNITS: { key: AmountUnit; label: string }[] = [
 	{ key: 'auto', label: '자동 (억·만 축약)' },
-	{ key: 'won', label: '원', divisor: 1, word: '', digits: 0 },
-	{ key: 'thousand', label: '천원', divisor: 1e3, word: '천', digits: 0 },
-	{ key: 'million', label: '백만원', divisor: 1e6, word: '백만', digits: 0 },
-	{ key: 'billion', label: '억원', divisor: 1e8, word: '억', digits: 1 }
+	{ key: 'won', label: '원' },
+	{ key: 'thousand', label: '천원' },
+	{ key: 'million', label: '백만원' },
+	{ key: 'billion', label: '억원' }
 ];
 
 export const DEFAULT_AMOUNT_UNIT: AmountUnit = 'thousand';
 
 export function isAmountUnit(v: unknown): v is AmountUnit {
-	return AMOUNT_UNITS.some((u) => u.key === v);
+	return v === 'auto' || (typeof v === 'string' && v in FIXED_UNITS);
+}
+
+/**
+ * 고정 단위로 나눈 숫자만 (단위어·통화어 없음).
+ * 0 은 언제나 "0". 자릿수가 적게 남는 값(인당 지표를 억원으로 보는 경우 등)은 소수를 더 보여
+ * 기간 간 차이가 뭉개지지 않게 하고, 1 미만도 0 으로 잘리지 않는다.
+ */
+function scaleAmount(v: number, unit: FixedUnit): string {
+	const u = FIXED_UNITS[unit];
+	const scaled = v / u.divisor;
+	const abs = Math.abs(scaled);
+	const f = scaled === 0 ? nf0 : u.digits === 0 ? (abs >= 1 ? nf0 : nf2) : abs >= 10 ? nf1 : nf2;
+	return f.format(scaled);
 }
 
 /**
@@ -81,14 +100,8 @@ export function formatAmount(
 	suffix = '원'
 ): string {
 	if (!isFiniteNumber(v)) return '—';
-	const u = AMOUNT_UNITS.find((x) => x.key === unit);
-	if (!u || u.divisor === undefined) return formatKrwCompact(v, suffix);
-	const scaled = v / u.divisor;
-	const abs = Math.abs(scaled);
-	// 자릿수가 적게 남는 값(인당 지표를 억원으로 보는 경우 등)은 소수를 더 보여
-	// 연도 간 차이가 뭉개지지 않게 한다. 1 미만도 0 으로 잘리지 않는다.
-	const f = u.digits === 0 ? (abs >= 1 ? nf0 : nf2) : abs >= 10 ? nf1 : nf2;
-	return `${f.format(scaled)}${u.word}${suffix}`;
+	if (unit === 'auto') return formatKrwCompact(v, suffix);
+	return `${scaleAmount(v, unit)}${FIXED_UNITS[unit].word}${suffix}`;
 }
 
 /**
@@ -97,15 +110,30 @@ export function formatAmount(
  */
 export function formatAmountBare(v: number | null | undefined, unit: AmountUnit = 'auto'): string {
 	if (!isFiniteNumber(v)) return '—';
-	const u = AMOUNT_UNITS.find((x) => x.key === unit);
-	if (!u || u.divisor === undefined) return formatKrwCompact(v, '');
-	return formatAmount(v, unit, '').replace(u.word ?? '', '');
+	return unit === 'auto' ? formatKrwCompact(v, '') : scaleAmount(v, unit);
 }
 
 /** 선택한 단위의 표기용 이름: 'thousand' → "천원" */
 export function amountUnitLabel(unit: AmountUnit): string {
-	const u = AMOUNT_UNITS.find((x) => x.key === unit);
-	return u?.divisor === undefined ? '원' : `${u.word}원`;
+	return unit === 'auto' ? '원' : `${FIXED_UNITS[unit].word}원`;
+}
+
+/**
+ * 표 칸의 금액 규칙 (모든 화면 공통): 고정 단위를 고르면 단위는 열 머리글이 밝히고 칸에는 숫자만,
+ * 자동 축약이면 칸에 "141.0억원" 처럼 단위까지.
+ */
+export function formatCellAmount(v: number | null | undefined, unit: AmountUnit): string {
+	return unit === 'auto' ? formatAmount(v, unit) : formatAmountBare(v, unit);
+}
+
+/** 열 머리글에 붙일 단위: " (천원)" — 자동 축약이면 빈 문자열 */
+export function columnUnitSuffix(unit: AmountUnit): string {
+	return unit === 'auto' ? '' : ` (${amountUnitLabel(unit)})`;
+}
+
+/** 입력칸 아래 힌트용 단위 — 표시 단위가 '원' 이면 입력값과 같아 의미가 없으므로 축약으로 보여 준다 */
+export function hintAmountUnit(unit: AmountUnit): AmountUnit {
+	return unit === 'won' ? 'auto' : unit;
 }
 
 /** 배수 표기: 1.4321 → "1.43배" */
@@ -132,7 +160,7 @@ export function formatSigned(v: number | null | undefined, fmt: (n: number) => s
  *  → "기간 평균(FTE) · 정규직만" / "기말 인원 · 정규직+계약직·기간제"
  */
 export function headcountBasisLabel(basis: HeadcountBasis): string {
-	const method = basis.method === 'average' ? '기간 평균(FTE)' : '기말 인원';
+	const method = HEADCOUNT_METHOD_LABELS[basis.method];
 	const extra = HEADCOUNT_OPTIONAL_KEYS.filter((k) => basis.include[k]).map(
 		(k) => HEADCOUNT_LABELS[k]
 	);

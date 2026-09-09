@@ -99,6 +99,7 @@ LLM 인사이트 서술, PDF 리포트, 다년 예측.
 - **분석 단위**: 분기 필수, 월 선택 — 2026-09-08 **기간 레코드로 전환 완료**. `PeriodRecord.period = {year, type: 'Y'|'H'|'Q', index}`,
   헬퍼는 `src/lib/hcroi/period.ts` 한 곳(라벨·정렬·파싱·전기/전년 동기). `YearRecord` 는 더 이상 없다.
   - 값은 기간 실적 그대로(연율화 안 함). 결산 없는 분기는 반기 레코드로. 추이는 한 유형만(`workspace.ofType`). 정렬은 끝 월 기준(분기·반기 뒤에 연간).
+  - 전기 = **달력상** 직전 같은 유형 기간(`previousPeriod`), 없으면 비교 안 함. 총원 불변식은 레이아웃 `$effect(applyHeadcountBasis)` 한 곳. 검증은 `validateRecord` 한 곳(화면·가져오기 공통).
   - localStorage 옛 형식(`years` + `year`)은 load 때 자동 이행. 엑셀은 `기간` 열(비우면 연간)로 나른다. 월(M)은 같은 구조로 추가 가능.
 - **임직원 수**: 기간 평균(FTE) 기준. 계약직·파견·등기임원은 기본 제외 + 포함 옵션 — 2026-09-08 구현.
   `workspace.headcountBasis`(작업공간 단위, 연도별 아님) + 연도별 선택 입력 `headcountBreakdown`(정규직·계약직·파견·등기임원).

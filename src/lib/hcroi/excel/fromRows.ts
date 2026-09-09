@@ -1,4 +1,10 @@
-import { sumHcCost, sumHeadcount, validateInputs } from '../formulas';
+import {
+	sumHcCost,
+	sumHeadcount,
+	validateBreakdown,
+	validateHeadcountBreakdown,
+	validateInputs
+} from '../formulas';
 import {
 	DEFAULT_HEADCOUNT_BASIS,
 	HC_COST_KEYS,
@@ -10,7 +16,15 @@ import {
 	type Period,
 	type PeriodRecord
 } from '../types';
-import { comparePeriods, isValidPeriod, parsePeriodText, periodKey, periodLabel } from '../period';
+import {
+	YEAR_MAX,
+	YEAR_MIN,
+	comparePeriods,
+	isValidYear,
+	parsePeriodText,
+	periodKey,
+	periodLabel
+} from '../period';
 import {
 	BASIS_SHEET,
 	INPUT_COLUMN_BY_HEADER,
@@ -59,6 +73,27 @@ export function parseNumber(v: unknown): number | null {
 	if (s === '') return null;
 	if (!/^[-+]?\d+(\.\d+)?$/.test(s)) return NaN;
 	return Number(s);
+}
+
+/** parseNumber 결과가 실제 숫자인지 (null·NaN 제외) */
+function isNum(x: number | null): x is number {
+	return x !== null && Number.isFinite(x);
+}
+
+/**
+ * 세부 항목 열 묶음(인건비 6항목 · 인원 구분 4항목) 공통 파서.
+ * 하나도 없으면 `parts: null`, 숫자로 못 읽는 칸이 있으면 `error`, 빈 칸은 0 으로 채우고 `blank` 표시.
+ */
+function parseParts<K extends string>(
+	values: (number | null)[],
+	keys: readonly K[],
+	what: string
+): { parts: Record<K, number> | null; error: string | null; blank: boolean } {
+	if (values.every((p) => p === null)) return { parts: null, error: null, blank: false };
+	if (values.some((p) => p !== null && Number.isNaN(p)))
+		return { parts: null, error: `${what} 중 숫자로 읽을 수 없는 값이 있습니다.`, blank: false };
+	const parts = Object.fromEntries(keys.map((k, i) => [k, values[i] ?? 0])) as Record<K, number>;
+	return { parts, error: null, blank: values.some((p) => p === null) };
 }
 
 function isBlankRow(cells: unknown[]): boolean {
@@ -113,14 +148,7 @@ export function parseInputRows(
 		const warnings: string[] = [];
 
 		const year = parseNumber(cell(cells, 'year'));
-		if (
-			year === null ||
-			Number.isNaN(year) ||
-			!Number.isInteger(year) ||
-			year < 1990 ||
-			year > 2100
-		)
-			messages.push('연도는 1990~2100 사이의 정수여야 합니다.');
+		if (!isValidYear(year)) messages.push(`연도는 ${YEAR_MIN}~${YEAR_MAX} 사이의 정수여야 합니다.`);
 
 		// 기간: 빈 칸 = 연간. 옛 파일(기간 열 없음)도 자연히 연간으로 읽힌다
 		const pt = parsePeriodText(cell(cells, 'period'));
@@ -128,10 +156,9 @@ export function parseInputRows(
 			messages.push(
 				`기간 "${String(cell(cells, 'period')).trim()}" 을(를) 읽을 수 없습니다 (1분기~4분기 · 상반기/하반기 · 연간 또는 빈 칸).`
 			);
-		const period: Period | null =
-			year !== null && !Number.isNaN(year) && pt ? { year, ...pt } : null;
-		if (period && !isValidPeriod(period)) messages.push('기간이 올바르지 않습니다.');
-		else if (period && seen.has(periodKey(period)))
+		// 연도·기간 텍스트가 모두 유효할 때만 기간이 만들어진다 (파서가 낸 유형·순번은 항상 범위 안)
+		const period: Period | null = isValidYear(year) && pt ? { year, ...pt } : null;
+		if (period && seen.has(periodKey(period)))
 			messages.push(
 				`${periodLabel(period)}이(가) ${seen.get(periodKey(period))}행에도 있습니다 (파일 내 중복).`
 			);
@@ -142,20 +169,23 @@ export function parseInputRows(
 
 		// 총 임직원 수 / 인원 구분 4항목
 		const headTotalCell = parseNumber(cell(cells, 'headcount'));
-		if (Number.isNaN(headTotalCell)) messages.push('총 임직원 수를 숫자로 읽을 수 없습니다.');
-		const headParts = HEADCOUNT_KEYS.map((k) => parseNumber(cell(cells, k)));
-		let headcountBreakdown: HeadcountBreakdown | null = null;
-		let headcount: number | null =
-			headTotalCell !== null && !Number.isNaN(headTotalCell) ? headTotalCell : null;
-		if (headParts.some((p) => p !== null)) {
-			if (headParts.some((p) => Number.isNaN(p))) {
-				messages.push('인원 구분 중 숫자로 읽을 수 없는 값이 있습니다.');
-			} else {
-				headcountBreakdown = {} as HeadcountBreakdown;
-				HEADCOUNT_KEYS.forEach((k, i) => (headcountBreakdown![k] = headParts[i] ?? 0));
-				if (headParts.some((p) => p === null))
-					warnings.push('비어 있는 인원 구분은 0으로 처리했습니다.');
-				// 구분을 쓴 연도의 총원은 산정 기준을 적용한 합계가 정답이다 (총원 칸은 참고값)
+		if (headTotalCell !== null && Number.isNaN(headTotalCell))
+			messages.push('총 임직원 수를 숫자로 읽을 수 없습니다.');
+		const hp = parseParts(
+			HEADCOUNT_KEYS.map((k) => parseNumber(cell(cells, k))),
+			HEADCOUNT_KEYS,
+			'인원 구분'
+		);
+		if (hp.error) messages.push(hp.error);
+		const headcountBreakdown: HeadcountBreakdown | null = hp.parts;
+		let headcount: number | null = isNum(headTotalCell) ? headTotalCell : null;
+		if (headcountBreakdown) {
+			if (hp.blank) warnings.push('비어 있는 인원 구분은 0으로 처리했습니다.');
+			const bad = validateHeadcountBreakdown(headcountBreakdown);
+			if (bad.length) messages.push(...bad);
+			else {
+				// 구분을 쓴 기간의 총원은 산정 기준을 적용한 합계가 정답이다 (총원 칸은 참고값).
+				// 반영 시점의 기준으로 다시 계산되므로(workspace.replaceRecords) 여기서 쓴 basis 는 미리보기용이다.
 				const sum = sumHeadcount(headcountBreakdown, basis);
 				if (headcount !== null && Math.abs(headcount - sum) > 0.5)
 					warnings.push(
@@ -164,9 +194,9 @@ export function parseInputRows(
 					);
 				headcount = sum;
 			}
-		}
-		if (headcount === null)
+		} else if (headTotalCell === null) {
 			messages.push('총 임직원 수가 비어 있습니다 (인원 구분으로 대신 입력할 수도 있습니다).');
+		}
 
 		// 영업비용 or 영업이익
 		const opCost = parseNumber(cell(cells, 'operatingCost'));
@@ -174,20 +204,14 @@ export function parseInputRows(
 		if (Number.isNaN(opCost)) messages.push('영업비용을 숫자로 읽을 수 없습니다.');
 		if (Number.isNaN(opProfit)) messages.push('영업이익을 숫자로 읽을 수 없습니다.');
 		let operatingCost: number | null = null;
-		if (opCost !== null && !Number.isNaN(opCost)) {
+		if (isNum(opCost)) {
 			operatingCost = opCost;
-			if (
-				opProfit !== null &&
-				!Number.isNaN(opProfit) &&
-				revenue !== null &&
-				!Number.isNaN(revenue) &&
-				Math.abs(revenue - opProfit - opCost) > 1
-			)
+			if (isNum(opProfit) && isNum(revenue) && Math.abs(revenue - opProfit - opCost) > 1)
 				warnings.push(
 					`영업비용(${opCost.toLocaleString()})과 영업이익(${opProfit.toLocaleString()})이 맞지 않아 영업비용을 사용했습니다.`
 				);
-		} else if (opProfit !== null && !Number.isNaN(opProfit)) {
-			if (revenue !== null && !Number.isNaN(revenue)) operatingCost = revenue - opProfit;
+		} else if (isNum(opProfit)) {
+			if (isNum(revenue)) operatingCost = revenue - opProfit;
 		} else {
 			messages.push('영업비용 또는 영업이익 중 하나는 있어야 합니다.');
 		}
@@ -195,33 +219,26 @@ export function parseInputRows(
 		// 총 인건비 / 세부 6항목
 		const hcTotalCell = parseNumber(cell(cells, 'hcCost'));
 		if (Number.isNaN(hcTotalCell)) messages.push('총 인건비를 숫자로 읽을 수 없습니다.');
-		const parts = HC_COST_KEYS.map((k) => parseNumber(cell(cells, k)));
-		const anyPart = parts.some((p) => p !== null);
-		let breakdown: HcCostBreakdown | null = null;
-		let hcCost: number | null =
-			hcTotalCell !== null && !Number.isNaN(hcTotalCell) ? hcTotalCell : null;
-		if (anyPart) {
-			if (parts.some((p) => Number.isNaN(p))) {
-				messages.push('인건비 세부 항목 중 숫자로 읽을 수 없는 값이 있습니다.');
-			} else {
-				breakdown = {} as HcCostBreakdown;
-				HC_COST_KEYS.forEach((k, i) => (breakdown![k] = parts[i] ?? 0));
-				if (parts.some((p) => p === null))
-					warnings.push('비어 있는 인건비 세부 항목은 0으로 처리했습니다.');
-				const sum = sumHcCost(breakdown);
-				if (hcCost === null) hcCost = sum;
-				else if (sum - hcCost > 1)
-					messages.push(
-						`인건비 세부 합계(${sum.toLocaleString()})가 총 인건비(${hcCost.toLocaleString()})보다 큽니다.`
-					);
-				else if (hcCost - sum > 1)
-					// 6항목을 다 쓰지 않는 회사(예: 법정후생비·교육훈련비 미분리)를 위해 허용한다.
-					// 총 인건비를 그대로 쓰고 차액은 미분류로 남긴다 — 지표는 총액으로 계산되므로 영향 없음.
-					warnings.push(
-						`인건비 세부 합계(${sum.toLocaleString()})가 총 인건비(${hcCost.toLocaleString()})보다 ` +
-							`${(hcCost - sum).toLocaleString()} 적습니다. 총 인건비를 사용하고 차액은 미분류로 둡니다.`
-					);
-			}
+		const cp = parseParts(
+			HC_COST_KEYS.map((k) => parseNumber(cell(cells, k))),
+			HC_COST_KEYS,
+			'인건비 세부 항목'
+		);
+		if (cp.error) messages.push(cp.error);
+		const breakdown: HcCostBreakdown | null = cp.parts;
+		let hcCost: number | null = isNum(hcTotalCell) ? hcTotalCell : null;
+		if (breakdown) {
+			if (cp.blank) warnings.push('비어 있는 인건비 세부 항목은 0으로 처리했습니다.');
+			const sum = sumHcCost(breakdown);
+			if (hcCost === null) hcCost = sum;
+			else if (hcCost - sum > 1)
+				// 6항목을 다 쓰지 않는 회사(예: 법정후생비·교육훈련비 미분리)를 위해 허용한다.
+				// 총 인건비를 그대로 쓰고 차액은 미분류로 남긴다 — 지표는 총액으로 계산되므로 영향 없음.
+				// (합계 > 총액은 validateRecord 와 같은 규칙으로 아래에서 오류 처리)
+				warnings.push(
+					`인건비 세부 합계(${sum.toLocaleString()})가 총 인건비(${hcCost.toLocaleString()})보다 ` +
+						`${(hcCost - sum).toLocaleString()} 적습니다. 총 인건비를 사용하고 차액은 미분류로 둡니다.`
+				);
 		} else if (hcCost === null) {
 			messages.push('총 인건비가 비어 있습니다 (세부 6항목으로 대신 입력할 수도 있습니다).');
 		}
@@ -237,7 +254,7 @@ export function parseInputRows(
 				hcCost: Math.round(hcCost as number),
 				headcount: headcount as number
 			};
-			messages.push(...validateInputs(inputs));
+			messages.push(...validateInputs(inputs), ...validateBreakdown(inputs, breakdown));
 			if (messages.length === 0) {
 				seen.set(periodKey(period as Period), rowNo);
 				records.push({
@@ -276,14 +293,17 @@ export function mergeRecords(
 	const records = existing.map((y) => ({
 		...y,
 		inputs: { ...y.inputs },
-		breakdown: y.breakdown ? { ...y.breakdown } : null
+		breakdown: y.breakdown ? { ...y.breakdown } : null,
+		headcountBreakdown: y.headcountBreakdown ? { ...y.headcountBreakdown } : null
 	}));
+	// 기간 키 → 위치. parseInputRows 가 파일 안 중복을 이미 걸렀으므로 한 번만 만들면 된다
+	const index = new Map(records.map((r, i) => [periodKey(r.period), i]));
 	let added = 0,
 		updated = 0,
 		skipped = 0;
 	for (const p of parsed) {
 		const key = periodKey(p.record.period);
-		const i = records.findIndex((y) => periodKey(y.period) === key);
+		const i = index.get(key) ?? -1;
 		if (i >= 0) {
 			if (!opt.overwrite) {
 				skipped++;
@@ -292,6 +312,7 @@ export function mergeRecords(
 			records[i] = { ...p.record, id: records[i].id };
 			updated++;
 		} else {
+			index.set(key, records.length);
 			records.push({ ...p.record, id: opt.newId() });
 			added++;
 		}
@@ -304,23 +325,30 @@ export function mergeRecords(
 export const ORG_NAME_MAX = 40;
 
 /**
+ * `조직 정보` 시트에서 라벨 칸을 찾아 그 오른쪽 첫 비어 있지 않은 칸을 돌려준다.
+ * 라벨이 없으면 null, 라벨은 있고 값이 비었으면 ''. parseOrgName·parseHeadcountBasis 가 같은 규칙을 쓴다.
+ */
+function findLabelValue(rows: unknown[][], label: string): string | null {
+	const want = normalizeHeader(label);
+	for (const cells of rows.slice(0, ORG_SHEET.scanRows)) {
+		const row = cells ?? [];
+		const i = row.findIndex((c) => normalizeHeader(c) === want);
+		if (i < 0) continue;
+		const raw = row.slice(i + 1).find((c) => c !== null && c !== undefined && String(c).trim());
+		return raw === undefined ? '' : String(raw).trim();
+	}
+	return null;
+}
+
+/**
  * 시트 ⑤ `조직 정보` → 회사/조직 이름 (순수 함수).
  * - 시트 자체가 없으면 `null` — 제목을 건드리지 않는다 (조직 정보 시트가 없던 옛 파일 호환)
  * - 라벨은 있고 값이 비었으면 `''` — 기본 제목("HCROI 대시보드")으로 되돌린다는 뜻
  */
 export function parseOrgName(rows: unknown[][] | null): string | null {
 	if (!rows) return null;
-	const label = normalizeHeader(ORG_SHEET.label);
-	for (let r = 0; r < Math.min(rows.length, ORG_SHEET.scanRows); r++) {
-		const cells = rows[r] ?? [];
-		const i = cells.findIndex((c) => normalizeHeader(c) === label);
-		if (i < 0) continue;
-		const raw = cells.slice(i + 1).find((c) => c !== null && c !== undefined && String(c).trim());
-		return String(raw ?? '')
-			.trim()
-			.slice(0, ORG_NAME_MAX);
-	}
-	return null;
+	const v = findLabelValue(rows, ORG_SHEET.label);
+	return v === null ? null : v.slice(0, ORG_NAME_MAX);
 }
 
 /**
@@ -329,31 +357,21 @@ export function parseOrgName(rows: unknown[][] | null): string | null {
  */
 export function parseHeadcountBasis(rows: unknown[][] | null): HeadcountBasis | null {
 	if (!rows) return null;
-	const find = (label: string): string | null => {
-		const want = normalizeHeader(label);
-		for (const cells of rows.slice(0, ORG_SHEET.scanRows)) {
-			const i = (cells ?? []).findIndex((c) => normalizeHeader(c) === want);
-			if (i < 0) continue;
-			const raw = cells.slice(i + 1).find((c) => c !== null && c !== undefined && String(c).trim());
-			return raw === undefined ? '' : String(raw).trim();
-		}
-		return null;
-	};
-
 	const basis: HeadcountBasis = structuredClone(DEFAULT_HEADCOUNT_BASIS);
 	let found = false;
 
-	const method = find(BASIS_SHEET.method.label);
+	const method = findLabelValue(rows, BASIS_SHEET.method.label);
 	if (method !== null) {
 		found = true;
 		if (normalizeHeader(method) === normalizeHeader(BASIS_SHEET.method.periodEnd))
 			basis.method = 'periodEnd';
 	}
+	const yes = normalizeHeader(BASIS_SHEET.yes);
 	for (const k of HEADCOUNT_OPTIONAL_KEYS) {
-		const v = find(BASIS_SHEET.include[k]);
+		const v = findLabelValue(rows, BASIS_SHEET.include[k]);
 		if (v === null) continue;
 		found = true;
-		basis.include[k] = normalizeHeader(v) === normalizeHeader(BASIS_SHEET.yes);
+		basis.include[k] = normalizeHeader(v) === yes;
 	}
 	return found ? basis : null;
 }

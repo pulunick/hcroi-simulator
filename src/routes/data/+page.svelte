@@ -1,6 +1,15 @@
 <script lang="ts">
 	import { newId, workspace } from '$lib/state/workspace.svelte';
-	import { isValidPeriod, periodIndexCount, periodKey, periodLabel } from '$lib/hcroi/period';
+	import {
+		YEAR_MAX,
+		YEAR_MIN,
+		isValidPeriod,
+		isValidYear,
+		periodIndexCount,
+		periodKey,
+		periodLabel,
+		periodText
+	} from '$lib/hcroi/period';
 	import {
 		mergeRecords,
 		parseInputRows,
@@ -8,32 +17,29 @@
 		parseOrgName,
 		type ParseResult
 	} from '$lib/hcroi/excel/fromRows';
-	import {
-		computeMetrics,
-		gradeOf,
-		sumHcCost,
-		sumHeadcount,
-		validateInputs
-	} from '$lib/hcroi/formulas';
+	import { computeMetrics, gradeOf, sumHcCost, validateRecord } from '$lib/hcroi/formulas';
 	import { estimateFromRevenue, splitHcCost, REFERENCE_DEFAULTS } from '$lib/hcroi/defaults';
 	import {
 		HC_COST_KEYS,
 		HC_COST_LABELS,
 		HEADCOUNT_KEYS,
 		HEADCOUNT_LABELS,
+		HEADCOUNT_METHOD_LABELS,
 		HEADCOUNT_OPTIONAL_KEYS,
 		PERIOD_TYPES,
 		PERIOD_TYPE_LABELS,
+		sameHeadcountBasis,
 		type HeadcountBasis,
 		type Period,
 		type PeriodType
 	} from '$lib/hcroi/types';
 	import {
 		AMOUNT_UNITS,
-		amountUnitLabel,
+		columnUnitSuffix,
 		formatAmount,
 		headcountBasisLabel,
-		formatAmountBare,
+		formatCellAmount,
+		hintAmountUnit,
 		formatHeadcount,
 		formatMultiple,
 		formatWon
@@ -41,32 +47,32 @@
 	import NumberField from '$lib/components/ui/NumberField.svelte';
 	import GradeBadge from '$lib/components/ui/GradeBadge.svelte';
 
-	/** 금액 표기 — 작업공간의 표시 단위 설정을 따른다 (저장값은 언제나 원 단위 정수) */
+	// 금액 표기는 작업공간의 표시 단위를 따른다 (저장값은 언제나 원 단위 정수). 규칙은 format.ts 한 곳
 	const won = (v: number | null | undefined, suffix = '원') =>
 		formatAmount(v, workspace.amountUnit, suffix);
-
-	/** 표 칸용 금액 — 고정 단위를 고르면 단위는 열 머리글이 밝히고 칸에는 숫자만 둔다 */
-	const cellWon = (v: number | null | undefined) =>
-		workspace.amountUnit === 'auto' ? won(v) : formatAmountBare(v, workspace.amountUnit);
-	/** 열 머리글에 붙일 단위 — 자동 축약일 때는 붙이지 않는다 */
-	const colUnit = $derived(
-		workspace.amountUnit === 'auto' ? '' : ` (${amountUnitLabel(workspace.amountUnit)})`
-	);
+	const cellWon = (v: number | null | undefined) => formatCellAmount(v, workspace.amountUnit);
+	const colUnit = $derived(columnUnitSuffix(workspace.amountUnit));
+	const hintUnit = $derived(hintAmountUnit(workspace.amountUnit));
 
 	let selectedId = $state<string | null>(null);
 	const selected = $derived(workspace.records.find((y) => y.id === selectedId) ?? workspace.latest);
-	const errors = $derived(selected ? validateInputs(selected.inputs) : []);
+	const errors = $derived(selected ? validateRecord(selected) : []);
 
 	// --- 기간 추가 (연도 + 유형 + 순번) ---
-	let newYear = $state((workspace.latest?.period.year ?? new Date().getFullYear() - 1) + 1);
+	// 연도 칸은 사용자가 손대기 전까지 "가장 최근 기간의 이듬해"를 따른다
+	// (localStorage 는 레이아웃 onMount 에서 읽히므로 초기값을 고정하면 샘플 기준 연도가 박힌다)
+	let newYearInput = $state<number | null>(null);
+	const newYear = $derived(
+		newYearInput ?? (workspace.latest?.period.year ?? new Date().getFullYear() - 1) + 1
+	);
 	let newType = $state<PeriodType>('Y');
 	let newIndex = $state(1);
 	const newPeriod = $derived<Period>({ year: newYear, type: newType, index: newIndex });
 	let addError = $state<string | null>(null);
 	function addPeriod() {
 		addError = null;
-		if (!Number.isInteger(newYear) || newYear < 1990 || newYear > 2100) {
-			addError = '연도는 1990~2100 사이의 정수여야 합니다.';
+		if (!isValidYear(newYear)) {
+			addError = `연도는 ${YEAR_MIN}~${YEAR_MAX} 사이의 정수여야 합니다.`;
 			return;
 		}
 		if (!isValidPeriod(newPeriod)) {
@@ -77,19 +83,15 @@
 			addError = `${periodLabel(newPeriod)} 데이터가 이미 있습니다.`;
 			return;
 		}
-		const rec = workspace.addPeriod({ ...newPeriod });
+		const rec = workspace.addPeriod(newPeriod);
 		selectedId = rec.id;
 		// 다음 기간으로 넘긴다: 4분기 다음은 이듬해 1분기
 		if (newIndex < periodIndexCount(newType)) newIndex += 1;
 		else {
 			newIndex = 1;
-			newYear += 1;
+			newYearInput = newYear + 1;
 		}
 	}
-	/** 유형을 바꾸면 순번을 범위 안으로 되돌린다 */
-	$effect(() => {
-		if (newIndex > periodIndexCount(newType)) newIndex = 1;
-	});
 	/** 선택 기간의 값을 표준 레퍼런스 기본값으로 되돌린다 (매출액·인원은 유지) */
 	function resetYear() {
 		if (!selected) return;
@@ -132,19 +134,8 @@
 	}
 
 	// --- 임직원 수 산정 기준 ---
+	// 총원 = 기준을 적용한 구분 합계 는 레이아웃의 $effect(workspace.applyHeadcountBasis) 가 항상 유지한다
 	const basisLabel = $derived(headcountBasisLabel(workspace.headcountBasis));
-	/** 인원 구분을 입력한 연도는 산정 기준에 따라 총원이 정해진다 */
-	const headcountSum = $derived(
-		selected?.headcountBreakdown
-			? sumHeadcount(selected.headcountBreakdown, workspace.headcountBasis)
-			: null
-	);
-	/** 세부 값을 고치면 총 임직원 수를 다시 맞춘다 (기준 변경은 applyBasis 가 전 연도에 반영) */
-	$effect(() => {
-		if (selected && headcountSum !== null && selected.inputs.headcount !== headcountSum) {
-			selected.inputs.headcount = headcountSum;
-		}
-	});
 	function toggleHeadcountBreakdown() {
 		if (!selected) return;
 		workspace.setHeadcountBreakdown(
@@ -155,10 +146,6 @@
 					{ regular: selected.inputs.headcount, contract: 0, dispatched: 0, executive: 0 }
 		);
 	}
-	function applyBasis() {
-		workspace.applyHeadcountBasis();
-	}
-
 	// 가져오기 / 내보내기
 	let fileInput = $state<HTMLInputElement | null>(null);
 	let ioMessage = $state<string | null>(null);
@@ -174,8 +161,10 @@
 	async function importJson(e: Event) {
 		const file = (e.currentTarget as HTMLInputElement).files?.[0];
 		if (!file) return;
-		const err = workspace.importJson(await file.text());
-		ioMessage = err ?? `${file.name} 을(를) 불러왔습니다.`;
+		const res = workspace.importJson(await file.text());
+		ioMessage = res.ok
+			? `${file.name} 을(를) 불러왔습니다.${res.warning ? ` ${res.warning}` : ''}`
+			: res.error;
 		selectedId = null;
 		if (fileInput) fileInput.value = '';
 	}
@@ -290,13 +279,12 @@
 		];
 		return rows.sort((a, b) => a.row - b.row);
 	});
-	/** 파일 산정 기준이 현재 설정과 달라 물어볼 필요가 있을 때만 값을 갖는다 */
-	const basisChange = $derived.by(() => {
-		if (!preview?.basis) return null;
-		const now = headcountBasisLabel(workspace.headcountBasis);
-		const file = headcountBasisLabel(preview.basis);
-		return file === now ? null : file;
-	});
+	/** 파일 산정 기준이 현재 설정과 (값으로) 다를 때만 물어본다 */
+	const basisChange = $derived<HeadcountBasis | null>(
+		preview?.basis && !sameHeadcountBasis(preview.basis, workspace.headcountBasis)
+			? preview.basis
+			: null
+	);
 	/** 파일 조직명이 현재 제목과 달라 물어볼 필요가 있을 때만 값을 갖는다 */
 	const orgNameChange = $derived(
 		preview && preview.orgName !== null && preview.orgName !== workspace.orgName.trim()
@@ -322,9 +310,9 @@
 			workspace.orgName = orgNameChange;
 			parts.push(orgNameChange ? `제목 "${orgNameChange}"` : '제목 기본값으로');
 		}
-		if (basisChange !== null && applyBasisFromFile && preview.basis) {
-			workspace.headcountBasis = preview.basis;
-			parts.push(`인원 산정 기준 "${basisChange}"`);
+		if (basisChange !== null && applyBasisFromFile) {
+			workspace.setHeadcountBasis(basisChange);
+			parts.push(`인원 산정 기준 "${headcountBasisLabel(basisChange)}"`);
 		}
 		if (r.skipped) parts.push(`${r.skipped}개 건너뜀(기존 기간 유지)`);
 		if (preview.result.errors.length) parts.push(`오류 ${preview.result.errors.length}행 제외`);
@@ -348,7 +336,7 @@
 		}
 	}
 	function clearAll() {
-		if (confirm('모든 연도 데이터를 삭제할까요? (되돌릴 수 없습니다)')) {
+		if (confirm('모든 기간 데이터를 삭제할까요? (되돌릴 수 없습니다)')) {
 			workspace.clearAll();
 			selectedId = null;
 		}
@@ -362,8 +350,8 @@
 	<div>
 		<h1 class="text-2xl font-bold text-ink">데이터 관리</h1>
 		<p class="mt-1 text-[15px] text-ink-2">
-			연도별 재무·HR 데이터를 입력합니다. 총 인건비는 6개 항목으로, 임직원 수는 4개 구분으로 나눠
-			관리할 수 있습니다.
+			기간별(연간·반기·분기) 재무·HR 데이터를 입력합니다. 총 인건비는 6개 항목으로, 임직원 수는 4개
+			구분으로 나눠 관리할 수 있습니다.
 		</p>
 		<label class="mt-3 flex flex-wrap items-center gap-2 text-sm text-ink-2">
 			<span class="font-medium text-ink">금액 표시 단위</span>
@@ -376,13 +364,10 @@
 		</label>
 		<div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-ink-2">
 			<span class="font-medium text-ink">임직원 수 산정 기준</span>
-			<select
-				class="field-input w-auto py-1 text-sm"
-				bind:value={workspace.headcountBasis.method}
-				onchange={applyBasis}
-			>
-				<option value="average">기간 평균(FTE)</option>
-				<option value="periodEnd">기말 인원</option>
+			<select class="field-input w-auto py-1 text-sm" bind:value={workspace.headcountBasis.method}>
+				{#each Object.entries(HEADCOUNT_METHOD_LABELS) as [m, label] (m)}
+					<option value={m}>{label}</option>
+				{/each}
 			</select>
 			{#each HEADCOUNT_OPTIONAL_KEYS as k (k)}
 				<label class="flex items-center gap-1.5 whitespace-nowrap">
@@ -390,12 +375,11 @@
 						type="checkbox"
 						class="rounded border-line-2 text-brand focus:ring-brand/30"
 						bind:checked={workspace.headcountBasis.include[k]}
-						onchange={applyBasis}
 					/>
 					{HEADCOUNT_LABELS[k]} 포함
 				</label>
 			{/each}
-			<span class="text-muted">인원 구분을 입력한 연도만 합계가 다시 계산됩니다.</span>
+			<span class="text-muted">인원 구분을 입력한 기간만 합계가 다시 계산됩니다.</span>
 		</div>
 	</div>
 	<div class="flex flex-wrap items-center gap-2">
@@ -496,7 +480,9 @@
 							class="rounded border-line-2 text-brand"
 							bind:checked={applyBasisFromFile}
 						/>
-						<span class="whitespace-nowrap">임직원 수 산정 기준도 "{basisChange}" 으로</span>
+						<span class="whitespace-nowrap"
+							>임직원 수 산정 기준도 "{headcountBasisLabel(basisChange)}" 으로</span
+						>
 					</label>
 				{/if}
 				{#if orgNameChange !== null}
@@ -529,7 +515,7 @@
 					<thead>
 						<tr class="border-y border-line bg-surface-2 text-ink-2">
 							<th scope="col" class="px-3 py-2 text-center font-semibold">행</th>
-							<th scope="col" class="px-3 py-2 text-center font-semibold">연도</th>
+							<th scope="col" class="px-3 py-2 text-center font-semibold">기간</th>
 							<th scope="col" class="px-3 py-2 text-center font-semibold">상태</th>
 							<th scope="col" class="px-3 py-2 text-center font-semibold">매출액{colUnit}</th>
 							<th scope="col" class="px-3 py-2 text-center font-semibold">영업이익{colUnit}</th>
@@ -615,12 +601,18 @@
 					id="new-year"
 					type="number"
 					class="field-input w-24 py-1.5"
-					min="1990"
-					max="2100"
-					bind:value={newYear}
+					min={YEAR_MIN}
+					max={YEAR_MAX}
+					value={newYear}
+					oninput={(e) => (newYearInput = Number((e.currentTarget as HTMLInputElement).value))}
 					aria-label="연도"
 				/>
-				<select class="field-input w-auto py-1.5" bind:value={newType} aria-label="기간 유형">
+				<select
+					class="field-input w-auto py-1.5"
+					bind:value={newType}
+					onchange={() => (newIndex = 1)}
+					aria-label="기간 유형"
+				>
 					{#each PERIOD_TYPES as t (t)}
 						<option value={t}>{PERIOD_TYPE_LABELS[t]}</option>
 					{/each}
@@ -628,9 +620,7 @@
 				{#if newType !== 'Y'}
 					<select class="field-input w-auto py-1.5" bind:value={newIndex} aria-label="기간 순번">
 						{#each Array.from({ length: periodIndexCount(newType) }, (_, i) => i + 1) as i (i)}
-							<option value={i}
-								>{newType === 'H' ? (i === 1 ? '상반기' : '하반기') : `${i}분기`}</option
-							>
+							<option value={i}>{periodText({ year: newYear, type: newType, index: i })}</option>
 						{/each}
 					</select>
 				{/if}
@@ -721,7 +711,7 @@
 					{:else}
 						<tr
 							><td colspan="7" class="px-4 py-8 text-center text-muted"
-								>데이터가 없습니다. 연도를 추가하거나 샘플로 초기화하세요.</td
+								>데이터가 없습니다. 기간을 추가하거나 샘플로 초기화하세요.</td
 							></tr
 						>
 					{/each}
@@ -745,8 +735,9 @@
 				>
 			</div>
 			<div class="space-y-4">
-				<NumberField label="매출액" bind:value={selected.inputs.revenue} min={0} />
+				<NumberField {hintUnit} label="매출액" bind:value={selected.inputs.revenue} min={0} />
 				<NumberField
+					{hintUnit}
 					label="영업비용 (인건비 포함)"
 					bind:value={selected.inputs.operatingCost}
 					min={0}
@@ -769,6 +760,7 @@
 						<div class="grid gap-3 sm:grid-cols-2">
 							{#each HEADCOUNT_KEYS as k (k)}
 								<NumberField
+									{hintUnit}
 									label={HEADCOUNT_LABELS[k] + (k === 'regular' ? ' (항상 포함)' : '')}
 									bind:value={selected.headcountBreakdown[k]}
 									unit="명"
@@ -796,6 +788,7 @@
 						</p>
 					{:else}
 						<NumberField
+							{hintUnit}
 							label="총 임직원 수"
 							bind:value={selected.inputs.headcount}
 							unit="명"
@@ -822,6 +815,7 @@
 						<div class="grid gap-3 sm:grid-cols-2">
 							{#each HC_COST_KEYS as k (k)}
 								<NumberField
+									{hintUnit}
 									label="{HC_COST_LABELS[k]} ({sharePct[k]}%)"
 									bind:value={selected.breakdown[k]}
 									min={0}
@@ -829,7 +823,12 @@
 							{/each}
 						</div>
 						<div class="mt-3 border-t border-line pt-3">
-							<NumberField label="총 인건비 (총액)" bind:value={selected.inputs.hcCost} min={0} />
+							<NumberField
+								{hintUnit}
+								label="총 인건비 (총액)"
+								bind:value={selected.inputs.hcCost}
+								min={0}
+							/>
 							<div class="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm">
 								<div class="text-ink-2">
 									세부 합계 <strong class="tabular text-ink">{formatWon(breakdownSum ?? 0)}</strong>
@@ -866,6 +865,7 @@
 						</p>
 					{:else}
 						<NumberField
+							{hintUnit}
 							label="총 인건비 (총액)"
 							bind:value={selected.inputs.hcCost}
 							min={0}
@@ -897,7 +897,7 @@
 			</div>
 		{:else}
 			<p class="py-10 text-center text-muted">
-				왼쪽 표에서 연도 행을 클릭하거나 새 연도를 추가하세요.
+				왼쪽 표에서 기간 행을 클릭하거나 새 기간을 추가하세요.
 			</p>
 		{/if}
 	</section>

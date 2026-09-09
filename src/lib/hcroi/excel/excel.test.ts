@@ -302,6 +302,17 @@ describe('인원 구분 · 임직원 수 산정 기준', () => {
 		expect(p.records[0].record.headcountBreakdown).toBeNull();
 	});
 
+	it('인원 구분이 음수·소수면 오류 (가져오기도 화면과 같은 규칙)', () => {
+		const p = parseInputRows(
+			sheet(row({ ...base, ...parts, contract: -5 })),
+			basis({ contract: true })
+		);
+		expect(p.records).toEqual([]);
+		expect(p.errors[0].messages.join(' ')).toMatch(/0 이상의 정수/);
+		const q = parseInputRows(sheet(row({ ...base, ...parts, regular: 10.5 })));
+		expect(q.records).toEqual([]);
+	});
+
 	it('총원도 인원 구분도 없으면 오류', () => {
 		const p = parseInputRows(sheet(row(base)));
 		expect(p.records).toEqual([]);
@@ -373,6 +384,16 @@ describe('mergeRecords', () => {
 		const r = mergeRecords(existing, parsed, { overwrite: false, newId: () => 'new' });
 		expect([r.added, r.updated, r.skipped]).toEqual([1, 0, 1]);
 		expect(r.records[2].inputs.revenue).toBe(14_100_000_000);
+	});
+
+	it('원본 불변 — 인원 구분 객체도 복사한다', () => {
+		const src = existing.map((y) => ({
+			...y,
+			headcountBreakdown: { regular: 30, contract: 0, dispatched: 0, executive: 0 }
+		}));
+		const r = mergeRecords(src, [], { overwrite: true, newId: () => 'x' });
+		r.records[0].headcountBreakdown!.regular = 99;
+		expect(src[0].headcountBreakdown!.regular).toBe(30);
 	});
 
 	it('같은 연도라도 분기와 연간은 다른 기간이다', () => {

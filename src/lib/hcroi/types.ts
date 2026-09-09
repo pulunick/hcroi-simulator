@@ -67,6 +67,12 @@ export const HEADCOUNT_LABELS: Record<keyof HeadcountBreakdown, string> = {
 	executive: '등기임원'
 };
 
+/** 산정 방식 라벨 — 화면·엑셀 `조직 정보` 시트·가이드가 모두 이 문구를 쓴다 (한 곳만 바꾸면 왕복이 깨진다) */
+export const HEADCOUNT_METHOD_LABELS: Record<'average' | 'periodEnd', string> = {
+	average: '기간 평균(FTE)',
+	periodEnd: '기말 인원'
+};
+
 /** 총 임직원 수에 포함할 수 있는 구분 (정규직은 선택 대상이 아니라 항상 포함) */
 export const HEADCOUNT_OPTIONAL_KEYS = ['contract', 'dispatched', 'executive'] as const;
 
@@ -85,6 +91,13 @@ export const DEFAULT_HEADCOUNT_BASIS: HeadcountBasis = {
 	method: 'average',
 	include: { contract: false, dispatched: false, executive: false }
 };
+
+/** 산정 기준이 같은지 — 값으로 비교한다 (라벨 문자열 비교에 기대지 않는다) */
+export function sameHeadcountBasis(a: HeadcountBasis, b: HeadcountBasis): boolean {
+	return (
+		a.method === b.method && HEADCOUNT_OPTIONAL_KEYS.every((k) => a.include[k] === b.include[k])
+	);
+}
 
 /** HCROI 산출에 필요한 최소 입력값 */
 export interface BaseInputs {
@@ -125,15 +138,16 @@ export interface PeriodRecord {
 	period: Period;
 	inputs: BaseInputs;
 	/**
-	 * 인건비 세부 내역. 값이 있으면 inputs.hcCost 는 이 합계와 동일해야 한다.
-	 * (세부 내역 없이 총액만 입력하는 경우 null)
+	 * 인건비 세부 내역 (총액만 입력하면 null).
+	 * 6항목을 다 쓰지 않는 회사가 있어 **세부 합계 ≤ inputs.hcCost** 만 요구한다 — 차액은 "미분류".
+	 * 지표는 언제나 총액(inputs.hcCost)으로 계산한다. 합계가 총액보다 크면 오류(`validateBreakdown`).
 	 */
 	breakdown: HcCostBreakdown | null;
 	/**
 	 * 임직원 수 세부 구성. 값이 있으면 `inputs.headcount` 는 산정 기준(`HeadcountBasis`)을 적용한
 	 * 합계와 같아야 한다. 총원만 입력하는 경우 null.
 	 */
-	headcountBreakdown?: HeadcountBreakdown | null;
+	headcountBreakdown: HeadcountBreakdown | null;
 	memo?: string;
 }
 

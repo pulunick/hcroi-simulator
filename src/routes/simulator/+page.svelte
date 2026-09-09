@@ -9,7 +9,7 @@
 		amountUnitLabel,
 		formatHeadcount,
 		formatAmount,
-		formatAmountBare,
+		formatCellAmount,
 		formatKrwCompact,
 		formatMultiple,
 		formatPct,
@@ -21,13 +21,10 @@
 	import BarPanel from '$lib/components/charts/BarPanel.svelte';
 	import Legend from '$lib/components/charts/Legend.svelte';
 
-	/** 금액 표기 — 작업공간의 표시 단위 설정을 따른다 (저장값은 언제나 원 단위 정수) */
+	// 금액 표기는 작업공간의 표시 단위를 따른다 (저장값은 언제나 원 단위 정수). 규칙은 format.ts 한 곳
 	const won = (v: number | null | undefined, suffix = '원') =>
 		formatAmount(v, workspace.amountUnit, suffix);
-
-	/** 비교표 칸용 — 고정 단위를 고르면 단위는 지표 열이 밝히고 칸에는 숫자만 둔다 */
-	const cellWon = (v: number | null | undefined) =>
-		workspace.amountUnit === 'auto' ? won(v) : formatAmountBare(v, workspace.amountUnit);
+	const cellWon = (v: number | null | undefined) => formatCellAmount(v, workspace.amountUnit);
 	/** 비교표 지표 열의 단위 표기: '원' · '원/인' 을 고른 표시 단위로 바꾼다 */
 	const rowUnit = (unit: string) =>
 		unit.startsWith('원') ? amountUnitLabel(workspace.amountUnit) + unit.slice(1) : unit;

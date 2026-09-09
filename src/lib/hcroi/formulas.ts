@@ -5,9 +5,10 @@ import type {
 	HcroiGrade,
 	HeadcountBasis,
 	HeadcountBreakdown,
-	Metrics
+	Metrics,
+	PeriodRecord
 } from './types';
-import { HC_COST_KEYS, HEADCOUNT_OPTIONAL_KEYS } from './types';
+import { HC_COST_KEYS, HEADCOUNT_KEYS, HEADCOUNT_LABELS, HEADCOUNT_OPTIONAL_KEYS } from './types';
 
 /** 총 인건비 = 기본급 + 성과급/수당 + 퇴직급여 + 법정후생비 + 기타 복리후생비 + 교육훈련비 */
 export function sumHcCost(b: HcCostBreakdown): number {
@@ -25,6 +26,40 @@ export function sumHeadcount(b: HeadcountBreakdown, basis: HeadcountBasis): numb
 		(acc, k) => acc + (basis.include[k] ? n(b[k]) : 0),
 		n(b.regular)
 	);
+}
+
+/**
+ * 인건비 세부 내역 정합성 — 세부 합계가 총액보다 **크면** 오류.
+ * 적은 것은 허용한다(차액 = 미분류). 화면 편집과 엑셀 가져오기가 같은 규칙을 쓴다.
+ */
+export function validateBreakdown(inputs: BaseInputs, breakdown: HcCostBreakdown | null): string[] {
+	if (!breakdown) return [];
+	const sum = sumHcCost(breakdown);
+	return sum - inputs.hcCost > 1
+		? [
+				`인건비 세부 합계(${sum.toLocaleString()})가 총 인건비(${inputs.hcCost.toLocaleString()})보다 큽니다.`
+			]
+		: [];
+}
+
+/** 인원 구분은 각각 0 이상의 정수여야 한다 */
+export function validateHeadcountBreakdown(hb: HeadcountBreakdown | null): string[] {
+	if (!hb) return [];
+	const bad = HEADCOUNT_KEYS.filter((k) => !Number.isInteger(hb[k]) || hb[k] < 0);
+	return bad.length
+		? [`인원 구분(${bad.map((k) => HEADCOUNT_LABELS[k]).join(', ')})은 0 이상의 정수여야 합니다.`]
+		: [];
+}
+
+/** 레코드 전체 검증 = 입력값 + 세부 내역 정합성 + 인원 구분 */
+export function validateRecord(
+	rec: Pick<PeriodRecord, 'inputs' | 'breakdown' | 'headcountBreakdown'>
+): string[] {
+	return [
+		...validateInputs(rec.inputs),
+		...validateBreakdown(rec.inputs, rec.breakdown),
+		...validateHeadcountBreakdown(rec.headcountBreakdown)
+	];
 }
 
 function ratio(num: number, den: number): number | null {

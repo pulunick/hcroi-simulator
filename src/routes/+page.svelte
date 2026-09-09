@@ -1,16 +1,23 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { workspace } from '$lib/state/workspace.svelte';
-	import { computeMetrics, diagnose, gradeOf, validateInputs } from '$lib/hcroi/formulas';
+	import {
+		computeMetrics,
+		diagnose,
+		gradeOf,
+		sumHcCost,
+		validateRecord
+	} from '$lib/hcroi/formulas';
 	import { trendInsights } from '$lib/hcroi/insights';
 	import { periodLabel, periodShortLabel } from '$lib/hcroi/period';
 	import { PERIOD_TYPE_LABELS, type PeriodType } from '$lib/hcroi/types';
 	import {
-		amountUnitLabel,
+		columnUnitSuffix,
+		formatCellAmount,
+		hintAmountUnit,
 		formatHeadcount,
 		headcountBasisLabel,
 		formatAmount,
-		formatAmountBare,
 		formatKrwCompact,
 		formatMultiple,
 		formatPct,
@@ -24,32 +31,27 @@
 	import LineChart from '$lib/components/charts/LineChart.svelte';
 	import StackedBarChart from '$lib/components/charts/StackedBarChart.svelte';
 
-	/** 금액 표기 — 작업공간의 표시 단위 설정을 따른다 (저장값은 언제나 원 단위 정수) */
+	// 금액 표기는 작업공간의 표시 단위를 따른다 (저장값은 언제나 원 단위 정수). 규칙은 format.ts 한 곳
 	const won = (v: number | null | undefined, suffix = '원') =>
 		formatAmount(v, workspace.amountUnit, suffix);
-
+	const cellWon = (v: number | null | undefined) => formatCellAmount(v, workspace.amountUnit);
+	const colUnit = $derived(columnUnitSuffix(workspace.amountUnit));
+	const hintUnit = $derived(hintAmountUnit(workspace.amountUnit));
 	/** 임직원 수 산정 기준 한 줄 표기 — 인원 관련 입력·지표에 함께 붙인다 */
 	const basisLabel = $derived(headcountBasisLabel(workspace.headcountBasis));
-	/** 표 칸용 금액 — 고정 단위를 고르면 단위는 열 머리글이 밝히고 칸에는 숫자만 둔다 */
-	const cellWon = (v: number | null | undefined) =>
-		workspace.amountUnit === 'auto' ? won(v) : formatAmountBare(v, workspace.amountUnit);
-	/** 열 머리글에 붙일 단위 — 자동 축약일 때는 붙이지 않는다 */
-	const colUnit = $derived(
-		workspace.amountUnit === 'auto' ? '' : ` (${amountUnitLabel(workspace.amountUnit)})`
-	);
 
 	let selectedId = $state<string | null>(null);
 	/** 조회 중인 기간 레코드 (연간·반기·분기 중 하나) */
-	const year = $derived(workspace.records.find((y) => y.id === selectedId) ?? workspace.latest);
-	const metrics = $derived(year ? computeMetrics(year.inputs) : null);
+	const rec = $derived(workspace.records.find((y) => y.id === selectedId) ?? workspace.latest);
+	const metrics = $derived(rec ? computeMetrics(rec.inputs) : null);
 	const diag = $derived(diagnose(metrics?.hcroi ?? null));
-	const errors = $derived(year ? validateInputs(year.inputs) : []);
+	const errors = $derived(rec ? validateRecord(rec) : []);
 
 	/** 전기 = 같은 유형의 바로 앞 기간 (연간이면 전년, 분기면 직전 분기) */
-	const prev = $derived(year ? workspace.previousOf(year) : null);
+	const prev = $derived(rec ? workspace.previousOf(rec) : null);
 	const prevMetrics = $derived(prev ? computeMetrics(prev.inputs) : null);
 	/** 전년 동기 — 반기·분기의 계절성 비교용 (연간은 전기와 같아 표시하지 않는다) */
-	const yearAgo = $derived(year && year.period.type !== 'Y' ? workspace.yearAgoOf(year) : null);
+	const yearAgo = $derived(rec && rec.period.type !== 'Y' ? workspace.yearAgoOf(rec) : null);
 	const yearAgoMetrics = $derived(yearAgo ? computeMetrics(yearAgo.inputs) : null);
 
 	/**
@@ -60,7 +62,7 @@
 	const trendType = $derived<PeriodType>(
 		trendTypeChoice && workspace.periodTypes.includes(trendTypeChoice)
 			? trendTypeChoice
-			: (year?.period.type ?? 'Y')
+			: (rec?.period.type ?? 'Y')
 	);
 	const series = $derived(workspace.ofType(trendType));
 	const trendTitle = $derived(PERIOD_TYPE_LABELS[trendType]);
@@ -84,12 +86,10 @@
 		};
 	}
 
-	// 차트 데이터
+	// 차트·표·인사이트가 같은 계산 결과를 쓴다 (키 입력마다 시리즈 전체를 네 번 계산하지 않도록)
+	const seriesRows = $derived(series.map((y) => ({ y, m: computeMetrics(y.inputs) })));
 	const linePoints = $derived(
-		series.map((y) => ({
-			label: periodShortLabel(y.period),
-			value: computeMetrics(y.inputs).hcroi
-		}))
+		seriesRows.map(({ y, m }) => ({ label: periodShortLabel(y.period), value: m.hcroi }))
 	);
 	const stackSeries = [
 		{ key: 'hc', label: '총 인건비', color: 'var(--color-series-1)' },
@@ -97,10 +97,7 @@
 		{ key: 'op', label: '영업이익', color: 'var(--color-series-3)' }
 	];
 	const stackValues = $derived(
-		series.map((y) => {
-			const m = computeMetrics(y.inputs);
-			return [y.inputs.hcCost, m.nonHcCost, m.operatingProfit];
-		})
+		seriesRows.map(({ y, m }) => [y.inputs.hcCost, m.nonHcCost, m.operatingProfit])
 	);
 	const thresholds = [
 		{ value: 1.0, label: '보통 1.0' },
@@ -169,7 +166,7 @@
 			조회 기간
 			<select
 				class="field-input w-auto py-1.5"
-				value={year?.id ?? ''}
+				value={rec?.id ?? ''}
 				onchange={(e) => (selectedId = (e.currentTarget as HTMLSelectElement).value || null)}
 			>
 				{#each workspace.sorted as y (y.id)}
@@ -180,7 +177,7 @@
 	{/if}
 </div>
 
-{#if !year || !metrics}
+{#if !rec || !metrics}
 	<div class="card px-6 py-12 text-center">
 		<p class="text-ink-2">아직 입력된 데이터가 없습니다.</p>
 		<div class="mt-4 flex justify-center gap-2">
@@ -196,14 +193,14 @@
 		<section class="card h-fit px-5 py-5" aria-labelledby="input-h">
 			<div class="mb-4 flex items-center justify-between">
 				<h2 id="input-h" class="text-lg font-semibold text-ink">
-					{periodLabel(year.period)} 기준 데이터
+					{periodLabel(rec.period)} 기준 데이터
 				</h2>
 				<a href={resolve('/data')} class="text-sm font-medium text-brand-ink hover:underline"
 					>세부 관리 →</a
 				>
 			</div>
 			<div class="space-y-4">
-				<NumberField label="매출액" bind:value={year.inputs.revenue} min={0} />
+				<NumberField {hintUnit} label="매출액" bind:value={rec.inputs.revenue} min={0} />
 				<div>
 					<div class="mb-1.5 flex items-center justify-between">
 						<span class="text-sm font-semibold text-ink-2">비용 입력 방식</span>
@@ -232,38 +229,45 @@
 					</div>
 					{#if costMode === 'cost'}
 						<NumberField
+							{hintUnit}
 							label="영업비용 (인건비 포함)"
-							bind:value={year.inputs.operatingCost}
+							bind:value={rec.inputs.operatingCost}
 							min={0}
 							help="영업이익 {won(metrics.operatingProfit)}"
 						/>
 					{:else}
 						<NumberField
+							{hintUnit}
 							label="영업이익"
 							bind:value={
-								() => year.inputs.revenue - year.inputs.operatingCost,
-								(v) => (year.inputs.operatingCost = year.inputs.revenue - v)
+								() => rec.inputs.revenue - rec.inputs.operatingCost,
+								(v) => (rec.inputs.operatingCost = rec.inputs.revenue - v)
 							}
-							help="영업비용 {won(year.inputs.operatingCost)}"
+							help="영업비용 {won(rec.inputs.operatingCost)}"
 						/>
 					{/if}
 				</div>
 				<NumberField
+					{hintUnit}
 					label="총 인건비"
-					bind:value={year.inputs.hcCost}
+					bind:value={rec.inputs.hcCost}
 					min={0}
-					readonly={!!year.breakdown}
-					help={year.breakdown
-						? '세부 내역 합계 (데이터 관리에서 수정)'
+					help={rec.breakdown
+						? `세부 합계 ${won(sumHcCost(rec.breakdown))}${
+								rec.inputs.hcCost - sumHcCost(rec.breakdown) > 0
+									? ` · 미분류 ${won(rec.inputs.hcCost - sumHcCost(rec.breakdown))}`
+									: ''
+							} (세부는 데이터 관리에서 수정)`
 						: '기본급+성과급/수당+퇴직급여+법정후생비+기타 복리후생비+교육훈련비'}
 				/>
 				<NumberField
+					{hintUnit}
 					label="총 임직원 수"
-					bind:value={year.inputs.headcount}
+					bind:value={rec.inputs.headcount}
 					unit="명"
 					min={1}
-					readonly={!!year.headcountBreakdown}
-					help={year.headcountBreakdown
+					readonly={!!rec.headcountBreakdown}
+					help={rec.headcountBreakdown
 						? `인원 구분 합계 · ${basisLabel} (데이터 관리에서 수정)`
 						: basisLabel}
 				/>
@@ -318,8 +322,8 @@
 					{diag?.summary ?? '총 인건비가 0이어서 HCROI 를 계산할 수 없습니다.'}
 				</p>
 				<p class="tabular mt-2 text-sm text-muted">
-					산식: (영업이익 {won(metrics.operatingProfit)} + 총 인건비 {won(year.inputs.hcCost)}) ÷ 총
-					인건비 {won(year.inputs.hcCost)}
+					산식: (영업이익 {won(metrics.operatingProfit)} + 총 인건비 {won(rec.inputs.hcCost)}) ÷ 총
+					인건비 {won(rec.inputs.hcCost)}
 				</p>
 			</section>
 
@@ -370,8 +374,8 @@
 				/>
 				<StatTile
 					label="총 임직원 수"
-					value={formatHeadcount(year.inputs.headcount)}
-					delta={delta(year.inputs.headcount, prev?.inputs.headcount, (n) => `${n}명`)}
+					value={formatHeadcount(rec.inputs.headcount)}
+					delta={delta(rec.inputs.headcount, prev?.inputs.headcount, (n) => `${n}명`)}
 				/>
 			</div>
 		</div>
@@ -450,12 +454,9 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each series as y (y.id)}
-						{@const m = computeMetrics(y.inputs)}
+					{#each seriesRows as { y, m } (y.id)}
 						<tr
-							class="border-b border-line last:border-0 {y.id === year.id
-								? 'bg-brand-tint/60'
-								: ''}"
+							class="border-b border-line last:border-0 {y.id === rec.id ? 'bg-brand-tint/60' : ''}"
 						>
 							<th scope="row" class="px-4 py-2 text-left font-semibold whitespace-nowrap text-ink"
 								>{periodLabel(y.period)}</th

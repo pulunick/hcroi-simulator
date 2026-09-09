@@ -1,7 +1,5 @@
 <script lang="ts">
-	import { formatAmount, formatInt } from '$lib/hcroi/format';
-	// 힌트 표기에만 작업공간의 표시 단위를 참조한다 (값 자체는 언제나 원 단위 정수)
-	import { workspace } from '$lib/state/workspace.svelte';
+	import { formatAmount, formatInt, type AmountUnit } from '$lib/hcroi/format';
 
 	interface Props {
 		label: string;
@@ -11,6 +9,8 @@
 		unit?: string;
 		/** 입력칸 아래에 축약 금액(억/만) 힌트 표시 */
 		krwHint?: boolean;
+		/** 힌트에 쓸 표시 단위 (화면이 `hintAmountUnit(workspace.amountUnit)` 을 넘긴다). 값 자체는 언제나 원 */
+		hintUnit?: AmountUnit;
 		/** 정수만 허용 */
 		integer?: boolean;
 		min?: number;
@@ -24,6 +24,7 @@
 		value = $bindable(0),
 		unit = '원',
 		krwHint = unit === '원',
+		hintUnit = 'auto',
 		integer = true,
 		min,
 		readonly = false,
@@ -88,12 +89,7 @@
 		<p class="text-sm text-status-critical-ink">{error}</p>
 	{:else if krwHint || help}
 		<p id="{id}-help" class="text-sm text-muted">
-			{#if krwHint}<span class="tabular"
-					>= {formatAmount(
-						value,
-						workspace.amountUnit === 'won' ? 'auto' : workspace.amountUnit
-					)}</span
-				>{/if}
+			{#if krwHint}<span class="tabular">= {formatAmount(value, hintUnit)}</span>{/if}
 			{#if krwHint && help}<span aria-hidden="true"> · </span>{/if}
 			{#if help}{help}{/if}
 		</p>

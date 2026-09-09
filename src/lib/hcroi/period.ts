@@ -1,9 +1,23 @@
-import { PERIODS_PER_YEAR, PERIOD_TYPE_LABELS, type Period, type PeriodType } from './types';
+import {
+	PERIODS_PER_YEAR,
+	PERIOD_TYPES,
+	PERIOD_TYPE_LABELS,
+	type Period,
+	type PeriodType
+} from './types';
 
 /**
  * 분석 기간(연간·반기·분기) 유틸 — 순수 함수.
  * 라벨·정렬·비교·텍스트 파싱을 여기서만 처리해 화면·엑셀·인사이트가 같은 규칙을 쓴다.
  */
+
+/** 회계연도 허용 범위 — 화면 입력·엑셀 가져오기·저장값 이행이 모두 이 상수를 쓴다 */
+export const YEAR_MIN = 1990;
+export const YEAR_MAX = 2100;
+
+export function isValidYear(y: unknown): y is number {
+	return typeof y === 'number' && Number.isInteger(y) && y >= YEAR_MIN && y <= YEAR_MAX;
+}
 
 /** 유형별 순번 범위: Y 1 · H 1–2 · Q 1–4 */
 export function periodIndexCount(type: PeriodType): number {
@@ -12,9 +26,8 @@ export function periodIndexCount(type: PeriodType): number {
 
 export function isValidPeriod(p: Period): boolean {
 	return (
-		Number.isInteger(p.year) &&
-		p.year >= 1990 &&
-		p.year <= 2100 &&
+		isValidYear(p.year) &&
+		PERIOD_TYPES.includes(p.type) &&
 		Number.isInteger(p.index) &&
 		p.index >= 1 &&
 		p.index <= periodIndexCount(p.type)

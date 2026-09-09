@@ -37,6 +37,8 @@ describe('period — 라벨·키·유효성', () => {
 		expect(isValidPeriod(H(2025, 3))).toBe(false);
 		expect(isValidPeriod({ year: 2025, type: 'Y', index: 2 })).toBe(false);
 		expect(isValidPeriod(Y(1800))).toBe(false);
+		// 알 수 없는 유형(예: 아직 없는 월 단위)은 거부한다 — 저장값 이행에서 조용히 통과하면 안 된다
+		expect(isValidPeriod({ year: 2025, type: 'M' as never, index: 3 })).toBe(false);
 	});
 	it('시작·끝 월', () => {
 		expect(periodMonths(Q(2025, 3))).toEqual({ start: 7, end: 9 });

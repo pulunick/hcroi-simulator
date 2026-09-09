@@ -3,6 +3,7 @@ import {
 	HC_COST_LABELS,
 	HEADCOUNT_KEYS,
 	HEADCOUNT_LABELS,
+	HEADCOUNT_METHOD_LABELS,
 	type HcCostBreakdown,
 	type HeadcountBreakdown
 } from '../types';
@@ -39,7 +40,7 @@ export const ORG_SHEET = {
  * 기준이 파일에 같이 실려 있지 않으면 다른 PC 에서 열었을 때 총원이 조용히 달라진다.
  */
 export const BASIS_SHEET = {
-	method: { label: '임직원 수 산정 방식', average: '기간 평균(FTE)', periodEnd: '기말 인원' },
+	method: { label: '임직원 수 산정 방식', ...HEADCOUNT_METHOD_LABELS },
 	include: {
 		contract: '계약직·기간제 포함',
 		dispatched: '파견·도급(소속 외) 포함',
@@ -47,7 +48,7 @@ export const BASIS_SHEET = {
 	},
 	yes: '예',
 	no: '아니오',
-	note: '인원 구분을 입력한 연도의 총 임직원 수는 이 기준으로 계산됩니다.'
+	note: '인원 구분을 입력한 기간의 총 임직원 수는 이 기준으로 계산됩니다.'
 } as const;
 
 /** 시트 ② 행 구조: 1행 헤더, 2행 단위·설명, 3행부터 데이터 */

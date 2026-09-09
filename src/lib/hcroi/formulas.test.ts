@@ -6,7 +6,10 @@ import {
 	operatingCostFromProfit,
 	sumHcCost,
 	sumHeadcount,
-	validateInputs
+	validateBreakdown,
+	validateHeadcountBreakdown,
+	validateInputs,
+	validateRecord
 } from './formulas';
 import { splitHcCost, sampleRecords } from './defaults';
 import {
@@ -108,6 +111,39 @@ describe('validateInputs', () => {
 	});
 });
 
+describe('validateRecord — 세부 내역 정합성', () => {
+	const inputs: BaseInputs = { revenue: 100, operatingCost: 90, hcCost: 30, headcount: 10 };
+	const bd = (sum: number) => ({ ...splitHcCost(sum) });
+
+	it('세부 합계가 총액보다 크면 오류, 적으면(미분류) 허용', () => {
+		expect(validateBreakdown(inputs, bd(32))).toHaveLength(1);
+		expect(validateBreakdown(inputs, bd(30))).toEqual([]);
+		expect(validateBreakdown(inputs, bd(20))).toEqual([]);
+		expect(validateBreakdown(inputs, null)).toEqual([]);
+	});
+	it('인원 구분은 0 이상의 정수', () => {
+		expect(
+			validateHeadcountBreakdown({ regular: 10, contract: -1, dispatched: 0, executive: 0 })
+		).toHaveLength(1);
+		expect(
+			validateHeadcountBreakdown({ regular: 10.5, contract: 0, dispatched: 0, executive: 0 })
+		).toHaveLength(1);
+		expect(
+			validateHeadcountBreakdown({ regular: 10, contract: 0, dispatched: 0, executive: 0 })
+		).toEqual([]);
+	});
+	it('레코드 검증은 셋을 합친다', () => {
+		expect(validateRecord({ inputs, breakdown: bd(32), headcountBreakdown: null })).toHaveLength(1);
+		expect(
+			validateRecord({
+				inputs: { ...inputs, hcCost: 0 },
+				breakdown: null,
+				headcountBreakdown: null
+			}).length
+		).toBeGreaterThan(0);
+	});
+});
+
 describe('sumHeadcount — 임직원 수 산정 기준', () => {
 	const hc = { regular: 30, contract: 4, dispatched: 3, executive: 2 };
 	const basis = (patch: Partial<HeadcountBasis['include']> = {}): HeadcountBasis => ({
@@ -167,6 +203,9 @@ describe('format', () => {
 		expect(formatAmount(null, 'thousand')).toBe('—');
 		// 선택 단위보다 작은 금액은 0 으로 뭉개지 않는다
 		expect(formatAmount(1_200, 'million')).toBe('0.00백만원');
+		// 정확히 0 은 소수 없이 (영업이익 0 이 "0.00천원" 으로 보이지 않게)
+		expect(formatAmount(0, 'thousand')).toBe('0천원');
+		expect(formatAmount(0, 'billion')).toBe('0억원');
 		expect(amountUnitLabel('thousand')).toBe('천원');
 		expect(amountUnitLabel('auto')).toBe('원');
 	});

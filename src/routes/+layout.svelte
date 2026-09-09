@@ -9,6 +9,10 @@
 	let { children } = $props();
 
 	onMount(() => workspace.load());
+	// 인원 구분을 쓴 기간의 총 임직원 수는 언제나 "산정 기준을 적용한 합계" — 기준·구분이 어디서 바뀌든 여기서 맞춘다
+	$effect(() => {
+		workspace.applyHeadcountBasis();
+	});
 	// 상태가 바뀔 때마다 localStorage 에 저장 (로드 전에는 save() 가 무시)
 	$effect(() => {
 		workspace.save();
