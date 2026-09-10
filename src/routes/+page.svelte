@@ -9,6 +9,13 @@
 		validateRecord
 	} from '$lib/hcroi/formulas';
 	import { trendInsights } from '$lib/hcroi/insights';
+	import {
+		TREND_RANGES,
+		defaultTrendRange,
+		referenceYears,
+		trendSeries,
+		type TrendRange
+	} from '$lib/hcroi/trend';
 	import { periodLabel, periodShortLabel } from '$lib/hcroi/period';
 	import { PERIOD_TYPE_LABELS, type PeriodType } from '$lib/hcroi/types';
 	import {
@@ -63,8 +70,10 @@
 	const yearAgoMetrics = $derived(yearAgo ? computeMetrics(yearAgo.inputs) : null);
 
 	/**
-	 * 추이(차트·표·인사이트)는 한 유형만 본다 — 분기와 연간을 한 줄에 섞으면 비교가 안 된다.
+	 * 추이(차트·표·인사이트)의 본체는 한 유형 — 분기와 연간 금액을 한 줄에 섞어 비교하지 않는다.
 	 * 기본은 조회 중인 기간의 유형, 유형이 둘 이상이면 셀렉트로 바꿀 수 있다.
+	 * 다개년 표시 규칙(`trend.ts`): 반기·분기·월 추이에서 그 유형 자료가 없는 해는 연간 값을 **참조점**으로 같은 축에 올리고,
+	 * 표시 범위는 "최근 N년"(유형별 기본값, 바꿀 수 있음). 참조점은 HCROI 라인과 표에만 — 금액 막대·인사이트는 본체만.
 	 */
 	let trendTypeChoice = $state<PeriodType | null>(null);
 	const trendType = $derived<PeriodType>(
@@ -72,7 +81,13 @@
 			? trendTypeChoice
 			: (rec?.period.type ?? 'Y')
 	);
-	const series = $derived(workspace.ofType(trendType));
+	let trendRangeChoice = $state<TrendRange | null>(null);
+	const trendRange = $derived<TrendRange>(trendRangeChoice ?? defaultTrendRange(trendType));
+	const trendPoints = $derived(trendSeries(workspace.effective, trendType, trendRange));
+	/** 본체 유형만 — 금액 누적 막대·추이 인사이트 (표·라인은 참조점까지 `seriesRows`) */
+	const ownSeries = $derived(trendPoints.filter((p) => !p.reference).map((p) => p.record));
+	const refYears = $derived(referenceYears(trendPoints));
+	const refYearsText = $derived(refYears.map((y) => `${y}년`).join('·'));
 	const trendTitle = $derived(PERIOD_TYPE_LABELS[trendType]);
 
 	/** 영업비용 ↔ 영업이익 입력 모드 */
@@ -95,23 +110,31 @@
 	}
 
 	// 차트·표·인사이트가 같은 계산 결과를 쓴다 (키 입력마다 시리즈 전체를 네 번 계산하지 않도록)
-	const seriesRows = $derived(series.map((y) => ({ y, m: computeMetrics(y.inputs) })));
-	const linePoints = $derived(
-		seriesRows.map(({ y, m }) => ({ label: periodShortLabel(y.period), value: m.hcroi }))
+	const seriesRows = $derived(
+		trendPoints.map((p) => ({ y: p.record, m: computeMetrics(p.record.inputs), ref: p.reference }))
 	);
+	const linePoints = $derived(
+		seriesRows.map(({ y, m, ref }) => ({
+			label: ref ? `${y.period.year} 연간` : periodShortLabel(y.period),
+			value: m.hcroi,
+			reference: ref,
+			note: ref ? `${trendTitle} 자료가 없어 연간 값으로 표시` : undefined
+		}))
+	);
+	const ownRows = $derived(seriesRows.filter((r) => !r.ref));
 	const stackSeries = [
 		{ key: 'hc', label: '총 인건비', color: 'var(--color-series-1)' },
 		{ key: 'nonhc', label: '비인건비 영업비용', color: 'var(--color-series-4)' },
 		{ key: 'op', label: '영업이익', color: 'var(--color-series-3)' }
 	];
 	const stackValues = $derived(
-		seriesRows.map(({ y, m }) => [y.inputs.hcCost, m.nonHcCost, m.operatingProfit])
+		ownRows.map(({ y, m }) => [y.inputs.hcCost, m.nonHcCost, m.operatingProfit])
 	);
 	const thresholds = [
 		{ value: 1.0, label: '보통 1.0' },
 		{ value: 1.5, label: '우수 1.5' }
 	];
-	const trend = $derived(trendInsights(series));
+	const trend = $derived(trendInsights(ownSeries));
 	const oneDecimalBil = (v: number) => (v === 0 ? '0억' : formatKrwCompact(v, ''));
 
 	// 대시보드 제목 — 회사/조직 이름은 헤더 로고 자리에서 편집한다(+layout.svelte). 저장은 workspace.orgName 한 곳
@@ -391,24 +414,46 @@
 		<section class="card px-5 py-4" aria-labelledby="line-h">
 			<div class="flex flex-wrap items-center justify-between gap-2">
 				<h2 id="line-h" class="text-base font-semibold text-ink">{trendTitle} HCROI 추이</h2>
-				{#if workspace.periodTypes.length > 1}
+				<div class="flex flex-wrap items-center gap-3">
+					{#if workspace.periodTypes.length > 1}
+						<label class="flex items-center gap-1.5 text-xs text-ink-2">
+							추이 단위
+							<select
+								class="field-input w-auto py-0.5 text-xs"
+								value={trendType}
+								onchange={(e) => {
+									trendTypeChoice = (e.currentTarget as HTMLSelectElement).value as PeriodType;
+									trendRangeChoice = null; // 단위를 바꾸면 그 단위의 기본 범위로
+								}}
+							>
+								{#each workspace.periodTypes as t (t)}
+									<option value={t}>{PERIOD_TYPE_LABELS[t]}</option>
+								{/each}
+							</select>
+						</label>
+					{/if}
 					<label class="flex items-center gap-1.5 text-xs text-ink-2">
-						추이 단위
+						표시 범위
 						<select
 							class="field-input w-auto py-0.5 text-xs"
-							value={trendType}
-							onchange={(e) =>
-								(trendTypeChoice = (e.currentTarget as HTMLSelectElement).value as PeriodType)}
+							value={String(trendRange)}
+							onchange={(e) => {
+								const v = (e.currentTarget as HTMLSelectElement).value;
+								trendRangeChoice = v === 'all' ? 'all' : (Number(v) as TrendRange);
+							}}
 						>
-							{#each workspace.periodTypes as t (t)}
-								<option value={t}>{PERIOD_TYPE_LABELS[t]}</option>
+							{#each TREND_RANGES as r (r.value)}
+								<option value={String(r.value)}>{r.label}</option>
 							{/each}
 						</select>
 					</label>
-				{/if}
+				</div>
 			</div>
 			<p class="mb-2 text-sm text-muted">
 				배수 · 가로선은 등급 기준선{trendType === 'Y' ? '' : ' · 각 기간 실적 기준(연율화 안 함)'}
+				{#if refYears.length > 0}
+					· 속 빈 점({refYearsText})은 {trendTitle} 자료가 없어 <strong>연간 값</strong>으로 표시
+				{/if}
 			</p>
 			<LineChart
 				points={linePoints}
@@ -421,9 +466,12 @@
 			<h2 id="stack-h" class="text-base font-semibold text-ink">인건비 vs 영업이익 비중</h2>
 			<p class="mb-2 text-sm text-muted">
 				매출액 구성 (억원) — 총 인건비 + 비인건비 영업비용 + 영업이익 = 매출액
+				{#if refYears.length > 0}
+					· {refYearsText}은 연간 금액이라 {trendTitle} 막대와 섞지 않음(연간 추이에서 확인)
+				{/if}
 			</p>
 			<StackedBarChart
-				categories={series.map((y) => periodShortLabel(y.period))}
+				categories={ownRows.map(({ y }) => periodShortLabel(y.period))}
 				series={stackSeries}
 				values={stackValues}
 				format={oneDecimalBil}
@@ -459,12 +507,17 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each seriesRows as { y, m } (y.id)}
+					{#each seriesRows as { y, m, ref } (y.id)}
 						<tr
-							class="border-b border-line last:border-0 {y.id === rec.id ? 'bg-brand-tint/60' : ''}"
+							class="border-b border-line last:border-0 {y.id === rec.id
+								? 'bg-brand-tint/60'
+								: ''} {ref ? 'text-muted' : ''}"
 						>
 							<th scope="row" class="px-4 py-2 text-left font-semibold whitespace-nowrap text-ink"
-								>{periodLabel(y.period)}{#if y.derived}<span
+								>{periodLabel(y.period)}{#if ref}<span
+										class="ml-1 text-xs font-normal text-muted"
+										title="{trendTitle} 자료가 없는 해 — 연간 값(참조)">연간 참조</span
+									>{/if}{#if y.derived}<span
 										class="ml-1 text-xs font-normal text-muted"
 										title={derivedLabel(y.derived)}>합산</span
 									>{/if}</th

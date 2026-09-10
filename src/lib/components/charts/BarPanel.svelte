@@ -76,7 +76,7 @@
 			{height}
 			role="img"
 			aria-label="{title} 시나리오 비교"
-			class="block touch-none select-none"
+			class="block max-w-full touch-none select-none"
 			onpointermove={onMove}
 			onpointerleave={() => (hover = null)}
 		>
