@@ -12,7 +12,7 @@
 | `npm test`      | ✅ 8 파일 / 144 passed (formulas · scenario · insights · period · rollup · excel · pdf table · pdf locate) + probe(skip)                                                                     |
 | `npm run check` | ✅ 0 errors / 0 warnings (360 files)                                                                                                                                                         |
 | `npm run lint`  | ✅                                                                                                                                                                                           |
-| git             | 원격 **github.com/pulunick/hcroi-simulator (public)**, 브랜치 `main`. f69acfd(세션 7 결산서 PDF 가져오기) push 완료. 작업 트리 클린                                                          |
+| git             | 원격 **github.com/pulunick/hcroi-simulator (public)**, 브랜치 `main`. 865f36d(세션 8 헤더 이름 편집) push 완료. 작업 트리 클린                                                               |
 | DB              | 없음(보류). 마이그레이션 SQL 준비만 됨, 어느 프로젝트에도 미적용                                                                                                                             |
 | 원격 저장소     | pulunick/hcroi-simulator (public). push 절차는 brain §1 참조                                                                                                                                 |
 
@@ -277,4 +277,5 @@
 
 - 사용자 제안("헤더를 바꾸면 아래도 바뀌게", 로고 자리): 편집 지점을 대시보드 h1 연필에서 **헤더 로고 자리**로 이동. `workspace.brand`·`pageTitle(section)` 추가, 대시보드 h1·데이터 관리·시뮬레이터·가이드 탭 제목이 모두 따라감. 로고 이미지는 안 함(글자만).
 - 검증: check 0 · lint ✅ · 브라우저 E2E(`e2e-brand.mjs`): 편집→헤더·h1·탭 반영, 새로고침 유지, 비우면 기본 이름, ESC 닫힘, 390px 문서 폭 390. 콘솔 에러 0.
-- 문서: user-guide §2 연필 위치, brain §7, decision-log. 커밋은 지시 대기, dev 서버 5173 켜 둠.
+- 문서: user-guide §2 연필 위치, brain §7, decision-log. 커밋 `865f36d` push 완료(pulunick → 회사 계정 복귀), dev 서버 종료.
+- **다음 세션 시작점**: ① Vercel 재배포 확인(헤더 편집 + PDF 가져오기 worker 로드) ② 담당자 회신(질문지 §6: 자사 PDF 종류·샘플, 4-1 가로형 여부) ③ 회신에 따라 PDF 수동 셀 지정 / 엑셀 열 매핑(헤더 별칭) 검토 → ⑤ 부서별 → ⑥ 동종업계
