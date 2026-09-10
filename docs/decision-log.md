@@ -158,6 +158,7 @@
 - 브랜치 전략 [docs/plans/branch-strategy.md](plans/branch-strategy.md): **main → product 단방향 머지**만. 코어(`src/lib/hcroi/**`)는 main 에서만 고치고 상용 브랜치는 쓰기만 한다. 상용 전용 코드는 새 디렉터리·새 경로에만. `.claude/state.md` 는 `.gitattributes` `merge=ours` 로 브랜치별 유지(`git config merge.ours.driver true` 필요).
   저장소를 분리하게 되면 private 저장소가 public 을 `core` 리모트로 두고 같은 방향으로 머지한다.
 - 상용화 기획서 [docs/plans/commercial-product.md](plans/commercial-product.md) 초안: 추천안은 **로컬 우선 웹 + 라이선스 키 → 같은 빌드를 Tauri 설치형으로**. 계정형 SaaS 는 보류. 티어 Free/Pro/Consultant, 첫 MVP = 다중 작업공간·라이선스·경영진 리포트·온보딩. 형태·저장소 처리·타깃·결제·제품명·권리 관계는 §10 미결.
+
 ## 2026-09-10 — 추이 다개년 표시 전략 (연간 참조점 + 표시 범위)
 
 - 사용자 지적: 대시보드 추이가 반기·분기에서는 2025년만 보인다(샘플은 2023·2024 연간 + 2025 분기). "몇 개년이 어떤 방식으로 보이는지"가 실무 니즈.
