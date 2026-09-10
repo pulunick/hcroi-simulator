@@ -1,0 +1,2 @@
+# 브랜치 전략(docs/plans/branch-strategy.md §3): 진행 상황 파일은 main 머지 때 현재 브랜치 것을 유지한다
+.claude/state.md merge=ours

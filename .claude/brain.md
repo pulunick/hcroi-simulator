@@ -133,3 +133,11 @@ LLM 인사이트 서술, PDF 리포트, 다년 예측.
   API 경로는 CORS 때문에 Vercel 서버 라우트 1개가 필요하다(DB 아님, 비용 0). ~~PDF 좌표 파싱(pdf.js)은 품 대비 정확도가 낮아 채택하지 않는다~~ → 2026-09-09 철회(위 결산서 항목 참조).
 - **참고용 결산 PDF 는 커밋하지 않는다** — 공개 저장소 + 대용량. `.gitignore` 의 `docs/*.pdf`. 필요하면 DART 에서 재다운로드.
   Claude 는 PDF 를 대화에 올리지 말고 `pdftotext -layout` 로 텍스트만 뽑아 필요한 구간만 읽는다(컨텍스트 초과 방지).
+
+## 12. 상용 버전 (브랜치 `product/commercial`, 2026-09-10~)
+
+- **main = 사내 도구(인사담당자 수정·개선 계속), `product/commercial` = 판매용 제품.** 전략은 [docs/plans/branch-strategy.md](../docs/plans/branch-strategy.md).
+- 머지는 **main → product 한 방향만**. 코어 `src/lib/hcroi/**` 는 main 에서만 고친다(상용 브랜치에서 발견한 코어 버그도 main 에서 수정 후 머지). 상용 전용 코드는 새 디렉터리(`src/lib/license/`, `src/lib/report/`, `src/routes/api/`, `components/product/`)·새 경로에만.
+- `.claude/state.md` 는 브랜치별로 따로 간다(`.gitattributes` `merge=ours`). brain 의 §1–§11 은 main 소유, 이 §12 만 상용 브랜치가 관리.
+- 기획서 [docs/plans/commercial-product.md](../docs/plans/commercial-product.md). 추천안(로컬 우선 웹 + 라이선스 → Tauri 설치형)은 **아직 결정 아님** — §10 답이 나오면 여기로 옮긴다.
+- 저장소 분리(private) 결정 전까지 이 브랜치에는 **문서·디자인만** 쌓고 라이선스·결제 코드는 넣지 않는다. 회사·지침 저자와의 권리 관계 확인 전에는 판매하지 않는다. 제품명에 "Martin" 은 쓰지 않는다.

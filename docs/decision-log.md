@@ -151,3 +151,10 @@
 - 사용자 제안: 헤더(로고) 이름을 바꾸면 아래 화면이 따라가게. 이미 `orgName` 한 곳이 대시보드 제목·탭·엑셀 파일명을 이끌고 있었으므로 **편집 지점만 헤더로 옮겼다**. 대시보드 h1 옆 연필은 제거.
 - `workspace.brand`(이름 또는 기본 "HCROI 시뮬레이터") · `workspace.pageTitle(section)` 추가. 데이터 관리·시뮬레이터·가이드 탭 제목도 회사 이름을 붙인다.
 - 로고 **이미지**는 넣지 않는다(글자만, 사용자 결정). 필요해지면 브라우저 저장 용량 제한을 두고 추가.
+
+## 2026-09-10 — 상용화 기획 착수, 브랜치 전략
+
+- 사용자 결정: 사내 도구는 **main** 에서 인사담당자 수정·개선을 계속 진행하고, 판매·유료 웹서비스·설치형 제품은 **`product/commercial`** 브랜치에서 기획부터 시작한다. UI 는 Claude Design 으로 시안을 만들어 손본 뒤 코드로 옮긴다.
+- 브랜치 전략 [docs/plans/branch-strategy.md](plans/branch-strategy.md): **main → product 단방향 머지**만. 코어(`src/lib/hcroi/**`)는 main 에서만 고치고 상용 브랜치는 쓰기만 한다. 상용 전용 코드는 새 디렉터리·새 경로에만. `.claude/state.md` 는 `.gitattributes` `merge=ours` 로 브랜치별 유지(`git config merge.ours.driver true` 필요).
+  저장소를 분리하게 되면 private 저장소가 public 을 `core` 리모트로 두고 같은 방향으로 머지한다.
+- 상용화 기획서 [docs/plans/commercial-product.md](plans/commercial-product.md) 초안: 추천안은 **로컬 우선 웹 + 라이선스 키 → 같은 빌드를 Tauri 설치형으로**. 계정형 SaaS 는 보류. 티어 Free/Pro/Consultant, 첫 MVP = 다중 작업공간·라이선스·경영진 리포트·온보딩. 형태·저장소 처리·타깃·결제·제품명·권리 관계는 §10 미결.

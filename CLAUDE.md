@@ -61,3 +61,8 @@ Supabase 연동(로그인·조직), LLM 인사이트 서술, PDF 리포트, 부�
 - `.claude/state.md` — **진행 상황**·다음 할 일·세션 로그. 작업 끝날 때마다 갱신한다
 - 새 결정 → brain.md 갱신 + docs/decision-log.md 에 날짜와 함께 추가. 진행 변화 → state.md 만
 - **세션 마무리는 `/wrap-up` 스킬**(`.claude/skills/wrap-up/SKILL.md`) 절차대로: 문서 최신화 → test/check/lint → 식별자 스캔 → dev 서버 종료 → 지시 시 커밋·push
+
+## 브랜치 (2026-09-10~)
+
+- **main** = 사내 도구(인사담당자 수정·개선). **`product/commercial`** = 판매용 제품(기획 docs/plans/commercial-product.md). 전략은 docs/plans/branch-strategy.md
+- 머지는 **main → product 한 방향만**. 코어 `src/lib/hcroi/**` 는 main 에서만 고친다. 상용 브랜치 작업 시작 시 `git merge main` 후 test/check

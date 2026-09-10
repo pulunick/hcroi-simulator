@@ -7,3 +7,6 @@ bun.lockb
 
 # Miscellaneous
 /static/
+
+# Claude Design 캔버스 작업 파일 (.dc.html 은 편집기 전용 포맷)
+/docs/design/
