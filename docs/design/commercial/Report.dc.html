@@ -1,0 +1,123 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; background: #ffffff; color: #111318; font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 16px; -webkit-font-smoothing: antialiased; }
+    a { color: #2a78d6; text-decoration: none; } a:hover { color: #256abf; }
+    .tabular { font-variant-numeric: tabular-nums; }
+    table { border-collapse: collapse; width: 100%; }
+    th { text-align: left; font-weight: 600; color: #4b5160; font-size: 12px; line-height: 1.3; padding: 6px 8px; border-bottom: 1.5px solid #111318; vertical-align: bottom; }
+    td { padding: 6px 8px; border-bottom: 1px solid #d3d7df; font-size: 13px; white-space: nowrap; vertical-align: top; }
+    td.wrap { white-space: normal; line-height: 1.4; }
+    td.num, th.num { text-align: right; }
+  </style>
+</helmet>
+<div style="width: 794px; height: 1123px; background: #ffffff; padding: 48px 60px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px;">
+
+  <div style="display: flex; align-items: flex-end; justify-content: space-between; border-bottom: 2px solid #111318; padding-bottom: 14px;">
+    <div style="display: flex; flex-direction: column; gap: 4px;">
+      <div style="font-size: 12px; font-weight: 600; letter-spacing: 0.08em; color: #4b5160;">인적자본 투자효율 보고</div>
+      <h1 style="margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.01em;">[회사명 A] 주식회사 · 2025년 연간</h1>
+    </div>
+    <div style="text-align: right; font-size: 12px; color: #4b5160; line-height: 1.5;">작성 2026-09-10<br>작성자 [이름] · 인사팀</div>
+  </div>
+
+  <div style="display: flex; gap: 20px; align-items: stretch;">
+    <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+      <div style="font-size: 22px; font-weight: 700; line-height: 1.35;">인건비 1원당 1.25원을 벌었습니다. 등급은 <span style="border-bottom: 3px solid #fab219;">보통</span>이며, 전년보다 0.06배 낮아졌습니다.</div>
+      <div style="font-size: 14px; color: #4b5160; line-height: 1.6;">인당 인건비(+2.1%)가 인당 매출(+0.1%)보다 빠르게 올라 효율이 떨어졌습니다. 우수 등급(1.5배)까지는 영업이익 846,000천원이 더 필요합니다.</div>
+    </div>
+    <div style="width: 180px; border: 1px solid #d3d7df; border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; align-items: center; justify-content: center;">
+      <div style="font-size: 12px; color: #4b5160;">HCROI</div>
+      <div class="tabular" style="font-size: 40px; font-weight: 700; letter-spacing: -0.02em; line-height: 1;">1.25<span style="font-size: 18px; font-weight: 600;">배</span></div>
+      <div style="font-size: 12px; color: #7b8294;">= 125% · 보통(1.0–1.5)</div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;">
+    <div style="border-top: 2px solid #111318; padding-top: 8px; display: flex; flex-direction: column; gap: 2px;">
+      <div style="font-size: 12px; color: #4b5160;">HCVA (인당 부가가치)</div>
+      <div class="tabular" style="font-size: 18px; font-weight: 700;">117,500천원</div>
+      <div style="font-size: 12px; color: #4b5160;">전년 −2.6%</div>
+    </div>
+    <div style="border-top: 2px solid #111318; padding-top: 8px; display: flex; flex-direction: column; gap: 2px;">
+      <div style="font-size: 12px; color: #4b5160;">인당 매출</div>
+      <div class="tabular" style="font-size: 18px; font-weight: 700;">391,700천원</div>
+      <div style="font-size: 12px; color: #4b5160;">전년 +0.1%</div>
+    </div>
+    <div style="border-top: 2px solid #111318; padding-top: 8px; display: flex; flex-direction: column; gap: 2px;">
+      <div style="font-size: 12px; color: #4b5160;">인당 인건비</div>
+      <div class="tabular" style="font-size: 18px; font-weight: 700;">94,000천원</div>
+      <div style="font-size: 12px; color: #4b5160;">전년 +2.1%</div>
+    </div>
+    <div style="border-top: 2px solid #111318; padding-top: 8px; display: flex; flex-direction: column; gap: 2px;">
+      <div style="font-size: 12px; color: #4b5160;">임직원 수 (기간 평균)</div>
+      <div class="tabular" style="font-size: 18px; font-weight: 700;">36명</div>
+      <div style="font-size: 12px; color: #4b5160;">전년 +2명</div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 8px;">
+    <h2 style="margin: 0; font-size: 14px; font-weight: 700;">1. 3개년 추이</h2>
+    <div style="display: flex; gap: 20px; align-items: flex-start;">
+      <svg width="260" height="122" viewBox="0 0 320 150" style="display: block; flex-shrink: 0;">
+        <line x1="36" y1="120" x2="310" y2="120" stroke="#111318" stroke-width="1"></line>
+        <line x1="36" y1="60" x2="310" y2="60" stroke="#7b8294" stroke-width="1" stroke-dasharray="3 3"></line>
+        <text x="312" y="63" font-size="9" fill="#4b5160">1.5</text>
+        <line x1="36" y1="100" x2="310" y2="100" stroke="#7b8294" stroke-width="1" stroke-dasharray="3 3"></line>
+        <text x="312" y="103" font-size="9" fill="#4b5160">1.0</text>
+        <polyline points="80,78 173,75 266,80" fill="none" stroke="#111318" stroke-width="2" stroke-linejoin="round"></polyline>
+        <circle cx="80" cy="78" r="3.5" fill="#111318"></circle><circle cx="173" cy="75" r="3.5" fill="#111318"></circle><circle cx="266" cy="80" r="3.5" fill="#111318"></circle>
+        <text x="80" y="66" font-size="11" font-weight="700" fill="#111318" text-anchor="middle">1.28</text>
+        <text x="173" y="63" font-size="11" font-weight="700" fill="#111318" text-anchor="middle">1.31</text>
+        <text x="266" y="68" font-size="11" font-weight="700" fill="#111318" text-anchor="middle">1.25</text>
+        <text x="80" y="138" font-size="11" fill="#4b5160" text-anchor="middle">2023</text>
+        <text x="173" y="138" font-size="11" fill="#4b5160" text-anchor="middle">2024</text>
+        <text x="266" y="138" font-size="11" fill="#4b5160" text-anchor="middle">2025</text>
+      </svg>
+      <table>
+        <thead><tr><th>연도</th><th class="num">영업이익 (천원)</th><th class="num">총 인건비 (천원)</th><th class="num">임직원 (명)</th><th class="num">HCROI (배)</th></tr></thead>
+        <tbody>
+          <tr><td>2023</td><td class="num tabular">812,000</td><td class="num tabular">2,900,000</td><td class="num tabular">32</td><td class="num tabular">1.28</td></tr>
+          <tr><td>2024</td><td class="num tabular">970,000</td><td class="num tabular">3,130,000</td><td class="num tabular">34</td><td class="num tabular">1.31</td></tr>
+          <tr><td>2025</td><td class="num tabular">846,000</td><td class="num tabular">3,384,000</td><td class="num tabular">36</td><td class="num tabular">1.25</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 8px;">
+    <h2 style="margin: 0; font-size: 14px; font-weight: 700;">2. 2026년 시나리오 비교</h2>
+    <table>
+      <thead><tr><th>시나리오</th><th>가정</th><th class="num">임직원 (명)</th><th class="num">총 인건비 (천원)</th><th class="num">영업이익 (천원)</th><th class="num">HCROI (배)</th><th>등급</th></tr></thead>
+      <tbody>
+        <tr><td style="font-weight: 600;">기준</td><td class="wrap">2025 실적 유지</td><td class="num tabular">36</td><td class="num tabular">3,384,000</td><td class="num tabular">846,000</td><td class="num tabular">1.25</td><td>보통</td></tr>
+        <tr><td style="font-weight: 600;">A</td><td class="wrap">인원 +10% · 임금 +5% · 생산성 0%</td><td class="num tabular">40</td><td class="num tabular">3,948,000</td><td class="num tabular">1,849,000</td><td class="num tabular">1.47</td><td>보통</td></tr>
+        <tr><td style="font-weight: 600;">B</td><td class="wrap">인원 0% · 임금 +3% · 생산성 +8%</td><td class="num tabular">36</td><td class="num tabular">3,486,000</td><td class="num tabular">1,872,000</td><td class="num tabular">1.54</td><td style="font-weight: 600;">우수</td></tr>
+      </tbody>
+    </table>
+    <div style="font-size: 12px; color: #4b5160; line-height: 1.5;">※ A 의 영업이익 증가분은 대부분 비인건비를 고정비로 본 가정에서 나옵니다(변동비 비율 0%). 신규 인원 램프업·채용 비용은 반영하지 않았습니다.</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <h2 style="margin: 0; font-size: 14px; font-weight: 700;">3. 판단과 제안</h2>
+    <ol style="margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.6; display: flex; flex-direction: column; gap: 2px;">
+      <li>임금 인상률은 <strong>6.7%</strong> 가 HCROI 1.25배를 지키는 상한입니다(인당 생산성 +2% 가정, 인원 불변).</li>
+      <li>정원 확대(A)만으로는 등급이 바뀌지 않습니다(1.47배). 인당 생산성 +8% 가 동반돼야 우수 구간에 듭니다(B).</li>
+      <li>인건비 세부에서 법정후생비·교육훈련비가 미분리 상태입니다. 다음 결산부터 분리하면 진단 정확도가 올라갑니다.</li>
+    </ol>
+  </div>
+
+  <div style="margin-top: auto; border-top: 1px solid #d3d7df; padding-top: 10px; font-size: 11px; color: #7b8294; line-height: 1.5;">
+    HCROI = (영업이익 + 총 인건비) ÷ 총 인건비 · HCVA = (영업이익 + 총 인건비) ÷ 총 임직원 수 · 총 인건비 = 기본급 + 성과급/수당 + 퇴직급여 + 법정후생비 + 기타 복리후생비 + 교육훈련비. 등급 기준 &lt;1.0 위험 · 1.0–1.5 보통 · ≥1.5 우수. [제품명] 으로 작성 · 1 / 1
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
