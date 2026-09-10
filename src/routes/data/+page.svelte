@@ -391,7 +391,7 @@
 	const sharePct = REFERENCE_DEFAULTS.breakdownSharePct;
 </script>
 
-<svelte:head><title>데이터 관리 — HCROI</title></svelte:head>
+<svelte:head><title>{workspace.pageTitle('데이터 관리')}</title></svelte:head>
 
 <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
 	<div>

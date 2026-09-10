@@ -123,7 +123,7 @@
 	}
 </script>
 
-<svelte:head><title>인건비·정원 시뮬레이터 — HCROI</title></svelte:head>
+<svelte:head><title>{workspace.pageTitle('인건비·정원 시뮬레이터')}</title></svelte:head>
 
 <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
 	<div>

@@ -26,6 +26,15 @@
 	];
 	const isActive = (href: string) =>
 		href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href);
+
+	// 헤더 로고 자리의 이름 편집 — 회사/조직 이름은 `workspace.orgName` 한 곳에 저장되어
+	// 대시보드 제목·브라우저 탭·엑셀 파일명·조직 정보 시트가 모두 따라간다 (서버 전송 없음)
+	let editingBrand = $state(false);
+	let brandInput = $state<HTMLInputElement | null>(null);
+	function startEdit() {
+		editingBrand = true;
+		queueMicrotask(() => brandInput?.focus());
+	}
 </script>
 
 <svelte:head>
@@ -54,8 +63,50 @@
 					aria-hidden="true"><path d="M3 17l5-6 4 4 8-9" /><path d="M14 6h6v6" /></svg
 				>
 			</span>
-			<span class="hidden sm:inline">HCROI 시뮬레이터</span>
+			{#if !editingBrand}<span class="hidden sm:inline">{workspace.brand}</span>{/if}
 		</a>
+		{#if editingBrand}
+			<form
+				class="flex items-center gap-1"
+				onsubmit={(e) => {
+					e.preventDefault();
+					editingBrand = false;
+				}}
+			>
+				<input
+					bind:this={brandInput}
+					class="field-input w-56 py-1 text-sm"
+					placeholder="회사/조직 이름 (비우면 기본)"
+					aria-label="회사/조직 이름"
+					bind:value={workspace.orgName}
+					onkeydown={(e) => {
+						if (e.key === 'Escape') editingBrand = false;
+					}}
+					onblur={() => (editingBrand = false)}
+				/>
+				<button type="submit" class="btn py-1 text-sm btn-primary">확인</button>
+			</form>
+		{:else}
+			<button
+				type="button"
+				class="-ml-4 btn p-1.5 btn-ghost text-muted hover:text-ink"
+				aria-label="회사/조직 이름 수정"
+				title="회사/조직 이름 넣기 — 대시보드 제목·탭·엑셀 파일명에 반영"
+				onclick={startEdit}
+			>
+				<svg
+					width="14"
+					height="14"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					aria-hidden="true"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg
+				>
+			</button>
+		{/if}
 		<nav aria-label="주 메뉴" class="flex flex-1 items-center gap-1 overflow-x-auto">
 			{#each nav as n (n.href)}
 				<a

@@ -66,7 +66,8 @@
 
 ## 7. 저장소 / DB
 
-- 대시보드 제목의 회사/조직 이름(`orgName`)도 localStorage 작업공간에 저장 — 서버 전송 없음. 회사명을 코드·저장소에 하드코딩하지 않는다.
+- 회사/조직 이름(`orgName`)은 localStorage 작업공간에 저장 — 서버 전송 없음. 회사명을 코드·저장소에 하드코딩하지 않는다.
+  **편집 지점은 헤더 로고 자리 하나**(2026-09-10, `+layout.svelte`). `workspace.brand`·`pageTitle()` 이 헤더·대시보드 h1·모든 화면 탭 제목·엑셀 파일명을 이끈다. 로고 이미지는 요청 시 검토(글자만 먼저).
 - 프로토타입: **localStorage** (`hcroi:workspace:v1`). 상태 모듈은 `src/lib/state/workspace.svelte.ts` 한 곳 → DB 연동 시 이것만 교체.
 - DB 는 **아직 없음**. `supabase/migrations/20260901000000_hcroi_schema.sql` 준비만 됨.
 - DB 대상: **개발자 개인 Supabase 계정**. 어느 프로젝트(기존 vs 신규)에 올릴지는 연동 착수 시 확정.

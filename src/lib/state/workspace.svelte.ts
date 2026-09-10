@@ -186,6 +186,17 @@ class Workspace {
 	/** 되돌릴 수 있는 가져오기 스냅샷이 있는지 */
 	undoAvailable = $state(false);
 
+	/** 헤더 로고 자리에 보이는 이름 — 회사/조직 이름, 비어 있으면 도구 이름 */
+	get brand(): string {
+		return this.orgName.trim() || 'HCROI 시뮬레이터';
+	}
+	/** 브라우저 탭 제목. 대시보드는 "○○ HCROI 대시보드", 나머지는 "화면 — ○○" */
+	pageTitle(section?: string): string {
+		const org = this.orgName.trim();
+		if (!section) return org ? `${org} HCROI 대시보드` : 'HCROI 대시보드';
+		return `${section} — ${this.brand}`;
+	}
+
 	/** 직접 입력한 레코드만 시간순 (한 해의 분기·반기 뒤에 연간). 엑셀 `입력 데이터` 가 이것을 내보낸다 */
 	sorted = $derived([...this.records].sort((a, b) => comparePeriods(a.period, b.period)));
 	/**

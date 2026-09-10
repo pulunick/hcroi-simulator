@@ -10,7 +10,7 @@
 	const basisLabel = $derived(headcountBasisLabel(workspace.headcountBasis));
 </script>
 
-<svelte:head><title>산식·가이드 — HCROI</title></svelte:head>
+<svelte:head><title>{workspace.pageTitle('산식·가이드')}</title></svelte:head>
 
 <h1 class="mb-2 text-2xl font-bold text-ink">산식 · 가이드</h1>
 <p class="mb-8 text-[15px] text-ink-2">
