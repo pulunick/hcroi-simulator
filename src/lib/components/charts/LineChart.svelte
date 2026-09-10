@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { niceTicks } from '$lib/hcroi/format';
 
-	type Point = { label: string; value: number | null };
+	/** reference = 본체 유형이 아닌 참조값(예: 분기 추이의 연간 값) — 속 빈 마커·점선으로 구분해 그린다 */
+	type Point = { label: string; value: number | null; reference?: boolean; note?: string };
 	interface Props {
 		points: Point[];
 		format: (v: number) => string;
@@ -48,18 +49,28 @@
 		return pad.top + innerH - ((v - yMin) / (yMax - yMin || 1)) * innerH;
 	}
 
-	const path = $derived.by(() => {
-		let d = '';
-		let pen = false;
+	/**
+	 * 선은 이웃한 두 점을 잇는 구간의 모음 — 값이 없는 점에서는 끊긴다.
+	 * 한쪽이라도 참조점이면 점선(`dashed`)으로 그려 본체 추이와 구분한다.
+	 */
+	const segments = $derived.by(() => {
+		const out: { d: string; dashed: boolean }[] = [];
+		let prevIdx = -1;
 		points.forEach((p, i) => {
 			if (p.value === null) {
-				pen = false;
+				prevIdx = -1;
 				return;
 			}
-			d += `${pen ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.value).toFixed(1)} `;
-			pen = true;
+			if (prevIdx >= 0) {
+				const q = points[prevIdx];
+				out.push({
+					d: `M${x(prevIdx).toFixed(1)},${y(q.value as number).toFixed(1)} L${x(i).toFixed(1)},${y(p.value).toFixed(1)}`,
+					dashed: Boolean(p.reference || q.reference)
+				});
+			}
+			prevIdx = i;
 		});
-		return d.trim();
+		return out;
 	});
 
 	const lastIdx = $derived.by(() => {
@@ -96,7 +107,7 @@
 			{height}
 			role="img"
 			aria-label={ariaLabel}
-			class="block touch-none select-none"
+			class="block max-w-full touch-none select-none"
 			onpointermove={onMove}
 			onpointerleave={() => (hover = null)}
 		>
@@ -155,24 +166,26 @@
 					stroke-width="1"
 				/>
 			{/if}
-			<!-- 선 -->
-			<path
-				d={path}
-				fill="none"
-				stroke={color}
-				stroke-width="2"
-				stroke-linejoin="round"
-				stroke-linecap="round"
-			/>
-			<!-- 마커 (2px 서피스 링) -->
+			<!-- 선 (참조점에 닿는 구간은 점선) -->
+			{#each segments as s, i (i)}
+				<path
+					d={s.d}
+					fill="none"
+					stroke={color}
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-dasharray={s.dashed ? '4 4' : undefined}
+				/>
+			{/each}
+			<!-- 마커 (2px 서피스 링) · 참조점은 속 빈 원 -->
 			{#each points as p, i (p.label)}
 				{#if p.value !== null}
 					<circle
 						cx={x(i)}
 						cy={y(p.value)}
 						r={hover === i ? 6 : 4.5}
-						fill={color}
-						stroke="var(--color-surface)"
+						fill={p.reference ? 'var(--color-surface)' : color}
+						stroke={p.reference ? color : 'var(--color-surface)'}
 						stroke-width="2"
 					/>
 				{/if}
@@ -201,6 +214,7 @@
 			>
 				<div class="text-muted">{hoverPoint.label}</div>
 				<div class="tabular font-semibold text-ink">{format(hoverPoint.value)}</div>
+				{#if hoverPoint.note}<div class="text-xs text-muted">{hoverPoint.note}</div>{/if}
 			</div>
 		{/if}
 	{/if}

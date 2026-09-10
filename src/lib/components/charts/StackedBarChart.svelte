@@ -91,7 +91,7 @@
 			{height}
 			role="img"
 			aria-label={ariaLabel}
-			class="block touch-none select-none"
+			class="block max-w-full touch-none select-none"
 			onpointermove={onMove}
 			onpointerleave={() => (hover = null)}
 		>
