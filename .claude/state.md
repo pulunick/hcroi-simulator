@@ -286,5 +286,5 @@
 - 브랜치 `product/commercial` 생성(main bd1ac6e 에서). 이 state.md 는 **이 브랜치 전용**(`.gitattributes` `merge=ours`, `git config merge.ours.driver true` 설정 완료) — main 진행 상황은 main 의 state.md 에.
 - 문서: `docs/plans/commercial-product.md`(기획서 — 타깃·형태 비교·추천안 아키텍처·티어·로드맵 M0–M8·UI 원칙·리스크·미결 §10), `docs/plans/branch-strategy.md`(main → product 단방향, 코어는 main 에서만, 충돌 파일 처리, 세션 루틴, 저장소 분리 시), brain §12, CLAUDE.md 브랜치 절, decision-log.
 - Claude Design 캔버스: 랜딩·홈(작업공간)·온보딩·대시보드·리포트 시안 (아래 링크는 이 세션 마지막 메시지 참조).
-- 코드 변경 없음. 미커밋 — 사용자 지시 대기. **branch-strategy.md · CLAUDE.md 브랜치 절 · decision-log 항목은 main 에도 들어가야 한다**(공유 규칙) → main 에서 먼저 커밋 후 이 브랜치가 머지하는 순서 권장.
+- 코드 변경 없음. 커밋 `88b7893`(문서) · `e3569cc`(디자인) → `origin/product/commercial` push 완료(pulunick → 회사 계정 복귀). **branch-strategy.md · CLAUDE.md 브랜치 절 · decision-log 항목은 main 에도 들어가야 한다**(공유 규칙) → main 에서 먼저 커밋 후 이 브랜치가 머지하는 순서 권장.
 - **다음**: 기획서 §10 결정 7개 답 → brain §12 확정 → M1(다중 작업공간·온보딩) 착수. 저장소 분리 결정 전에는 라이선스·결제 코드 금지.
