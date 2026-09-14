@@ -12,7 +12,7 @@
 | `npm test`      | ✅ 8 파일 / 144 passed (formulas · scenario · insights · period · rollup · excel · pdf table · pdf locate) + probe(skip)                                                                     |
 | `npm run check` | ✅ 0 errors / 0 warnings (360 files)                                                                                                                                                         |
 | `npm run lint`  | ✅                                                                                                                                                                                           |
-| git             | 원격 **github.com/pulunick/hcroi-simulator (public)**, 브랜치 `main`. 865f36d(세션 8 헤더 이름 편집) push 완료. 작업 트리 클린                                                               |
+| git             | 원격 **github.com/pulunick/hcroi-simulator (public)**, 브랜치 **`product/commercial`** (main 1b9ff99 머지 완료). 이 브랜치의 state.md 는 상용 진행 상황만 — main 진행은 main 의 state.md     |
 | DB              | 없음(보류). 마이그레이션 SQL 준비만 됨, 어느 프로젝트에도 미적용                                                                                                                             |
 | 원격 저장소     | pulunick/hcroi-simulator (public). push 절차는 brain §1 참조                                                                                                                                 |
 
@@ -285,6 +285,18 @@
 - 사용자: 사내 수정은 main 에서 계속, 판매·유료 웹·설치형 제품은 새 브랜치에서 기획부터. UI 는 Claude Design.
 - 브랜치 `product/commercial` 생성(main bd1ac6e 에서). 이 state.md 는 **이 브랜치 전용**(`.gitattributes` `merge=ours`, `git config merge.ours.driver true` 설정 완료) — main 진행 상황은 main 의 state.md 에.
 - 문서: `docs/plans/commercial-product.md`(기획서 — 타깃·형태 비교·추천안 아키텍처·티어·로드맵 M0–M8·UI 원칙·리스크·미결 §10), `docs/plans/branch-strategy.md`(main → product 단방향, 코어는 main 에서만, 충돌 파일 처리, 세션 루틴, 저장소 분리 시), brain §12, CLAUDE.md 브랜치 절, decision-log.
-- Claude Design 캔버스: 랜딩·홈(작업공간)·온보딩·대시보드·리포트 시안 (아래 링크는 이 세션 마지막 메시지 참조).
+- Claude Design 캔버스 "HCROI 제품 화면 시안": https://claude.ai/code/artifact/1637dbb7-3c9e-42d9-9b60-db22f38fdbd9 — 작업 파일 `docs/design/commercial/*.dc.html` + `canvas.json`(랜딩 A/B·홈·온보딩·대시보드·A4 리포트). 수정은 파일 편집 → 재발행.
 - 코드 변경 없음. 커밋 `88b7893`(문서) · `e3569cc`(디자인) → `origin/product/commercial` push 완료(pulunick → 회사 계정 복귀). **branch-strategy.md · CLAUDE.md 브랜치 절 · decision-log 항목은 main 에도 들어가야 한다**(공유 규칙) → main 에서 먼저 커밋 후 이 브랜치가 머지하는 순서 권장.
 - **다음**: 기획서 §10 결정 7개 답 → brain §12 확정 → M1(다중 작업공간·온보딩) 착수. 저장소 분리 결정 전에는 라이선스·결제 코드 금지.
+
+### 2026-09-10 — 세션 9 (이어서): 수익 가설 · 개인 프로젝트 정리 · main 머지
+
+- main 에서 추이 다개년 표시(연간 참조점·표시 범위, 커밋 1b9ff99)를 만든 뒤 이 브랜치에 **머지**(16cb4be, decision-log 충돌은 양쪽 항목 유지·37cf9ef 서식). 머지 후 test 153 · check 0 · lint ✅. state.md 는 `merge=ours` 로 이 브랜치 것 유지 확인.
+- 사용자 질문 "판매 vs 무료+부가 수익" → 기획서 **§11 수익 전략 가설 3가지**(H1 무료 도구+유료 서비스 · H2 결과물 과금 · H3 파트너 화이트라벨), 추천 H1 → H2, H3 접촉 병행. 첫 공개는 무료.
+- 사용자 확인: **회사와 아무 연관 없는 개인 프로젝트**, 담당자 수익화 허락 → 기획서 §12 정리(체크리스트 6개: 허락 문서화 · 위생 · 제품명 · 무료 공개 · 매출 직전 사업자 등록 · 담당자 관계), §8-2·§10-6 "정리됨", §0 요약 갱신. brain §12 · decision-log 반영.
+- 디자인 시안 2차 점검 반영본 발행(위 링크 동일).
+- **다음 세션 시작점**:
+  1. `git merge main` 으로 코어 최신화(브랜치 전략 §4 루틴)
+  2. 기획서 §10 남은 결정: 제품명(5) · 1순위 타깃(3) · 디자인 범위(7). §12-1 담당자 허락 문서화는 사용자가 직접
+  3. H1 준비 = **무료 공개**: 문의 폼 1개 + 랜딩(디자인 캔버스 방향 A) → M1 다중 작업공간·온보딩 착수. 결제·라이선스 코드는 아직 아님
+  4. branch-strategy.md · CLAUDE.md 브랜치 절 · decision-log 브랜치 항목을 main 에도 넣기(main 세션에서, 지시 시)
