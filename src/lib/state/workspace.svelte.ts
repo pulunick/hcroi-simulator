@@ -1,6 +1,6 @@
 import { normalizePdfPrefs, type PdfPrefs } from '$lib/hcroi/pdf/map';
 import { browser } from '$app/environment';
-import { PRODUCT_NAME } from '$lib/site-config';
+import { DASHBOARD_TITLE, PRODUCT_NAME } from '$lib/site-config';
 import { sampleRecords } from '$lib/hcroi/defaults';
 import { DEFAULT_SCENARIO_PARAMS } from '$lib/hcroi/scenario';
 import type {
@@ -303,10 +303,10 @@ class Workspace {
 	get brand(): string {
 		return this.orgName.trim() || PRODUCT_NAME;
 	}
-	/** 브라우저 탭 제목. 대시보드는 "○○ 대시보드"(탭 메뉴 이름과 통일), 나머지는 "화면 — ○○" */
+	/** 브라우저 탭 제목. 대시보드는 "○○ {DASHBOARD_TITLE}"(탭 메뉴 이름과 통일), 나머지는 "화면 — ○○" */
 	pageTitle(section?: string): string {
 		const org = this.orgName.trim();
-		if (!section) return org ? `${org} 대시보드` : '대시보드';
+		if (!section) return org ? `${org} ${DASHBOARD_TITLE}` : DASHBOARD_TITLE;
 		return `${section} — ${this.brand}`;
 	}
 

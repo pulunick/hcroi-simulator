@@ -7,3 +7,9 @@ export const SITE_ENABLED = true;
  * 이름이 두 곳 이상에 박히지 않게 여기 한 줄에서만 정한다.
  */
 export const PRODUCT_NAME = SITE_ENABLED ? 'Headroom' : 'HCROI 시뮬레이터';
+
+/**
+ * 대시보드 제목(브라우저 탭·h1) — 공개판(product/commercial)은 "대시보드", 사내 도구(main)는
+ * "HCROI 대시보드". main/product 차이는 위 `SITE_ENABLED` 한 줄에서만 파생한다.
+ */
+export const DASHBOARD_TITLE = SITE_ENABLED ? '대시보드' : 'HCROI 대시보드';
