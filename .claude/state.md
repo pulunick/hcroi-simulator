@@ -345,7 +345,8 @@
 - 최종 검수(Fable): format 적용(state·decision-log) · lint OK · check 430 files 0 errors · test 180 passed. 식별자 스캔 이상 없음.
 - **사용자 화면 점검 → 수정 5건(sonnet)**: 시작 경로(`/data?start=pdf` 샘플 비움·확인 / `/?start=sample` 샘플 적재, `isSampleOnly`·`startFresh`) · 앱 ↔ 소개 왕복(워드마크 → `/intro`, 푸터 `소개`) · PDF 카드 기간 셀렉트 `w-auto` · 리포트 인쇄 여백(종이 패딩 14/16mm 유지 + `@page report` 여백 0, 최소 여백 14.3mm) · 설정 02 `Checkbox.svelte`. 리포트 기간 선택은 이미 있어 수정 없음.
 - **사용자 결정(2026-09-15)**: (1) 공개판 UI 를 main 에도 — product → main 1회 역머지, main 은 intro·소개 링크 제거 + 헤더 워드마크 대신 회사 이름. (2) PDF 기간 자동 감지(표지 문구 추정 + 사용자 확인)를 main 코어에 구현. 문서 개정: brain §12 · CLAUDE.md · branch-strategy §1 · decision-log.
-- **다음 세션 시작점**:
+- **2026-09-15 저녁(product)**: main 의 43f4422·3dd8033(사이트 플래그 · PDF 기간 감지 · QA 19건 · 앱 룩 복귀 — 상세는 main 의 state.md·decision-log)을 머지하고 `src/lib/site-config.ts` `SITE_ENABLED = true` 로 설정. 이 브랜치와 main 의 차이는 그 한 줄뿐(워드마크·`/intro`·소개 링크·제품명 "Headroom"). 앱 룩은 사용자 결정으로 기존 디자인(흰 카드·파랑·고딕)으로 복귀 — 9/14 종이·먹·주홍 아트보드는 이력, 워드마크 SVG 만 유지.
+- **다음 세션 시작점**: 0. QA 세션 2차 재검증(product) 결과 반영 → push(지시 시) → Vercel 배포
   1. 사용자가 실제 화면 점검(`npm run dev` → `/intro`, `/`, `/settings`, `/report`, 다크·390px) → 지적 반영(코드는 서브에이전트)
   2. **커밋·push**(지시 시, brain §1 계정 전환) — 미커밋 범위: 디자인 11 + 문서 7 + 코드(신규 라우트 3 · 컴포넌트 3 그룹 · `lib/report` · `state/io.ts` · 토큰/헤더/스윕 수정 15 파일 · `static/hero-dashboard.jpg`)
   3. **Vercel 배포**(사용자 대시보드에서 import) → 배포 URL 에서 pdf.js worker 로드·다크·인쇄 재확인. 진입 동선(`/` ↔ `/intro`) 결정: 지금은 `/` = 대시보드, `/intro` 링크 없음
