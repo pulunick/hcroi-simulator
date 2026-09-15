@@ -123,11 +123,11 @@
 	}
 </script>
 
-<svelte:head><title>{workspace.pageTitle('인건비·정원 시뮬레이터')}</title></svelte:head>
+<svelte:head><title>{workspace.pageTitle('시뮬레이터')}</title></svelte:head>
 
 <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
 	<div>
-		<h1 class="text-2xl font-bold text-ink">인건비 & 정원 시뮬레이터</h1>
+		<h1 class="text-2xl font-bold text-ink">시뮬레이터</h1>
 		<p class="mt-1 text-[15px] text-ink-2">
 			인원·임금·생산성 변수를 조정하면 예상 총 인건비, 영업이익, HCROI 가 즉시 재계산됩니다.
 		</p>
@@ -157,11 +157,11 @@
 		<div class="mb-3 flex flex-wrap items-center gap-3">
 			<h2 id="baseline-h" class="text-base font-semibold text-ink">
 				<span
-					class="mr-1.5 inline-block h-3 w-3 rounded-sm align-middle"
+					class="mr-1.5 inline-block h-3 w-3 rounded-[2px] align-middle"
 					style="background:{SERIES_COLORS[0]}"
 				></span>
 				기준선 (Baseline) — {periodLabel(base.period)}{#if base.derived}<span
-						class="ml-2 rounded bg-surface-2 px-1.5 py-0.5 text-xs font-normal text-muted"
+						class="ml-2 rounded-[2px] bg-surface-2 px-1.5 py-0.5 text-xs font-normal text-muted"
 						>{derivedLabel(base.derived)}</span
 					>{/if}
 			</h2>
@@ -204,7 +204,7 @@
 				<div class="flex items-center justify-between gap-3">
 					<label class="flex flex-1 items-center gap-2">
 						<span
-							class="inline-block h-3 w-3 shrink-0 rounded-sm"
+							class="inline-block h-3 w-3 shrink-0 rounded-[2px]"
 							style="background:{color}"
 							aria-hidden="true"
 						></span>
@@ -226,22 +226,22 @@
 					<div class="flex items-center justify-between">
 						<span class="text-sm font-semibold text-ink-2">인원 변동</span>
 						<div
-							class="inline-flex rounded-md border border-line-2 p-0.5 text-sm"
+							class="inline-flex rounded-[2px] border border-line-2 p-0.5 text-sm"
 							role="group"
 							aria-label="인원 조정 방식"
 						>
 							<button
 								type="button"
-								class="rounded px-2.5 py-0.5 font-medium {s.params.headcountMode === 'pct'
-									? 'bg-brand text-white'
+								class="rounded-[2px] px-2.5 py-0.5 font-medium {s.params.headcountMode === 'pct'
+									? 'bg-brand text-on-brand'
 									: 'text-ink-2'}"
 								aria-pressed={s.params.headcountMode === 'pct'}
 								onclick={() => (s.params.headcountMode = 'pct')}>비율(%)</button
 							>
 							<button
 								type="button"
-								class="rounded px-2.5 py-0.5 font-medium {s.params.headcountMode === 'delta'
-									? 'bg-brand text-white'
+								class="rounded-[2px] px-2.5 py-0.5 font-medium {s.params.headcountMode === 'delta'
+									? 'bg-brand text-on-brand'
 									: 'text-ink-2'}"
 								aria-pressed={s.params.headcountMode === 'delta'}
 								onclick={() => (s.params.headcountMode = 'delta')}>인원(명)</button
@@ -296,7 +296,7 @@
 					help="인당 매출 {won(b.revenuePerHead)} → {won(r.metrics.revenuePerHead)}"
 				/>
 
-				<details class="rounded-lg border border-line bg-surface-2 px-4 py-2">
+				<details class="rounded-[2px] border border-line bg-surface-2 px-4 py-2">
 					<summary class="cursor-pointer text-sm font-semibold text-ink-2"
 						>고급 가정 — 비인건비 중 변동비 비율</summary
 					>
@@ -470,7 +470,7 @@
 				<div>
 					<h3 class="mb-2 flex items-center gap-2 text-base font-semibold text-ink">
 						<span
-							class="inline-block h-3 w-3 rounded-sm"
+							class="inline-block h-3 w-3 rounded-[2px]"
 							style="background:{SERIES_COLORS[i + 1]}"
 							aria-hidden="true"
 						></span>{r.scenario.name}

@@ -1,5 +1,13 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { resolve } from '$app/paths';
+	import { replaceState } from '$app/navigation';
 	import { newId, workspace } from '$lib/state/workspace.svelte';
+	import {
+		exportWorkspaceExcel,
+		exportWorkspaceJson,
+		importWorkspaceJsonFile
+	} from '$lib/state/io';
 	import {
 		YEAR_MAX,
 		YEAR_MIN,
@@ -27,8 +35,6 @@
 		HC_COST_LABELS,
 		HEADCOUNT_KEYS,
 		HEADCOUNT_LABELS,
-		HEADCOUNT_METHOD_LABELS,
-		HEADCOUNT_OPTIONAL_KEYS,
 		PERIOD_TYPES,
 		PERIOD_TYPE_LABELS,
 		sameHeadcountBasis,
@@ -37,7 +43,7 @@
 		type PeriodType
 	} from '$lib/hcroi/types';
 	import {
-		AMOUNT_UNITS,
+		amountUnitLabel,
 		columnUnitSuffix,
 		derivedLabel,
 		formatAmount,
@@ -161,27 +167,25 @@
 					{ regular: selected.inputs.headcount, contract: 0, dispatched: 0, executive: 0 }
 		);
 	}
-	// 가져오기 / 내보내기
+	// 가져오기 / 내보내기 (JSON · 엑셀 내보내기의 파일명 규칙·동작은 `io.ts` 공용 — /settings 와 동일)
 	let fileInput = $state<HTMLInputElement | null>(null);
 	let ioMessage = $state<string | null>(null);
 	function exportJson() {
-		const blob = new Blob([workspace.exportJson()], { type: 'application/json' });
-		const url = URL.createObjectURL(blob);
-		const a = document.createElement('a');
-		a.href = url;
-		a.download = `hcroi-workspace-${new Date().toISOString().slice(0, 10)}.json`;
-		a.click();
-		URL.revokeObjectURL(url);
+		exportWorkspaceJson();
 	}
 	async function importJson(e: Event) {
 		const file = (e.currentTarget as HTMLInputElement).files?.[0];
 		if (!file) return;
-		const res = workspace.importJson(await file.text());
-		ioMessage = res.ok
-			? `${file.name} 을(를) 불러왔습니다.${res.warning ? ` ${res.warning}` : ''}`
-			: res.error;
-		selectedId = null;
-		if (fileInput) fileInput.value = '';
+		try {
+			const { fileName, result } = await importWorkspaceJsonFile(file);
+			ioMessage = result.ok
+				? `${fileName} 을(를) 불러왔습니다.${result.warning ? ` ${result.warning}` : ''}`
+				: result.error;
+			selectedId = null;
+		} finally {
+			// 실패해도(파일 읽기 오류 등) 같은 파일을 다시 고를 수 있도록 항상 입력을 비운다
+			if (fileInput) fileInput.value = '';
+		}
 	}
 	// 엑셀 내보내기 / 템플릿 / 가져오기 (exceljs 는 io.ts 에서 동적 로드)
 	let busy = $state(false);
@@ -203,8 +207,37 @@
 	let applyOrgName = $state(true);
 	/** 미리보기에서 "산정 기준도 파일 기준으로" 체크 여부 (파일 기준이 현재와 다를 때만 노출) */
 	let applyBasisFromFile = $state(true);
-	/** 결산서 PDF 가져오기 패널 */
+	/** 결산서 PDF 가져오기 패널 — `/data#pdf` 로 들어오면 자동으로 펼친다(랜딩·가이드의 앵커 링크) */
 	let pdfOpen = $state(false);
+	onMount(() => {
+		if (window.location.hash === '#pdf') pdfOpen = true;
+	});
+	/**
+	 * 소개 페이지 "결산서 PDF 로 시작" 진입점(`/data?start=pdf`) — 작업공간에 가상 회사 샘플이 섞여 있으면
+	 * 사용자의 결산서 값이 샘플과 합산되어 버리므로, PDF 카드를 펼치기 전에 샘플을 비운다.
+	 * `workspace.loaded` 가 켜진 뒤(레이아웃의 onMount 가 localStorage 를 읽은 뒤) 한 번만 처리한다 —
+	 * 이 페이지의 onMount 는 레이아웃보다 먼저 실행돼 로드 전 상태(샘플 기본값)만 보일 수 있다.
+	 */
+	let startHandled = false;
+	$effect(() => {
+		if (!workspace.loaded || startHandled) return;
+		startHandled = true;
+		const params = new URLSearchParams(window.location.search);
+		if (params.get('start') !== 'pdf') return;
+		if (workspace.isSampleOnly()) {
+			workspace.startFresh();
+			ioMessage = '샘플을 비웠습니다. 결산서 PDF 를 올리면 첫 기간이 됩니다.';
+		} else if (
+			confirm(
+				'입력된 데이터가 있습니다. 지우고 결산서 PDF 로 새로 시작할까요? (취소하면 현재 데이터에 추가합니다)'
+			)
+		) {
+			workspace.startFresh();
+		}
+		pdfOpen = true;
+		// 처리 후 쿼리를 지워 새로고침 시 반복되지 않게 한다
+		replaceState(resolve('/data'), {});
+	});
 	/** PDF 카드에서 확인한 값 → 엑셀 가져오기와 같은 미리보기·병합·되돌리기 경로 */
 	function fromPdf(fileName: string, records: ParsedRecord[], companyName: string | null) {
 		applyOrgName = true;
@@ -219,13 +252,10 @@
 			cumulative: false
 		};
 	}
-	const today = () => new Date().toISOString().slice(0, 10);
-
 	async function exportExcel() {
 		busy = true;
 		try {
-			const { buildWorkbookBuffer, downloadBuffer } = await import('$lib/hcroi/excel/io');
-			const buf = await buildWorkbookBuffer({
+			const fname = await exportWorkspaceExcel({
 				records: $state.snapshot(workspace.records),
 				scenarios: $state.snapshot(workspace.scenarios),
 				base: workspace.base ? $state.snapshot(workspace.base) : null,
@@ -233,9 +263,6 @@
 				headcountBasis: $state.snapshot(workspace.headcountBasis),
 				summaryRecords: $state.snapshot(workspace.effective)
 			});
-			const org = workspace.orgName.trim().replace(/[\\/:*?"<>|\s]+/g, '-');
-			const fname = `hcroi-${org ? org + '-' : ''}${today()}.xlsx`;
-			downloadBuffer(buf, fname);
 			ioMessage = `엑셀 파일(${fname})을 내려받았습니다. 시트: 지표 요약 · 입력 데이터 · 시나리오 비교 · 조직 정보 · 산식·가정`;
 		} catch (e) {
 			ioMessage = `엑셀 내보내기 실패: ${(e as Error).message}`;
@@ -391,44 +418,24 @@
 	const sharePct = REFERENCE_DEFAULTS.breakdownSharePct;
 </script>
 
-<svelte:head><title>{workspace.pageTitle('데이터 관리')}</title></svelte:head>
+<svelte:head><title>{workspace.pageTitle('데이터')}</title></svelte:head>
 
 <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
 	<div>
-		<h1 class="text-2xl font-bold text-ink">데이터 관리</h1>
+		<h1 class="text-2xl font-bold text-ink">데이터</h1>
 		<p class="mt-1 text-[15px] text-ink-2">
 			기간별(연간·반기·분기·월) 재무·HR 데이터를 입력합니다. 잘게 넣으면 상위 기간(분기 → 반기 →
 			연간)은 자동으로 합산됩니다. 총 인건비는 6개 항목으로, 임직원 수는 4개 구분으로 나눠 관리할 수
 			있습니다.
 		</p>
-		<label class="mt-3 flex flex-wrap items-center gap-2 text-sm text-ink-2">
-			<span class="font-medium text-ink">금액 표시 단위</span>
-			<select class="field-input w-auto py-1 text-sm" bind:value={workspace.amountUnit}>
-				{#each AMOUNT_UNITS as u (u.key)}
-					<option value={u.key}>{u.label}</option>
-				{/each}
-			</select>
-			<span class="text-muted">화면 표기만 바뀝니다 — 입력·저장·엑셀은 원 단위 그대로입니다.</span>
-		</label>
-		<div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-ink-2">
-			<span class="font-medium text-ink">임직원 수 산정 기준</span>
-			<select class="field-input w-auto py-1 text-sm" bind:value={workspace.headcountBasis.method}>
-				{#each Object.entries(HEADCOUNT_METHOD_LABELS) as [m, label] (m)}
-					<option value={m}>{label}</option>
-				{/each}
-			</select>
-			{#each HEADCOUNT_OPTIONAL_KEYS as k (k)}
-				<label class="flex items-center gap-1.5 whitespace-nowrap">
-					<input
-						type="checkbox"
-						class="rounded border-line-2 text-brand focus:ring-brand/30"
-						bind:checked={workspace.headcountBasis.include[k]}
-					/>
-					{HEADCOUNT_LABELS[k]} 포함
-				</label>
-			{/each}
-			<span class="text-muted">인원 구분을 입력한 기간만 합계가 다시 계산됩니다.</span>
-		</div>
+		<p class="mt-3 text-sm text-ink-2">
+			표시 단위 {amountUnitLabel(workspace.amountUnit)} · 임직원 수 {headcountBasisLabel(
+				workspace.headcountBasis
+			)} —
+			<a href={resolve('/settings')} class="font-medium text-brand-ink hover:underline"
+				>설정에서 바꾸기</a
+			>
+		</p>
 	</div>
 	<div class="flex flex-wrap items-center gap-2">
 		<button type="button" class="btn btn-primary" onclick={exportExcel} disabled={busy}
@@ -448,8 +455,9 @@
 			/>
 		</label>
 		<button
+			id="pdf"
 			type="button"
-			class="btn btn-secondary"
+			class="btn scroll-mt-24 btn-secondary"
 			aria-pressed={pdfOpen}
 			onclick={() => (pdfOpen = !pdfOpen)}
 			disabled={busy}>결산서 PDF 가져오기</button
@@ -465,7 +473,7 @@
 		<details class="relative">
 			<summary class="btn list-none text-sm btn-ghost text-muted">고급 (JSON)</summary>
 			<div
-				class="absolute right-0 z-10 mt-1 flex w-max flex-col gap-1 rounded-lg border border-line bg-surface p-2 shadow-md"
+				class="absolute right-0 z-10 mt-1 flex w-max flex-col gap-1 rounded-[2px] border border-line bg-surface p-2"
 			>
 				<button
 					type="button"
@@ -491,7 +499,7 @@
 </div>
 {#if ioMessage}
 	<p
-		class="mb-4 rounded-md border border-line bg-surface px-4 py-2 text-sm text-ink-2"
+		class="mb-4 rounded-[2px] border border-line bg-surface px-4 py-2 text-sm text-ink-2"
 		role="status"
 	>
 		{ioMessage}
@@ -523,7 +531,7 @@
 				<label class="flex items-center gap-2 text-sm text-ink-2">
 					<input
 						type="checkbox"
-						class="rounded border-line-2 text-brand"
+						class="rounded-[2px] border-line-2 text-brand"
 						bind:checked={overwrite}
 					/>
 					기존 기간 덮어쓰기
@@ -532,7 +540,7 @@
 					<label class="flex items-center gap-2 text-sm text-ink-2">
 						<input
 							type="checkbox"
-							class="rounded border-line-2 text-brand"
+							class="rounded-[2px] border-line-2 text-brand"
 							bind:checked={skipErrors}
 						/>
 						오류 행 건너뛰고 반영
@@ -542,7 +550,7 @@
 					<label class="flex items-center gap-2 text-sm text-ink-2">
 						<input
 							type="checkbox"
-							class="rounded border-line-2 text-brand"
+							class="rounded-[2px] border-line-2 text-brand"
 							bind:checked={applyBasisFromFile}
 						/>
 						<span class="whitespace-nowrap"
@@ -554,7 +562,7 @@
 					<label class="flex items-center gap-2 text-sm text-ink-2">
 						<input
 							type="checkbox"
-							class="rounded border-line-2 text-brand"
+							class="rounded-[2px] border-line-2 text-brand"
 							bind:checked={applyOrgName}
 						/>
 						<span class="whitespace-nowrap">
@@ -570,7 +578,7 @@
 		</div>
 		{#if res.headerError}
 			<p
-				class="rounded-md border border-status-critical/40 bg-status-critical-bg px-4 py-3 text-sm text-status-critical-ink"
+				class="rounded-[2px] border border-status-critical/40 bg-status-critical-bg px-4 py-3 text-sm text-status-critical-ink"
 			>
 				{res.headerError}
 			</p>
@@ -600,7 +608,7 @@
 								<td class="px-3 py-2 font-semibold whitespace-nowrap">{r.label ?? '—'}</td>
 								<td class="px-3 py-2">
 									<span
-										class="rounded px-1.5 py-0.5 text-xs font-semibold {r.status === '오류'
+										class="rounded-[2px] px-1.5 py-0.5 text-xs font-semibold {r.status === '오류'
 											? 'bg-status-critical-bg text-status-critical-ink'
 											: r.status === '신규'
 												? 'bg-status-good-bg text-status-good-ink'
@@ -653,7 +661,7 @@
 			<div>
 				<h2 id="years-h" class="text-lg font-semibold text-ink">기간별 데이터</h2>
 				<p class="text-xs text-muted">
-					행을 클릭하면 오른쪽에서 편집할 수 있습니다. <span class="rounded bg-surface-2 px-1"
+					행을 클릭하면 오른쪽에서 편집할 수 있습니다. <span class="rounded-[2px] bg-surface-2 px-1"
 						>합산</span
 					> 은 하위 기간에서 계산된 기간(저장되지 않음)
 				</p>
@@ -735,7 +743,7 @@
 									onclick={() => (selectedId = y.id)}>{periodLabel(y.period)}</button
 								>
 								{#if y.derived}<span
-										class="ml-1 rounded bg-surface-2 px-1.5 py-0.5 text-xs font-normal whitespace-nowrap text-muted"
+										class="ml-1 rounded-[2px] bg-surface-2 px-1.5 py-0.5 text-xs font-normal whitespace-nowrap text-muted"
 										title={derivedLabel(y.derived)}>합산</span
 									>{:else if y.id.startsWith('sample-')}<span
 										class="ml-1 text-xs font-normal whitespace-nowrap text-muted">샘플</span
@@ -860,13 +868,13 @@
 					min={0}
 					help="영업이익 = {won(selected.inputs.revenue - selected.inputs.operatingCost)}"
 				/>
-				<div class="rounded-lg border border-line bg-surface-2 p-4">
+				<div class="rounded-[2px] border border-line bg-surface-2 p-4">
 					<div class="mb-3 flex items-center justify-between gap-3">
 						<h3 class="text-sm font-semibold text-ink-2">총 임직원 수</h3>
 						<label class="flex items-center gap-2 text-sm text-ink-2">
 							<input
 								type="checkbox"
-								class="rounded border-line-2 text-brand focus:ring-brand/30"
+								class="rounded-[2px] border-line-2 text-brand focus:ring-brand/30"
 								checked={!!selected.headcountBreakdown}
 								onchange={toggleHeadcountBreakdown}
 							/>
@@ -915,13 +923,13 @@
 					{/if}
 				</div>
 
-				<div class="rounded-lg border border-line bg-surface-2 p-4">
+				<div class="rounded-[2px] border border-line bg-surface-2 p-4">
 					<div class="mb-3 flex items-center justify-between gap-3">
 						<h3 class="text-sm font-semibold text-ink-2">총 인건비</h3>
 						<label class="flex items-center gap-2 text-sm text-ink-2">
 							<input
 								type="checkbox"
-								class="rounded border-line-2 text-brand focus:ring-brand/30"
+								class="rounded-[2px] border-line-2 text-brand focus:ring-brand/30"
 								checked={!!selected.breakdown}
 								onchange={toggleBreakdown}
 							/>
@@ -1002,7 +1010,7 @@
 
 				{#if mismatch.length}
 					<div
-						class="rounded-md border border-status-warning/40 bg-status-warning-bg px-4 py-3 text-sm text-status-warning-ink"
+						class="rounded-[2px] border border-status-warning/40 bg-status-warning-bg px-4 py-3 text-sm text-status-warning-ink"
 					>
 						<p class="font-semibold">하위 기간 합산과 다릅니다 — 직접 입력한 값을 씁니다</p>
 						<ul class="mt-1 space-y-0.5">
@@ -1023,7 +1031,7 @@
 				{/if}
 				{#if errors.length}
 					<ul
-						class="space-y-1 rounded-md border border-status-critical/40 bg-status-critical-bg px-4 py-3 text-sm text-status-critical-ink"
+						class="space-y-1 rounded-[2px] border border-status-critical/40 bg-status-critical-bg px-4 py-3 text-sm text-status-critical-ink"
 					>
 						{#each errors as e (e)}<li>{e}</li>{/each}
 					</ul>

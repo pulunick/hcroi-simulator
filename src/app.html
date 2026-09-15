@@ -3,7 +3,27 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="color-scheme" content="light" />
+		<meta name="color-scheme" content="light dark" />
+		<!--
+			화면 테마를 첫 렌더 전에 확정한다 (라이트 → 다크 깜빡임 방지).
+			작업공간 본문(hcroi:workspace:v1)은 큰 JSON 이라 여기서 파싱하지 않고,
+			테마만 담은 작은 키를 따로 읽는다. 'system' 이거나 값이 없으면 속성을 두지 않고
+			prefers-color-scheme 에 맡긴다.
+		-->
+		<script>
+			try {
+				var t = localStorage.getItem('hcroi:theme');
+				if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
+			} catch (e) {
+				/* 프라이빗 모드 등 저장소 접근 불가 — 기기 설정을 따른다 */
+			}
+		</script>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			rel="stylesheet"
+			href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap"
+		/>
 		<link
 			rel="stylesheet"
 			as="style"

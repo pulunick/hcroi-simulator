@@ -2,56 +2,244 @@
 @plugin '@tailwindcss/forms';
 
 /*
- * 디자인 토큰 — 사내 HR 분석 도구. 라이트 단일 테마.
- * 차트 색은 dataviz 검증 팔레트(범주형 슬롯 1~3, 상태 4색)를 그대로 사용한다.
+ * 디자인 토큰 — 공개판(Headroom) 브랜드. 종이색 + 먹색 + 주홍 1색, 다크모드 지원.
+ *
+ * 구조가 두 겹인 이유: Tailwind v4 의 `@theme` 값은 빌드 시점에 고정되므로 런타임 전환이 안 된다.
+ *   1) `:root` / `:root[data-theme='dark']` / `prefers-color-scheme` 에 **원시 팔레트**(--paper, --ink …)를 정의
+ *   2) `@theme inline` 이 Tailwind 토큰 이름(--color-page …)을 그 원시 변수에 **참조로** 연결 (inline 이라야 참조가 산다)
+ *   3) 인라인 SVG 차트가 `var(--color-…)` 를 직접 쓰므로 같은 이름의 별칭을 `:root` 에도 둔다
+ *      (Tailwind 는 쓰이지 않는 테마 변수를 내보내지 않으므로 별칭이 없으면 차트 색이 비어 버린다)
+ *
+ * 차트 범주색(--color-series-1..4)과 등급 상태색(--color-status-*)의 **색상 값은 두 테마에서 같다**(brain §6·§12).
+ * 다크에서 바뀌는 것은 그 색을 얹는 배경(-bg)과, 배경 위 글자로 쓰이는 -ink 명도뿐이다.
  */
-@theme {
-	--font-sans:
-		'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto,
-		'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
 
-	/* 표면·잉크 */
-	--color-page: #f5f6f8;
-	--color-surface: #ffffff;
-	--color-surface-2: #f9fafb;
-	--color-ink: #111318;
-	--color-ink-2: #4b5160;
-	--color-muted: #7b8294;
-	--color-line: #e3e6ec;
-	--color-line-2: #d3d7df;
+/* ───────────────────────── 1) 원시 팔레트 — 라이트(기본) ───────────────────────── */
+:root {
+	color-scheme: light;
 
-	/* 브랜드/액션 (= 범주형 슬롯 1 블루) */
-	--color-brand: #2a78d6;
-	--color-brand-hover: #256abf;
-	--color-brand-tint: #eaf2fc;
-	--color-brand-ink: #1c5cab;
+	/* 표면 */
+	--paper: #f7f5f0; /* 바탕(종이색) */
+	--panel: #efece5; /* 패널·연한 채움 */
+	--surface: #fbfaf7; /* 카드 — 종이보다 살짝 밝게 */
 
-	/* 차트 범주형 (Baseline / A / B / 예비) — 고정 순서, 순환 금지 */
-	--color-series-1: #2a78d6;
-	--color-series-2: #eb6834;
-	--color-series-3: #1baf7a;
-	--color-series-4: #eda100;
+	/* 잉크 */
+	--ink: #1a1917;
+	--ink-2: #4a4741;
+	--muted: #7d786f;
 
-	/* 상태 (등급) — 아이콘·라벨과 항상 함께 사용 */
-	--color-status-good: #0ca30c;
-	--color-status-good-ink: #006300;
-	--color-status-good-bg: #e6f4e6;
-	--color-status-warning: #fab219;
-	--color-status-warning-ink: #7a5200;
-	--color-status-warning-bg: #fdf3dc;
-	--color-status-serious: #ec835a;
-	--color-status-serious-ink: #8f3a17;
-	--color-status-serious-bg: #fdebe3;
-	--color-status-critical: #d03b3b;
-	--color-status-critical-ink: #a32424;
-	--color-status-critical-bg: #fbe7e7;
+	/* 선 */
+	--line: #d9d4c9;
+	--line-2: #c8c2b4;
+
+	/* 강조 — 주홍 */
+	--accent: #c24a2c;
+	--accent-hover: #a23a20;
+	--accent-tint: #f3e3dd;
+	--accent-ink: #8f3a17;
+	/* 강조 배경 위 글자색 (버튼 라벨) — 다크에서도 종이색을 쓴다 */
+	--on-accent: #f7f5f0;
 
 	/* 차트 크롬 */
-	--color-grid: #e6e5df;
-	--color-axis: #c3c2b7;
+	--grid: #e2ddd1;
+	--axis: #bdb6a7;
 
-	--radius-card: 14px;
-	--shadow-card: 0 1px 2px rgba(17, 19, 24, 0.04), 0 4px 16px rgba(17, 19, 24, 0.04);
+	/* 차트 범주형 (Baseline / A / B / 예비) — 고정 순서, 순환 금지. 두 테마 공통 */
+	--series-1: #2a78d6;
+	--series-2: #eb6834;
+	--series-3: #1baf7a;
+	--series-4: #eda100;
+
+	/* 상태(등급) — 핵심 색상은 두 테마 공통 */
+	--status-good: #0ca30c;
+	--status-warning: #fab219;
+	--status-serious: #ec835a;
+	--status-critical: #d03b3b;
+	/* 배경·글자 변형만 테마를 탄다 */
+	--status-good-ink: #006300;
+	--status-good-bg: #e6f4e6;
+	--status-warning-ink: #7a5200;
+	--status-warning-bg: #fdf3dc;
+	--status-serious-ink: #8f3a17;
+	--status-serious-bg: #fdebe3;
+	--status-critical-ink: #a32424;
+	--status-critical-bg: #fbe7e7;
+
+	/* 위험(danger) 버튼 전용 배경 — 배지가 쓰는 --status-critical(원색, 두 테마 공통 유지)과 달리
+	   버튼 배경은 다크에서 밝기를 올려야 글자 대비 4.5:1 을 채운다. 라이트는 배지와 같은 값. */
+	--danger-btn-bg: var(--status-critical);
+	--danger-btn-bg-hover: var(--status-critical-ink);
+}
+
+/* 다크 팔레트 (강제 고정) */
+:root[data-theme='dark'] {
+	color-scheme: dark;
+
+	--paper: #1a1917;
+	--panel: #242220;
+	--surface: #211f1d;
+
+	--ink: #f0ece4;
+	--ink-2: #b8b2a6;
+	--muted: #8a847a;
+
+	--line: #3a3733;
+	--line-2: #4a4641;
+
+	--accent: #d9603f;
+	--accent-hover: #e4795a;
+	--accent-tint: #3a2620;
+	--accent-ink: #eb9376;
+	/* 강조 배경 위 글자색(버튼 라벨) — 다크 종이색 위 밝은 주홍은 옅은 글자와 대비가 3.4:1 밖에 안 나온다.
+	   먹색으로 바꾸면 4.5:1 이상(아래 보고 참조) */
+	--on-accent: #1a1917;
+
+	--grid: #302d29;
+	--axis: #57524b;
+
+	/* 상태 — 색상(hue)은 그대로, 배경만 어둡게 / 글자만 밝게 */
+	--status-good-ink: #6fd06f;
+	--status-good-bg: #1e2c1e;
+	--status-warning-ink: #e8bd5c;
+	--status-warning-bg: #2e2618;
+	--status-serious-ink: #f0a07a;
+	--status-serious-bg: #32211a;
+	--status-critical-ink: #ef7b7b;
+	--status-critical-bg: #331d1d;
+
+	/* 위험 버튼 전용 배경 — 배지 원색(#d03b3b, 공통)은 먹색 글자와 4.5:1 을 못 채워 버튼만 밝힌다 */
+	--danger-btn-bg: #d85c5c;
+	--danger-btn-bg-hover: #de7575;
+}
+
+/* 기기 설정 따라감 (명시적으로 '밝게'를 고른 경우만 제외) */
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) {
+		color-scheme: dark;
+
+		--paper: #1a1917;
+		--panel: #242220;
+		--surface: #211f1d;
+
+		--ink: #f0ece4;
+		--ink-2: #b8b2a6;
+		--muted: #8a847a;
+
+		--line: #3a3733;
+		--line-2: #4a4641;
+
+		--accent: #d9603f;
+		--accent-hover: #e4795a;
+		--accent-tint: #3a2620;
+		--accent-ink: #eb9376;
+		--on-accent: #1a1917;
+
+		--grid: #302d29;
+		--axis: #57524b;
+
+		--status-good-ink: #6fd06f;
+		--status-good-bg: #1e2c1e;
+		--status-warning-ink: #e8bd5c;
+		--status-warning-bg: #2e2618;
+		--status-serious-ink: #f0a07a;
+		--status-serious-bg: #32211a;
+		--status-critical-ink: #ef7b7b;
+		--status-critical-bg: #331d1d;
+
+		--danger-btn-bg: #d85c5c;
+		--danger-btn-bg-hover: #de7575;
+	}
+}
+
+/* ─────────────── 2) Tailwind 토큰 ← 원시 팔레트 (inline 이라야 참조가 유지된다) ─────────────── */
+@theme inline {
+	--font-sans:
+		'IBM Plex Sans KR', 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont,
+		system-ui, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+	--font-mono:
+		'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, 'IBM Plex Sans KR', monospace;
+	--font-display: 'Hahmlet', 'Noto Serif KR', Batang, serif;
+
+	/* 표면·잉크 */
+	--color-page: var(--paper);
+	--color-surface: var(--surface);
+	--color-surface-2: var(--panel);
+	--color-panel: var(--panel);
+	--color-ink: var(--ink);
+	--color-ink-2: var(--ink-2);
+	--color-muted: var(--muted);
+	--color-line: var(--line);
+	--color-line-2: var(--line-2);
+
+	/* 브랜드/액션 */
+	--color-brand: var(--accent);
+	--color-brand-hover: var(--accent-hover);
+	--color-brand-tint: var(--accent-tint);
+	--color-brand-ink: var(--accent-ink);
+	--color-on-brand: var(--on-accent);
+
+	/* 차트 범주형 */
+	--color-series-1: var(--series-1);
+	--color-series-2: var(--series-2);
+	--color-series-3: var(--series-3);
+	--color-series-4: var(--series-4);
+
+	/* 상태 (등급) — 아이콘·라벨과 항상 함께 사용 */
+	--color-status-good: var(--status-good);
+	--color-status-good-ink: var(--status-good-ink);
+	--color-status-good-bg: var(--status-good-bg);
+	--color-status-warning: var(--status-warning);
+	--color-status-warning-ink: var(--status-warning-ink);
+	--color-status-warning-bg: var(--status-warning-bg);
+	--color-status-serious: var(--status-serious);
+	--color-status-serious-ink: var(--status-serious-ink);
+	--color-status-serious-bg: var(--status-serious-bg);
+	--color-status-critical: var(--status-critical);
+	--color-status-critical-ink: var(--status-critical-ink);
+	--color-status-critical-bg: var(--status-critical-bg);
+
+	/* 차트 크롬 */
+	--color-grid: var(--grid);
+	--color-axis: var(--axis);
+
+	--radius-card: 2px;
+	--shadow-card: none;
+}
+
+/* ───────── 3) 인라인 SVG 차트가 직접 쓰는 var(--color-…) 별칭 (Tailwind 출력과 무관하게 보장) ───────── */
+:root {
+	--color-page: var(--paper);
+	--color-surface: var(--surface);
+	--color-surface-2: var(--panel);
+	--color-panel: var(--panel);
+	--color-ink: var(--ink);
+	--color-ink-2: var(--ink-2);
+	--color-muted: var(--muted);
+	--color-line: var(--line);
+	--color-line-2: var(--line-2);
+	--color-brand: var(--accent);
+	--color-brand-hover: var(--accent-hover);
+	--color-brand-tint: var(--accent-tint);
+	--color-brand-ink: var(--accent-ink);
+	--color-on-brand: var(--on-accent);
+	--color-series-1: var(--series-1);
+	--color-series-2: var(--series-2);
+	--color-series-3: var(--series-3);
+	--color-series-4: var(--series-4);
+	--color-status-good: var(--status-good);
+	--color-status-good-ink: var(--status-good-ink);
+	--color-status-good-bg: var(--status-good-bg);
+	--color-status-warning: var(--status-warning);
+	--color-status-warning-ink: var(--status-warning-ink);
+	--color-status-warning-bg: var(--status-warning-bg);
+	--color-status-serious: var(--status-serious);
+	--color-status-serious-ink: var(--status-serious-ink);
+	--color-status-serious-bg: var(--status-serious-bg);
+	--color-status-critical: var(--status-critical);
+	--color-status-critical-ink: var(--status-critical-ink);
+	--color-status-critical-bg: var(--status-critical-bg);
+	--color-grid: var(--grid);
+	--color-axis: var(--axis);
 }
 
 html {
@@ -64,6 +252,14 @@ html {
 body {
 	font-family: var(--font-sans);
 	min-height: 100dvh;
+}
+
+/* 제목은 함렛(명조) — 본문 산스와 대비를 준다 */
+h1,
+h2 {
+	font-family: var(--font-display);
+	font-weight: 600;
+	letter-spacing: -0.01em;
 }
 
 /*
@@ -101,7 +297,7 @@ body {
 
 @utility field-input {
 	width: 100%;
-	border-radius: 0.5rem;
+	border-radius: 2px;
 	border-color: var(--color-line-2);
 	background: var(--color-surface);
 	padding: 0.5rem 0.75rem;
@@ -119,7 +315,7 @@ body {
 	align-items: center;
 	justify-content: center;
 	gap: 0.5rem;
-	border-radius: 0.5rem;
+	border-radius: 2px;
 	padding: 0.5rem 1rem;
 	font-size: 15px;
 	font-weight: 600;
@@ -136,7 +332,7 @@ body {
 }
 @utility btn-primary {
 	background: var(--color-brand);
-	color: #fff;
+	color: var(--color-on-brand);
 	&:hover {
 		background: var(--color-brand-hover);
 	}
@@ -150,10 +346,10 @@ body {
 	}
 }
 @utility btn-danger {
-	background: var(--color-status-critical);
-	color: #fff;
+	background: var(--danger-btn-bg);
+	color: var(--color-on-brand);
 	&:hover {
-		background: var(--color-status-critical-ink);
+		background: var(--danger-btn-bg-hover);
 	}
 }
 @utility btn-ghost {
@@ -179,7 +375,7 @@ input[type='range'].slider::-webkit-slider-thumb {
 	height: 20px;
 	border-radius: 9999px;
 	background: var(--color-brand);
-	border: 3px solid #fff;
+	border: 3px solid var(--color-surface);
 	box-shadow: 0 0 0 1px var(--color-line-2);
 }
 input[type='range'].slider::-moz-range-thumb {
@@ -187,11 +383,13 @@ input[type='range'].slider::-moz-range-thumb {
 	height: 14px;
 	border-radius: 9999px;
 	background: var(--color-brand);
-	border: 3px solid #fff;
+	border: 3px solid var(--color-surface);
 	box-shadow: 0 0 0 1px var(--color-line-2);
 }
 
+/* 수치 표기 — 금액·배수·명 등은 IBM Plex Mono 고정폭 숫자 */
 .tabular {
+	font-family: var(--font-mono);
 	font-variant-numeric: tabular-nums;
 }
 
@@ -202,4 +400,31 @@ table .tabular,
 /* "영업이익 (천원)" 같은 열 머리글도 단위가 잘려 내려가지 않게 한다 */
 table thead th {
 	white-space: nowrap;
+}
+
+/* 가로 스크롤 줄(모바일 헤더)에서 스크롤 막대가 밑줄을 가리지 않게 */
+.no-scrollbar {
+	scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+	display: none;
+}
+
+/* 워드마크 — 다크에서는 밝은 글자 파일로 교체 (CSS 로만 전환, JS 없음) */
+.wordmark-dark {
+	display: none;
+}
+:root[data-theme='dark'] .wordmark-light {
+	display: none;
+}
+:root[data-theme='dark'] .wordmark-dark {
+	display: block;
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) .wordmark-light {
+		display: none;
+	}
+	:root:not([data-theme='light']) .wordmark-dark {
+		display: block;
+	}
 }

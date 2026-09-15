@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { replaceState } from '$app/navigation';
 	import { workspace } from '$lib/state/workspace.svelte';
 	import {
 		computeMetrics,
@@ -47,6 +48,29 @@
 	const hintUnit = $derived(hintAmountUnit(workspace.amountUnit));
 	/** 임직원 수 산정 기준 한 줄 표기 — 인원 관련 입력·지표에 함께 붙인다 */
 	const basisLabel = $derived(headcountBasisLabel(workspace.headcountBasis));
+
+	/**
+	 * 소개 페이지 "가상 회사 샘플 열어 보기" 진입점(`/?start=sample`).
+	 * `workspace.loaded` 가 켜진 뒤(레이아웃 onMount 가 localStorage 를 읽은 뒤) 한 번만 처리한다 —
+	 * 이 페이지의 $effect 는 레이아웃보다 먼저 실행될 수 있어 로드 전 상태(샘플 기본값)만 보일 수 있다.
+	 */
+	let startHandled = false;
+	$effect(() => {
+		if (!workspace.loaded || startHandled) return;
+		startHandled = true;
+		const params = new URLSearchParams(window.location.search);
+		if (params.get('start') !== 'sample') return;
+		if (workspace.records.length === 0) {
+			workspace.resetToSample();
+		} else if (
+			!workspace.isSampleOnly() &&
+			confirm('현재 데이터를 가상 회사 샘플로 바꿀까요? (먼저 설정에서 백업하세요)')
+		) {
+			workspace.resetToSample();
+		}
+		// 처리 후 쿼리를 지워 새로고침 시 반복되지 않게 한다
+		replaceState(resolve('/'), {});
+	});
 
 	let selectedId = $state<string | null>(null);
 	/** 조회 중인 기간 레코드 (연간·반기·분기·월 중 하나, 하위 기간에서 합산된 것 포함) */
@@ -147,8 +171,8 @@
 	<div>
 		<h1 class="text-2xl font-bold text-ink">{pageTitle}</h1>
 		<p class="mt-1 text-[15px] text-ink-2">
-			재무·HR 데이터를 입력하면 인적자본 투자효율 지표가 실시간으로 산출됩니다. 회사 이름은 왼쪽 위
-			로고 옆 연필로 바꿉니다.
+			재무·HR 데이터를 입력하면 인적자본 투자효율 지표가 실시간으로 산출됩니다. 회사 이름은 상단의
+			회사 이름을 눌러 바꿉니다.
 		</p>
 	</div>
 	{#if workspace.records.length}
@@ -190,7 +214,7 @@
 				>
 			</div>
 			{#if rec.derived}
-				<p class="mb-3 rounded-md border border-line bg-surface-2 px-3 py-2 text-sm text-ink-2">
+				<p class="mb-3 rounded-[2px] border border-line bg-surface-2 px-3 py-2 text-sm text-ink-2">
 					<strong class="text-ink">{derivedLabel(rec.derived)}</strong> — 하위 기간에서 계산된
 					값이라 여기서는 고칠 수 없습니다. 개별 기간을 데이터 관리에서 수정하거나,
 					<button type="button" class="font-semibold text-brand-ink underline" onclick={editDerived}
@@ -210,22 +234,22 @@
 					<div class="mb-1.5 flex items-center justify-between">
 						<span class="text-sm font-semibold text-ink-2">비용 입력 방식</span>
 						<div
-							class="inline-flex rounded-md border border-line-2 p-0.5 text-sm"
+							class="inline-flex rounded-[2px] border border-line-2 p-0.5 text-sm"
 							role="group"
 							aria-label="비용 입력 방식"
 						>
 							<button
 								type="button"
-								class="rounded px-2.5 py-0.5 font-medium {costMode === 'cost'
-									? 'bg-brand text-white'
+								class="rounded-[2px] px-2.5 py-0.5 font-medium {costMode === 'cost'
+									? 'bg-brand text-on-brand'
 									: 'text-ink-2'}"
 								aria-pressed={costMode === 'cost'}
 								onclick={() => (costMode = 'cost')}>영업비용</button
 							>
 							<button
 								type="button"
-								class="rounded px-2.5 py-0.5 font-medium {costMode === 'profit'
-									? 'bg-brand text-white'
+								class="rounded-[2px] px-2.5 py-0.5 font-medium {costMode === 'profit'
+									? 'bg-brand text-on-brand'
 									: 'text-ink-2'}"
 								aria-pressed={costMode === 'profit'}
 								onclick={() => (costMode = 'profit')}>영업이익</button
@@ -282,14 +306,14 @@
 			</div>
 			{#if errors.length}
 				<ul
-					class="mt-4 space-y-1 rounded-md border border-status-critical/40 bg-status-critical-bg px-4 py-3 text-sm text-status-critical-ink"
+					class="mt-4 space-y-1 rounded-[2px] border border-status-critical/40 bg-status-critical-bg px-4 py-3 text-sm text-status-critical-ink"
 				>
 					{#each errors as e (e)}<li>{e}</li>{/each}
 				</ul>
 			{/if}
 			{#if mismatch.length}
 				<div
-					class="mt-4 rounded-md border border-status-warning/40 bg-status-warning-bg px-4 py-3 text-sm text-status-warning-ink"
+					class="mt-4 rounded-[2px] border border-status-warning/40 bg-status-warning-bg px-4 py-3 text-sm text-status-warning-ink"
 				>
 					<p class="font-semibold">
 						직접 입력한 값이 하위 기간 합산과 다릅니다 (직접 입력을 씁니다)

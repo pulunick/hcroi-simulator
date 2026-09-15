@@ -248,7 +248,9 @@
 	</div>
 
 	{#if files.length === 0}
-		<p class="rounded-md border border-dashed border-line px-4 py-6 text-center text-sm text-muted">
+		<p
+			class="rounded-[2px] border border-dashed border-line px-4 py-6 text-center text-sm text-muted"
+		>
 			분기마다 결산서 한 부씩 올리세요. 스캔 이미지(글자를 드래그해 복사할 수 없는 PDF)는 읽지
 			못합니다.
 		</p>
@@ -259,7 +261,7 @@
 		{@const built = st.status === 'ready' ? buildOf(st, fields) : null}
 		{@const problems = built ? problemsOf(built) : []}
 		{@const emp = st.scan?.employees[0] ?? null}
-		<article class="mb-4 rounded-lg border border-line bg-surface-2/40 p-4" aria-label={st.name}>
+		<article class="mb-4 rounded-[2px] border border-line bg-surface-2/40 p-4" aria-label={st.name}>
 			<header class="mb-3 flex flex-wrap items-start justify-between gap-3">
 				<div class="min-w-0">
 					<h3 class="truncate font-semibold text-ink">{st.name}</h3>
@@ -278,7 +280,7 @@
 							{/if}
 							· 표 {st.scan.tables.length}개 · 직원 현황 {st.scan.employees.length}개
 							{#if st.remembered}<span
-									class="ml-1 rounded bg-brand/10 px-1.5 py-0.5 text-xs text-brand"
+									class="ml-1 rounded-[2px] bg-brand/10 px-1.5 py-0.5 text-xs text-brand"
 									>이 회사의 저장된 설정 적용</span
 								>{/if}
 						</p>
@@ -328,7 +330,7 @@
 							max="2100"
 						/>
 						<select
-							class="field-input py-1"
+							class="field-input w-auto py-1"
 							value={st.period.type}
 							onchange={(e) =>
 								setPeriodType(st, (e.currentTarget as HTMLSelectElement).value as PeriodType)}
@@ -338,7 +340,7 @@
 							{/each}
 						</select>
 						{#if periodIndexCount(st.period.type) > 1}
-							<select class="field-input py-1" bind:value={st.period.index}>
+							<select class="field-input w-auto py-1" bind:value={st.period.index}>
 								{#each Array.from({ length: periodIndexCount(st.period.type) }, (_, i) => i + 1) as i (i)}
 									<option value={i}>{i}</option>
 								{/each}
@@ -417,7 +419,7 @@
 											<label class="flex items-center gap-2 text-ink">
 												<input
 													type="checkbox"
-													class="rounded border-line-2 text-brand"
+													class="rounded-[2px] border-line-2 text-brand"
 													bind:checked={st.include[key]}
 												/>
 												{FIELD_LABELS[key]}
@@ -499,14 +501,14 @@
 
 				{#if problems.length}
 					<ul
-						class="mt-3 space-y-1 rounded-md border border-status-critical/40 bg-status-critical-bg px-4 py-2 text-sm text-status-critical-ink"
+						class="mt-3 space-y-1 rounded-[2px] border border-status-critical/40 bg-status-critical-bg px-4 py-2 text-sm text-status-critical-ink"
 					>
 						{#each problems as p, i (i)}<li>{p}</li>{/each}
 					</ul>
 				{/if}
 				{#if built && built.warnings.length}
 					<ul
-						class="mt-3 space-y-1 rounded-md border border-status-warning/40 bg-status-warning-bg px-4 py-2 text-sm text-status-warning-ink"
+						class="mt-3 space-y-1 rounded-[2px] border border-status-warning/40 bg-status-warning-bg px-4 py-2 text-sm text-status-warning-ink"
 					>
 						{#each built.warnings as w, i (i)}<li>{w.replace(/\*\*/g, '')}</li>{/each}
 					</ul>

@@ -165,7 +165,7 @@
 		{#if hover !== null}
 			{@const st = stacks[hover]}
 			<div
-				class="pointer-events-none absolute top-2 z-10 min-w-[200px] -translate-x-1/2 rounded-md border border-line bg-surface px-3 py-2 text-sm shadow-md"
+				class="pointer-events-none absolute top-2 z-10 min-w-[200px] -translate-x-1/2 rounded-[2px] border border-line bg-surface px-3 py-2 text-sm"
 				style="left:{tipLeft}px"
 				role="status"
 			>
@@ -174,7 +174,7 @@
 					{#each series as s, si (s.key)}
 						<div class="flex items-center justify-between gap-4">
 							<dt class="flex items-center gap-1.5 text-ink-2">
-								<span class="inline-block h-2.5 w-2.5 rounded-sm" style="background:{s.color}"
+								<span class="inline-block h-2.5 w-2.5 rounded-[2px]" style="background:{s.color}"
 								></span>{s.label}
 							</dt>
 							<dd class="tabular text-ink">{format(values[hover][si])}</dd>

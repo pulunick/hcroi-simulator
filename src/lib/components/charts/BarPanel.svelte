@@ -130,7 +130,7 @@
 		</svg>
 		{#if hovered && hovered.value !== null}
 			<div
-				class="pointer-events-none absolute top-0 left-1/2 z-10 -translate-x-1/2 rounded-md border border-line bg-surface px-3 py-1.5 text-sm shadow-md"
+				class="pointer-events-none absolute top-0 left-1/2 z-10 -translate-x-1/2 rounded-[2px] border border-line bg-surface px-3 py-1.5 text-sm"
 				role="status"
 			>
 				<span class="text-muted">{hovered.label}</span>

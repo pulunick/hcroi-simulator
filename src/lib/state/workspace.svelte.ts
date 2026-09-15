@@ -33,8 +33,36 @@ import { DEFAULT_AMOUNT_UNIT, isAmountUnit, type AmountUnit } from '$lib/hcroi/f
  *   (`rollup.ts`) — 계산 레코드는 저장하지 않는다.
  */
 const STORAGE_KEY = 'hcroi:workspace:v1';
+/** 이 도구가 쓰는 localStorage 키의 공통 앞머리 — 설정 화면의 저장소 사용량 계산용 */
+const STORAGE_PREFIX = 'hcroi:';
 /** 엑셀 가져오기 반영 직전 상태 (되돌리기 1회분) */
 const UNDO_KEY = 'hcroi:workspace:v1:undo';
+/**
+ * 화면 테마만 따로 담는 작은 키.
+ * `app.html` 의 인라인 스크립트가 **첫 렌더 전에** 읽어야 하는데(밝게→어둡게 깜빡임 방지),
+ * 작업공간 본문은 레코드가 전부 든 큰 JSON 이라 그 자리에서 파싱하기에 무겁고 손상 시 예외 위험도 있다.
+ * 그래서 값 하나짜리 키를 따로 둔다 — 저장은 `save()` 에서 본문과 함께 이뤄지므로 둘은 항상 같은 값이다.
+ */
+const THEME_KEY = 'hcroi:theme';
+
+/** 화면 테마 — 기본은 기기 설정 따라감 */
+export type ThemePref = 'system' | 'light' | 'dark';
+const THEME_PREFS: ThemePref[] = ['system', 'light', 'dark'];
+export function isThemePref(v: unknown): v is ThemePref {
+	return typeof v === 'string' && (THEME_PREFS as string[]).includes(v);
+}
+
+/** "방금 · n분 전 · n시간 전 · n일 전" — 헤더의 저장 시각 표기 */
+export function relativeSavedLabel(savedAt: number | null, now: number): string {
+	if (savedAt === null) return '저장 전';
+	const sec = Math.max(0, Math.round((now - savedAt) / 1000));
+	if (sec < 60) return '방금';
+	const min = Math.floor(sec / 60);
+	if (min < 60) return `${min}분 전`;
+	const hour = Math.floor(min / 60);
+	if (hour < 24) return `${hour}시간 전`;
+	return `${Math.floor(hour / 24)}일 전`;
+}
 
 interface Persisted {
 	/** 기간 레코드. 옛 저장값(2026-09-08 이전)은 `years` 키에 `year` 필드만 있는 연간 레코드 — load 에서 이행 */
@@ -53,6 +81,35 @@ interface Persisted {
 	headcountBasis?: HeadcountBasis;
 	/** 결산서 PDF 읽기 설정 (회사명별, 선택) */
 	pdfPrefs?: Record<string, PdfPrefs>;
+	/** 경영진 리포트 머리글의 작성자 이름 (선택) */
+	reportAuthor?: string;
+	/** 경영진 리포트 머리글의 작성자 소속 (선택) */
+	reportOrg?: string;
+	/** 화면 테마 (선택). 없으면 기기 설정 따라감 */
+	theme?: ThemePref;
+	/** 마지막 저장 시각 (epoch ms, 선택). 헤더의 "n분 전" 표기용 */
+	savedAt?: number;
+	/** 마지막으로 백업 파일을 내려받은 시각 (epoch ms, 선택). 설정 화면 표기용 — 백업 파일 자체에는 넣지 않는다 */
+	lastBackupAt?: number;
+}
+
+/**
+ * 이 도구가 localStorage 에 쓰는 모든 키(`hcroi:…`)의 대략적인 바이트 합.
+ * 브라우저 할당량은 UTF-16 문자 수를 기준으로 재므로 (키+값) 길이 × 2 로 센다.
+ */
+export function storageBytes(): number {
+	if (!browser) return 0;
+	try {
+		let bytes = 0;
+		for (let i = 0; i < localStorage.length; i++) {
+			const k = localStorage.key(i);
+			if (!k || !k.startsWith(STORAGE_PREFIX)) continue;
+			bytes += (k.length + (localStorage.getItem(k)?.length ?? 0)) * 2;
+		}
+		return bytes;
+	} catch {
+		return 0;
+	}
 }
 
 export function newId(): string {
@@ -143,6 +200,11 @@ interface Migrated {
 	amountUnit: AmountUnit | null;
 	headcountBasis: HeadcountBasis;
 	pdfPrefs: Record<string, PdfPrefs>;
+	reportAuthor: string;
+	reportOrg: string;
+	theme: ThemePref | null;
+	savedAt: number | null;
+	lastBackupAt: number | null;
 }
 
 /** 저장값(localStorage · JSON 파일 · 되돌리기 스냅샷)을 현재 스키마로 한 번에 옮긴다 — load/importJson 공통 */
@@ -157,7 +219,13 @@ function migratePersisted(p: Persisted): Migrated {
 		orgName: typeof p.orgName === 'string' ? p.orgName : '',
 		amountUnit: isAmountUnit(p.amountUnit) ? p.amountUnit : null,
 		headcountBasis: normalizeBasis(p.headcountBasis),
-		pdfPrefs: normalizePdfPrefs(p.pdfPrefs)
+		pdfPrefs: normalizePdfPrefs(p.pdfPrefs),
+		reportAuthor: typeof p.reportAuthor === 'string' ? p.reportAuthor : '',
+		reportOrg: typeof p.reportOrg === 'string' ? p.reportOrg : '',
+		theme: isThemePref(p.theme) ? p.theme : null,
+		savedAt: typeof p.savedAt === 'number' && Number.isFinite(p.savedAt) ? p.savedAt : null,
+		lastBackupAt:
+			typeof p.lastBackupAt === 'number' && Number.isFinite(p.lastBackupAt) ? p.lastBackupAt : null
 	};
 }
 
@@ -181,19 +249,48 @@ class Workspace {
 	headcountBasis = $state<HeadcountBasis>(structuredClone(DEFAULT_HEADCOUNT_BASIS));
 	/** 결산서 PDF 읽기 설정 — 회사명별(연결/별도 · 3개월/누적 · 인건비 항목). PDF 카드에서 보낼 때 기억된다 */
 	pdfPrefs = $state<Record<string, PdfPrefs>>({});
+	/**
+	 * 경영진 리포트(/report) 머리글에 찍히는 작성자 이름·소속.
+	 * 리포트 화면 위 도구 줄에서 입력하며, 다음에 열 때도 그대로 쓰도록 작업공간에 기억한다(서버 전송 없음).
+	 */
+	reportAuthor = $state('');
+	reportOrg = $state('');
+	/** 화면 테마 — 기기 설정 따라감(기본) · 밝게 · 어둡게. 레이아웃이 <html data-theme> 에 반영한다 */
+	theme = $state<ThemePref>('system');
 	/** localStorage 로드 완료 여부 — 로드 전에는 저장하지 않는다 */
 	loaded = $state(false);
 	/** 되돌릴 수 있는 가져오기 스냅샷이 있는지 */
 	undoAvailable = $state(false);
+	/** 마지막으로 localStorage 에 저장한 시각 (epoch ms). 헤더가 "n분 전" 으로 보여 준다 */
+	savedAt = $state<number | null>(null);
+	/** 마지막 저장 시도가 실패했는지 (용량 초과·프라이빗 모드 등). 헤더가 "저장 전" 대신 경고를 보여 준다 */
+	saveError = $state(false);
+	/**
+	 * 마지막으로 백업 파일(.json)을 내려받은 시각 (epoch ms). 설정 화면이 "n일 전" 으로 보여 준다.
+	 * 백업 파일 자체(`exportJson`)에는 넣지 않는다 — 파일을 다시 불러와도 "이 PC 의 마지막 백업"은 그대로여야 한다.
+	 */
+	lastBackupAt = $state<number | null>(null);
+	/** 상대 시간 표기를 갱신하기 위한 현재 시각 — `startClock()` 이 1분마다 올린다 */
+	private nowTick = $state(Date.now());
+
+	/** 헤더 오른쪽 저장 표기 ("방금" · "3분 전"). 저장 전에는 "저장 전" */
+	savedLabel = $derived(relativeSavedLabel(this.savedAt, this.nowTick));
+
+	/** 상대 시간 표기를 1분마다 갱신한다. 레이아웃의 onMount 에서 호출하고 반환된 함수로 정리한다 */
+	startClock(): () => void {
+		if (!browser) return () => {};
+		const id = setInterval(() => (this.nowTick = Date.now()), 30_000);
+		return () => clearInterval(id);
+	}
 
 	/** 헤더 로고 자리에 보이는 이름 — 회사/조직 이름, 비어 있으면 도구 이름 */
 	get brand(): string {
 		return this.orgName.trim() || 'HCROI 시뮬레이터';
 	}
-	/** 브라우저 탭 제목. 대시보드는 "○○ HCROI 대시보드", 나머지는 "화면 — ○○" */
+	/** 브라우저 탭 제목. 대시보드는 "○○ 대시보드"(탭 메뉴 이름과 통일), 나머지는 "화면 — ○○" */
 	pageTitle(section?: string): string {
 		const org = this.orgName.trim();
-		if (!section) return org ? `${org} HCROI 대시보드` : 'HCROI 대시보드';
+		if (!section) return org ? `${org} 대시보드` : '대시보드';
 		return `${section} — ${this.brand}`;
 	}
 
@@ -271,6 +368,11 @@ class Workspace {
 		this.amountUnit = m.amountUnit ?? this.amountUnit;
 		this.headcountBasis = m.headcountBasis;
 		this.pdfPrefs = m.pdfPrefs;
+		this.reportAuthor = m.reportAuthor;
+		this.reportOrg = m.reportOrg;
+		if (m.theme) this.theme = m.theme;
+		if (m.savedAt !== null) this.savedAt = m.savedAt;
+		if (m.lastBackupAt !== null) this.lastBackupAt = m.lastBackupAt;
 		this.applyHeadcountBasis();
 	}
 
@@ -286,6 +388,13 @@ class Workspace {
 			/* 손상된 저장값은 무시하고 샘플로 시작 */
 		}
 		try {
+			// 테마 전용 키가 최종 기준 — app.html 의 인라인 스크립트가 읽는 값과 화면 상태를 일치시킨다
+			const t = localStorage.getItem(THEME_KEY);
+			if (isThemePref(t)) this.theme = t;
+		} catch {
+			/* 저장소 접근 불가 — 기기 설정 따라감 */
+		}
+		try {
 			this.undoAvailable = localStorage.getItem(UNDO_KEY) !== null;
 		} catch {
 			this.undoAvailable = false;
@@ -295,6 +404,8 @@ class Workspace {
 
 	save() {
 		if (!browser || !this.loaded) return;
+		// savedAt 을 읽지 않고 새 시각을 만들어 쓴다 — 저장 $effect 안에서 자기 자신을 읽으면 루프가 된다
+		const ts = Date.now();
 		const data: Persisted = {
 			records: $state.snapshot(this.records),
 			scenarios: $state.snapshot(this.scenarios),
@@ -302,12 +413,22 @@ class Workspace {
 			orgName: this.orgName,
 			amountUnit: this.amountUnit,
 			headcountBasis: $state.snapshot(this.headcountBasis),
-			pdfPrefs: $state.snapshot(this.pdfPrefs)
+			pdfPrefs: $state.snapshot(this.pdfPrefs),
+			reportAuthor: this.reportAuthor,
+			reportOrg: this.reportOrg,
+			theme: this.theme,
+			savedAt: ts,
+			lastBackupAt: this.lastBackupAt ?? undefined
 		};
 		try {
 			localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+			// 첫 렌더 전에 읽히는 테마 전용 키도 같이 갱신
+			localStorage.setItem(THEME_KEY, this.theme);
+			this.savedAt = ts;
+			this.saveError = false;
 		} catch {
-			/* 저장 실패(용량·프라이빗 모드)는 무시 */
+			// 저장 실패(용량 초과·프라이빗 모드) — 헤더가 "저장 전" 대신 경고를 보여 주도록 표시만 하고 삼키지 않는다
+			this.saveError = true;
 		}
 	}
 
@@ -317,10 +438,76 @@ class Workspace {
 		this.baseId = null;
 	}
 
+	/**
+	 * 레코드가 전부 샘플(id 접두어 `sample-`, `defaults.ts` 참조)이거나 0개면 true.
+	 * 소개 페이지("결산서 PDF 로 시작" · "샘플 열어 보기") 시작 경로가 샘플을 비울지 그대로 둘지 가를 때 쓴다.
+	 * 하나라도 직접 입력한(샘플이 아닌) 레코드가 있으면 false — 사용자 데이터를 함부로 지우지 않는다.
+	 */
+	isSampleOnly(): boolean {
+		return this.records.every((r) => r.id.startsWith('sample-'));
+	}
+
+	/**
+	 * 소개 페이지 "결산서 PDF 로 시작" 진입점 — 샘플이 섞이지 않은 빈 작업공간으로 만든다.
+	 * `wipeAll()`(설정 화면의 "이 PC 의 데이터 지우기")과 달리 샘플로 되돌리지 않고 레코드 0개로 두며,
+	 * 화면 표시 설정(테마·금액 단위·인원 산정 기준)·PDF 읽기 설정·리포트 작성자 정보는 그대로 유지한다.
+	 */
+	startFresh() {
+		this.records = [];
+		this.scenarios = defaultScenarios();
+		this.baseId = null;
+		this.orgName = '';
+		this.saveError = false;
+		if (browser) {
+			try {
+				localStorage.removeItem(UNDO_KEY);
+			} catch {
+				/* 저장소 접근 불가 — undoAvailable 만 내려서 표시라도 맞춘다 */
+			}
+		}
+		this.undoAvailable = false;
+		this.save();
+	}
+
 	clearAll() {
 		this.records = [];
 		this.scenarios = defaultScenarios();
 		this.baseId = null;
+	}
+
+	/**
+	 * 설정 화면의 "이 PC 의 데이터 지우기" — `resetToSample()` 과 달리 레코드·시나리오뿐 아니라
+	 * 회사/조직 이름·리포트 작성자·소속·PDF 읽기 설정·마지막 백업 시각·되돌리기(가져오기 되돌리기) 저장분까지
+	 * 전부 지우고 샘플로 되돌린다. 화면 테마(`hcroi:theme`)는 회사 데이터가 아니라 이 브라우저의 개인 표시
+	 * 설정이라 지우지 않는다(지워도 다음 로드 때 `app.html` 인라인 스크립트가 다시 기기 설정으로 채워 의미가 없다).
+	 */
+	wipeAll() {
+		this.records = sampleRecords();
+		this.scenarios = defaultScenarios();
+		this.baseId = null;
+		this.orgName = '';
+		this.amountUnit = DEFAULT_AMOUNT_UNIT;
+		this.headcountBasis = structuredClone(DEFAULT_HEADCOUNT_BASIS);
+		this.pdfPrefs = {};
+		this.reportAuthor = '';
+		this.reportOrg = '';
+		this.lastBackupAt = null;
+		this.saveError = false;
+		this.undoAvailable = false;
+		if (browser) {
+			try {
+				const toRemove: string[] = [];
+				for (let i = 0; i < localStorage.length; i++) {
+					const k = localStorage.key(i);
+					if (k && k.startsWith(STORAGE_PREFIX) && k !== THEME_KEY) toRemove.push(k);
+				}
+				for (const k of toRemove) localStorage.removeItem(k);
+			} catch {
+				/* 저장소 접근 불가 — 아래 save() 가 새 상태로 다시 시도한다 */
+			}
+		}
+		// 지운 직후 바로 새 상태로 저장해 둔다 (레이아웃의 저장 $effect 를 기다리지 않는다)
+		this.save();
 	}
 
 	/**
@@ -453,6 +640,11 @@ class Workspace {
 		}
 	}
 
+	/** 백업 파일을 내려받은 직후 호출 — 시각을 기록하고 저장 $effect 가 localStorage 에 남긴다 */
+	markBackedUp() {
+		this.lastBackupAt = Date.now();
+	}
+
 	exportJson(): string {
 		const data: Persisted = {
 			records: $state.snapshot(this.records),
@@ -461,7 +653,10 @@ class Workspace {
 			orgName: this.orgName,
 			amountUnit: this.amountUnit,
 			headcountBasis: $state.snapshot(this.headcountBasis),
-			pdfPrefs: $state.snapshot(this.pdfPrefs)
+			pdfPrefs: $state.snapshot(this.pdfPrefs),
+			reportAuthor: this.reportAuthor,
+			reportOrg: this.reportOrg,
+			theme: this.theme
 		};
 		return JSON.stringify(data, null, 2);
 	}
