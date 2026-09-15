@@ -65,5 +65,5 @@ Supabase 연동(로그인·조직), LLM 인사이트 서술, PDF 리포트, 부�
 ## 브랜치 (2026-09-10~)
 
 - **main** = 사내 도구(인사담당자 수정·개선). **`product/commercial`** = **인터넷 공개판**(인사담당자가 바로 써보는 무료 웹 — 2026-09-14 방향 전환, 판매·라이선스는 보류. 이름은 이력 때문에 유지). 규칙은 brain §12, 기획 docs/plans/commercial-product.md §7.5. 전략은 docs/plans/branch-strategy.md
-- 머지는 **main → product** 가 기본. 코어 `src/lib/hcroi/**` 는 main 에서만 고친다. 상용 브랜치 작업 시작 시 `git merge main` 후 test/check. **2026-09-15 역머지 이후 두 브랜치 차이는 `/intro`(+소개 링크)와 헤더 워드마크뿐** — main 은 워드마크 없이 회사 이름이 그 자리. UI 개선은 main 에서 하고 product 로 머지, intro·워드마크만 product 에서
+- 머지는 **main → product** 가 기본. 코어 `src/lib/hcroi/**` 는 main 에서만 고친다. 상용 브랜치 작업 시작 시 `git merge main` 후 test/check. **2026-09-15 역머지 이후 두 브랜치 차이는 `/intro`(+소개 링크)와 헤더 워드마크뿐** — main 은 워드마크 없이 회사 이름이 그 자리. 차이는 파일 삭제가 아니라 `src/lib/site-config.ts` 의 `SITE_ENABLED` 한 줄(main false / product true). UI 개선은 main 에서 하고 product 로 머지
 - 브랜드 자산은 `docs/design/commercial/`(워드마크 `headroom-wordmark*.svg`, Claude Design 아트보드 `*.dc.html` + `canvas.json`). 규칙은 brain §12. **코드 작성은 opus/sonnet 서브에이전트(Agent 툴)에 위임하고 총괄 모델(Fable)은 설계·브리핑·검수·문서만** — 두 번 실패한 것만 직접(2026-09-14 고정). **프론트 리뷰(에러 잡기·QA)는 Codex 플러그인(`codex:rescue`)에 위임**한다

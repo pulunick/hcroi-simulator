@@ -351,3 +351,15 @@
   3. **Vercel 배포**(사용자 대시보드에서 import) → 배포 URL 에서 pdf.js worker 로드·다크·인쇄 재확인. 진입 동선(`/` ↔ `/intro`) 결정: 지금은 `/` = 대시보드, `/intro` 링크 없음
   4. 사용자 몫: Headroom 도메인·상표 확인, 라이트 위험 버튼 대비 4.41:1(기존값) 손볼지
   5. main 에도 넣어야 할 것: branch-strategy·CLAUDE.md 브랜치 절. 코어 밖 보조 함수(`pctChange`·`nextPeriod`·`splitMultiple`)를 코어로 옮길지는 main 에서 판단
+
+### 2026-09-15 — 세션 12 (main): 공개판 UI 역머지 · 사이트 플래그 · PDF 기간 감지
+
+- product/commercial 의 두 커밋(6c6fc26 docs · 25d6633 feat: 브랜드 토큰·다크모드·앱 헤더·`/settings`·`/report`·`/intro`·`state/io.ts`)을 **main 으로 역머지**(충돌 없음, state.md 는 main 것 유지). 사용자 결정: "intro 만 빼면 담당자 쪽에도 반영, 대시보드에서 Headroom 은 빼고 회사 이름이 그 자리".
+- 브랜치 차이는 `src/lib/site-config.ts` `SITE_ENABLED`(main false / product true) 한 줄로 — intro 라우트 404 · 워드마크 대신 회사 이름 · 소개 링크 없음. 파일 삭제 안 함(머지 안전). brain §12 · CLAUDE.md · branch-strategy §1 · decision-log 개정.
+- 코어 변경(main 전용): `src/lib/hcroi/pdf/detectPeriod.ts` — 표지 문구(보고서 종류 + "YYYY.MM.DD ~ YYYY.MM.DD")로 연도·유형·순번 제안, `PdfImport` 미리 채움 + 근거 표시, 못 읽으면 빈 값·사용자 선택 강제. 픽스처 테스트 + 실 PDF 프로브.
+- 역할: 코드는 sonnet/opus 서브에이전트, Fable 총괄(brain §12).
+- QA 세션(다른 Claude, 인사담당자 시점 Playwright)이 20건 보고 → 19건 처리(14번 색 의미는 사용자 판단 보류): 오류 레코드 지표 제외 + 합산 차단 규칙 · `copiedFrom` 칩 · 인원 0 강제 승격 제거 · 연도 +2 · 표 잘림 · 모바일 탭 두 줄 · 행 클릭 스크롤 · 샘플 칩 · `?start=excel` · `PRODUCT_NAME` 플래그 · 오타 · 앱 인쇄 CSS · 콘솔 경고 0 등. 리포트 "삭제된 데이터 출력"의 실제 경로는 `wipeAll()` 샘플 재적재 → 빈 상태로 변경.
+- 코어 `pdf/table.ts` 정규식 오타(`[\s3000]` → `[\s　]`) 수정 + 회귀 테스트, 실 PDF 프로브 전후 동일.
+- **룩 복귀(사용자 결정, 담당자 비교 "기존이 더 전문적")**: 앱 화면·소개 페이지를 `1b9ff99` 디자인 시스템(흰 카드·그림자·14px·파랑·고딕·Pretendard)으로 되돌림 + 다크 팔레트 재정의(page `#0f1115` · surface `#171a21` · brand `#5b9cf0`), 종이·먹·주홍·함렛·Mono 는 앱에서 제거(워드마크 SVG 만 유지). 히어로 재촬영. 설명서 반영.
+- 검수: PowerShell `npm test` 200 passed · check 435 files 0 errors · lint OK · 7화면×3모드 스크린샷 · 콘솔 0.
+- 다음: (1) main 커밋 → QA 세션에 해시 전달(1차 재검증) (2) product/commercial 에서 `git merge main` → `SITE_ENABLED = true` 커밋 → test/check → QA 2차 (3) push 는 지시 시(brain §1 계정 전환) (4) Vercel 배포는 product 브랜치 (5) 보류: QA 14번 증감 색 의미 · `excel/io.ts` `wb.creator` 제품명 · 라이트 `btn-primary` 대비 4.46:1(기존값) · 디자인 캔버스 아트보드는 9/14 이력.
