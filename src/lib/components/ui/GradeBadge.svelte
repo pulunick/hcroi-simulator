@@ -8,28 +8,73 @@
 	}
 	let { grade, size = 'sm' }: Props = $props();
 
-	// 사각 칩(2px 모서리, 1px 테두리) — 우수는 옅은 초록 배경+진한 초록 글자, 보통은 중립 테두리, 위험은 위험색 테두리+글자.
-	// 우수를 예전처럼 bg-status-good(원색)+text-on-brand 로 채우면 라이트 테마에서 3.08:1 밖에 안 나와
-	// (스크래치패드 fix2/contrast.cjs 로 확인, WCAG AA 4.5:1 미달) 다른 화면의 상태 배지와 같은
-	// "옅은 배경(-bg) + 진한 글자(-ink)" 조합으로 바꿨다 — 이 조합은 라이트 6.62:1 · 다크 7.62:1.
-	const styles: Record<HcroiGrade, string> = {
-		excellent: 'border-status-good bg-status-good-bg text-status-good-ink',
-		warning: 'border-line-2 text-ink',
-		critical: 'border-status-critical text-status-critical-ink'
+	const styles: Record<HcroiGrade, { bg: string; ink: string; dot: string }> = {
+		excellent: { bg: 'bg-status-good-bg', ink: 'text-status-good-ink', dot: 'bg-status-good' },
+		warning: {
+			bg: 'bg-status-warning-bg',
+			ink: 'text-status-warning-ink',
+			dot: 'bg-status-warning'
+		},
+		critical: {
+			bg: 'bg-status-critical-bg',
+			ink: 'text-status-critical-ink',
+			dot: 'bg-status-critical'
+		}
 	};
 </script>
 
 {#if grade}
+	{@const s = styles[grade]}
 	<span
-		class="inline-flex items-center justify-center rounded-[2px] border font-bold whitespace-nowrap {styles[
-			grade
-		]} {size === 'lg' ? 'h-7 px-3 text-sm' : 'h-6 px-2.5 text-[13px]'}"
+		class="inline-flex items-center gap-1.5 rounded-full font-semibold {s.bg} {s.ink} {size === 'lg'
+			? 'px-3.5 py-1.5 text-base'
+			: 'px-2.5 py-0.5 text-sm'}"
 	>
-		{GRADE_LABEL[grade]}
+		{#if grade === 'critical'}
+			<svg
+				width="16"
+				height="16"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2.2"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				aria-hidden="true"
+				><path
+					d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"
+				/><path d="M12 9v4M12 17h.01" /></svg
+			>
+		{:else if grade === 'warning'}
+			<svg
+				width="16"
+				height="16"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2.2"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 8v4M12 16h.01" /></svg
+			>
+		{:else}
+			<svg
+				width="16"
+				height="16"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2.2"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				aria-hidden="true"
+				><path d="m12 3 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9Z" /></svg
+			>
+		{/if}
+		<span>{GRADE_LABEL[grade]}</span>
 	</span>
 {:else}
-	<span
-		class="inline-flex h-6 items-center justify-center rounded-[2px] border border-line px-2.5 text-[13px] font-bold whitespace-nowrap text-muted"
+	<span class="inline-flex items-center rounded-full bg-surface-2 px-2.5 py-0.5 text-sm text-muted"
 		>산출 불가</span
 	>
 {/if}

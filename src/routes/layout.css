@@ -2,47 +2,49 @@
 @plugin '@tailwindcss/forms';
 
 /*
- * 디자인 토큰 — 공개판(Headroom) 브랜드. 종이색 + 먹색 + 주홍 1색, 다크모드 지원.
+ * 디자인 토큰 — 사내 HR 분석 도구의 기존 룩(흰 카드·옅은 그림자·둥근 모서리 14px·파랑 강조·고딕).
+ * 2026-09-15 결정: 공개판 브랜드(종이색·먹색·주홍·함렛·Plex Mono·2px)는 앱 화면에서 쓰지 않는다.
+ * 워드마크 SVG 만 브랜드 표식으로 남는다 (SITE_ENABLED=true 일 때 헤더).
  *
- * 구조가 두 겹인 이유: Tailwind v4 의 `@theme` 값은 빌드 시점에 고정되므로 런타임 전환이 안 된다.
+ * 구조가 세 겹인 이유(다크모드): Tailwind v4 의 `@theme` 값은 빌드 시점에 고정되므로 런타임 전환이 안 된다.
  *   1) `:root` / `:root[data-theme='dark']` / `prefers-color-scheme` 에 **원시 팔레트**(--paper, --ink …)를 정의
  *   2) `@theme inline` 이 Tailwind 토큰 이름(--color-page …)을 그 원시 변수에 **참조로** 연결 (inline 이라야 참조가 산다)
  *   3) 인라인 SVG 차트가 `var(--color-…)` 를 직접 쓰므로 같은 이름의 별칭을 `:root` 에도 둔다
  *      (Tailwind 는 쓰이지 않는 테마 변수를 내보내지 않으므로 별칭이 없으면 차트 색이 비어 버린다)
  *
- * 차트 범주색(--color-series-1..4)과 등급 상태색(--color-status-*)의 **색상 값은 두 테마에서 같다**(brain §6·§12).
+ * 차트 범주색(--color-series-1..4)과 등급 상태색의 **핵심 색상은 두 테마에서 같다**(brain §6).
  * 다크에서 바뀌는 것은 그 색을 얹는 배경(-bg)과, 배경 위 글자로 쓰이는 -ink 명도뿐이다.
  */
 
-/* ───────────────────────── 1) 원시 팔레트 — 라이트(기본) ───────────────────────── */
+/* ───────────────────────── 1) 원시 팔레트 — 라이트(기존 룩, 값은 1b9ff99 그대로) ───────────────────────── */
 :root {
 	color-scheme: light;
 
 	/* 표면 */
-	--paper: #f7f5f0; /* 바탕(종이색) */
-	--panel: #efece5; /* 패널·연한 채움 */
-	--surface: #fbfaf7; /* 카드 — 종이보다 살짝 밝게 */
+	--paper: #f5f6f8; /* 바탕 */
+	--surface: #ffffff; /* 흰 카드 */
+	--panel: #f9fafb; /* 연한 채움(표 머리·보조 블록) */
 
 	/* 잉크 */
-	--ink: #1a1917;
-	--ink-2: #4a4741;
-	--muted: #7d786f;
+	--ink: #111318;
+	--ink-2: #4b5160;
+	--muted: #7b8294;
 
 	/* 선 */
-	--line: #d9d4c9;
-	--line-2: #c8c2b4;
+	--line: #e3e6ec;
+	--line-2: #d3d7df;
 
-	/* 강조 — 주홍 */
-	--accent: #c24a2c;
-	--accent-hover: #a23a20;
-	--accent-tint: #f3e3dd;
-	--accent-ink: #8f3a17;
-	/* 강조 배경 위 글자색 (버튼 라벨) — 다크에서도 종이색을 쓴다 */
-	--on-accent: #f7f5f0;
+	/* 브랜드/액션 — 파랑 (= 범주형 슬롯 1) */
+	--accent: #2a78d6;
+	--accent-hover: #256abf;
+	--accent-tint: #eaf2fc;
+	--accent-ink: #1c5cab;
+	/* 강조 배경 위 글자색 (버튼 라벨) */
+	--on-accent: #ffffff;
 
 	/* 차트 크롬 */
-	--grid: #e2ddd1;
-	--axis: #bdb6a7;
+	--grid: #e6e5df;
+	--axis: #c3c2b7;
 
 	/* 차트 범주형 (Baseline / A / B / 예비) — 고정 순서, 순환 금지. 두 테마 공통 */
 	--series-1: #2a78d6;
@@ -65,51 +67,51 @@
 	--status-critical-ink: #a32424;
 	--status-critical-bg: #fbe7e7;
 
-	/* 위험(danger) 버튼 전용 배경 — 배지가 쓰는 --status-critical(원색, 두 테마 공통 유지)과 달리
-	   버튼 배경은 다크에서 밝기를 올려야 글자 대비 4.5:1 을 채운다. 라이트는 배지와 같은 값. */
+	/* 위험(danger) 버튼 — 배지가 쓰는 --status-critical(원색, 두 테마 공통)과 달리 버튼은
+	   배경 위 글자 대비를 따로 맞춘다. 흰 글자 기준 #d03b3b 4.82:1 (두 테마 동일). */
 	--danger-btn-bg: var(--status-critical);
 	--danger-btn-bg-hover: var(--status-critical-ink);
+	--danger-btn-ink: #ffffff;
 }
 
-/* 다크 팔레트 (강제 고정) */
+/* 다크 팔레트 — 기존 파랑 팔레트의 다크 변형(회청색 계열). 강제 고정 */
 :root[data-theme='dark'] {
 	color-scheme: dark;
 
-	--paper: #1a1917;
-	--panel: #242220;
-	--surface: #211f1d;
+	--paper: #0f1115;
+	--surface: #171a21;
+	--panel: #1d2129;
 
-	--ink: #f0ece4;
-	--ink-2: #b8b2a6;
-	--muted: #8a847a;
+	--ink: #e8eaf0;
+	--ink-2: #b6bcc8;
+	--muted: #8b93a1;
 
-	--line: #3a3733;
-	--line-2: #4a4641;
+	--line: #2a2f3a;
+	--line-2: #3a4150;
 
-	--accent: #d9603f;
-	--accent-hover: #e4795a;
-	--accent-tint: #3a2620;
-	--accent-ink: #eb9376;
-	/* 강조 배경 위 글자색(버튼 라벨) — 다크 종이색 위 밝은 주홍은 옅은 글자와 대비가 3.4:1 밖에 안 나온다.
-	   먹색으로 바꾸면 4.5:1 이상(아래 보고 참조) */
-	--on-accent: #1a1917;
+	--accent: #5b9cf0;
+	--accent-hover: #7fb2f5;
+	--accent-tint: #1a2a44;
+	--accent-ink: #9cc4f7;
+	/* 밝은 파랑 위의 흰 글자는 2.1:1 밖에 안 나온다 — 바탕색(먹)을 글자로 쓰면 6.77:1 */
+	--on-accent: #0f1115;
 
-	--grid: #302d29;
-	--axis: #57524b;
+	--grid: #262b34;
+	--axis: #4a515e;
 
 	/* 상태 — 색상(hue)은 그대로, 배경만 어둡게 / 글자만 밝게 */
 	--status-good-ink: #6fd06f;
-	--status-good-bg: #1e2c1e;
+	--status-good-bg: #172a1d;
 	--status-warning-ink: #e8bd5c;
-	--status-warning-bg: #2e2618;
+	--status-warning-bg: #2a2416;
 	--status-serious-ink: #f0a07a;
-	--status-serious-bg: #32211a;
+	--status-serious-bg: #2e1f1a;
 	--status-critical-ink: #ef7b7b;
-	--status-critical-bg: #331d1d;
+	--status-critical-bg: #2f1d1e;
 
-	/* 위험 버튼 전용 배경 — 배지 원색(#d03b3b, 공통)은 먹색 글자와 4.5:1 을 못 채워 버튼만 밝힌다 */
-	--danger-btn-bg: #d85c5c;
-	--danger-btn-bg-hover: #de7575;
+	--danger-btn-bg: var(--status-critical);
+	--danger-btn-bg-hover: #a32424;
+	--danger-btn-ink: #ffffff;
 }
 
 /* 기기 설정 따라감 (명시적으로 '밝게'를 고른 경우만 제외) */
@@ -117,48 +119,53 @@
 	:root:not([data-theme='light']) {
 		color-scheme: dark;
 
-		--paper: #1a1917;
-		--panel: #242220;
-		--surface: #211f1d;
+		--paper: #0f1115;
+		--surface: #171a21;
+		--panel: #1d2129;
 
-		--ink: #f0ece4;
-		--ink-2: #b8b2a6;
-		--muted: #8a847a;
+		--ink: #e8eaf0;
+		--ink-2: #b6bcc8;
+		--muted: #8b93a1;
 
-		--line: #3a3733;
-		--line-2: #4a4641;
+		--line: #2a2f3a;
+		--line-2: #3a4150;
 
-		--accent: #d9603f;
-		--accent-hover: #e4795a;
-		--accent-tint: #3a2620;
-		--accent-ink: #eb9376;
-		--on-accent: #1a1917;
+		--accent: #5b9cf0;
+		--accent-hover: #7fb2f5;
+		--accent-tint: #1a2a44;
+		--accent-ink: #9cc4f7;
+		--on-accent: #0f1115;
 
-		--grid: #302d29;
-		--axis: #57524b;
+		--grid: #262b34;
+		--axis: #4a515e;
 
 		--status-good-ink: #6fd06f;
-		--status-good-bg: #1e2c1e;
+		--status-good-bg: #172a1d;
 		--status-warning-ink: #e8bd5c;
-		--status-warning-bg: #2e2618;
+		--status-warning-bg: #2a2416;
 		--status-serious-ink: #f0a07a;
-		--status-serious-bg: #32211a;
+		--status-serious-bg: #2e1f1a;
 		--status-critical-ink: #ef7b7b;
-		--status-critical-bg: #331d1d;
+		--status-critical-bg: #2f1d1e;
 
-		--danger-btn-bg: #d85c5c;
-		--danger-btn-bg-hover: #de7575;
+		--danger-btn-bg: var(--status-critical);
+		--danger-btn-bg-hover: #a32424;
+		--danger-btn-ink: #ffffff;
 	}
 }
 
 /* ─────────────── 2) Tailwind 토큰 ← 원시 팔레트 (inline 이라야 참조가 유지된다) ─────────────── */
 @theme inline {
 	--font-sans:
-		'IBM Plex Sans KR', 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont,
-		system-ui, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
-	--font-mono:
-		'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, 'IBM Plex Sans KR', monospace;
-	--font-display: 'Hahmlet', 'Noto Serif KR', Batang, serif;
+		'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto,
+		'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+	/* 제목도 본문과 같은 고딕 — 명조(함렛)는 2026-09-15 에 앱에서 제거했다.
+	   토큰 이름은 리포트 종이·푸터가 참조하고 있어 남겨 둔다. */
+	--font-display:
+		'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto,
+		'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+	/* 산식 블록·리포트 숫자에만 쓰는 시스템 고정폭 (브랜드 서체 아님) */
+	--font-mono: ui-monospace, 'Cascadia Mono', Consolas, 'Liberation Mono', Menlo, monospace;
 
 	/* 표면·잉크 */
 	--color-page: var(--paper);
@@ -202,8 +209,8 @@
 	--color-grid: var(--grid);
 	--color-axis: var(--axis);
 
-	--radius-card: 2px;
-	--shadow-card: none;
+	--radius-card: 14px;
+	--shadow-card: 0 1px 2px rgba(17, 19, 24, 0.04), 0 4px 16px rgba(17, 19, 24, 0.04);
 }
 
 /* ───────── 3) 인라인 SVG 차트가 직접 쓰는 var(--color-…) 별칭 (Tailwind 출력과 무관하게 보장) ───────── */
@@ -254,11 +261,10 @@ body {
 	min-height: 100dvh;
 }
 
-/* 제목은 함렛(명조) — 본문 산스와 대비를 준다 */
+/* 제목도 본문과 같은 고딕 — 굵기로만 위계를 준다 */
 h1,
 h2 {
-	font-family: var(--font-display);
-	font-weight: 600;
+	font-family: var(--font-sans);
 	letter-spacing: -0.01em;
 }
 
@@ -297,7 +303,7 @@ h2 {
 
 @utility field-input {
 	width: 100%;
-	border-radius: 2px;
+	border-radius: 0.5rem;
 	border-color: var(--color-line-2);
 	background: var(--color-surface);
 	padding: 0.5rem 0.75rem;
@@ -315,7 +321,7 @@ h2 {
 	align-items: center;
 	justify-content: center;
 	gap: 0.5rem;
-	border-radius: 2px;
+	border-radius: 0.5rem;
 	padding: 0.5rem 1rem;
 	font-size: 15px;
 	font-weight: 600;
@@ -347,7 +353,7 @@ h2 {
 }
 @utility btn-danger {
 	background: var(--danger-btn-bg);
-	color: var(--color-on-brand);
+	color: var(--danger-btn-ink);
 	&:hover {
 		background: var(--danger-btn-bg-hover);
 	}
@@ -387,9 +393,8 @@ input[type='range'].slider::-moz-range-thumb {
 	box-shadow: 0 0 0 1px var(--color-line-2);
 }
 
-/* 수치 표기 — 금액·배수·명 등은 IBM Plex Mono 고정폭 숫자 */
+/* 수치 표기 — 서체는 본문과 같은 고딕, 자릿수만 고정폭(고정폭 서체 아님) */
 .tabular {
-	font-family: var(--font-mono);
 	font-variant-numeric: tabular-nums;
 }
 
@@ -402,7 +407,7 @@ table thead th {
 	white-space: nowrap;
 }
 
-/* 가로 스크롤 줄(모바일 헤더)에서 스크롤 막대가 밑줄을 가리지 않게 */
+/* 가로 스크롤 줄에서 스크롤 막대가 내용을 가리지 않게 */
 .no-scrollbar {
 	scrollbar-width: none;
 }
@@ -426,5 +431,36 @@ table thead th {
 	}
 	:root:not([data-theme='light']) .wordmark-dark {
 		display: block;
+	}
+}
+
+/*
+ * 인쇄 (Ctrl+P) — 앱 화면은 "보고서"가 아니라 도구다. 헤더·탭·버튼·푸터를 빼고 카드가 쪽 경계에서
+ * 쪼개지지 않게만 한다 (그대로 두면 대시보드가 A4 3장 + 버튼까지 찍혀 나온다).
+ *
+ * `/report` 는 자기 인쇄 규칙(이름 있는 `@page report`, 종이 안의 header.head·footer.foot)을 따로 갖고
+ * 있고 그때만 <html> 에 `report-print` 가 붙는다 — 그래서 여기 규칙은 전부 그 클래스가 **없을 때만** 건다.
+ */
+@media print {
+	html:not(.report-print) header,
+	html:not(.report-print) nav,
+	html:not(.report-print) footer,
+	html:not(.report-print) .btn,
+	html:not(.report-print) button {
+		display: none !important;
+	}
+	html:not(.report-print) main {
+		max-width: none !important;
+		padding: 0 !important;
+	}
+	/* 카드·표·차트가 쪽 경계에서 반으로 잘리지 않게 */
+	html:not(.report-print) .card,
+	html:not(.report-print) section,
+	html:not(.report-print) table {
+		break-inside: avoid;
+	}
+	html:not(.report-print),
+	html:not(.report-print) body {
+		background: #ffffff !important;
 	}
 }

@@ -29,7 +29,7 @@
 		{#if sub}<div class="text-sm text-muted">{sub}</div>{/if}
 	</div>
 	{#if delta}
-		<div class="flex items-center gap-1 text-sm font-medium {deltaClass}">
+		<div class="flex items-start gap-1 text-sm font-medium break-keep {deltaClass}">
 			{#if delta.direction === 'up'}
 				<svg
 					width="14"
@@ -40,6 +40,7 @@
 					stroke-width="2.5"
 					stroke-linecap="round"
 					stroke-linejoin="round"
+					class="mt-1 shrink-0"
 					aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" /></svg
 				>
 			{:else if delta.direction === 'down'}
@@ -52,6 +53,7 @@
 					stroke-width="2.5"
 					stroke-linecap="round"
 					stroke-linejoin="round"
+					class="mt-1 shrink-0"
 					aria-hidden="true"><path d="M12 5v14M5 12l7 7 7-7" /></svg
 				>
 			{:else}
@@ -63,10 +65,11 @@
 					stroke="currentColor"
 					stroke-width="2.5"
 					stroke-linecap="round"
+					class="mt-1 shrink-0"
 					aria-hidden="true"><path d="M5 12h14" /></svg
 				>
 			{/if}
-			<span>{delta.text}</span>
+			<span class="break-keep">{delta.text}</span>
 		</div>
 	{/if}
 	{#if children}{@render children()}{/if}

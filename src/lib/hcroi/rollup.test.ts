@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { derivedId, rollup, rollupMismatch } from './rollup';
+﻿import { describe, expect, it } from 'vitest';
+import { blockedRollups, derivedId, rollup, rollupMismatch } from './rollup';
 import { periodKey } from './period';
 import {
 	DEFAULT_HEADCOUNT_BASIS,
@@ -144,5 +144,49 @@ describe('rollup — 차감 (사업보고서의 4분기)', () => {
 		const small = rec(Y(2025), 300, 30, 166, 32); // 300 − 330 < 0
 		expect(keys(rollup([small, ...q123], basis))).not.toContain('2025-Q4');
 		expect(keys(rollup([y, ...q123.slice(0, 2)], basis))).not.toContain('2025-Q4');
+	});
+});
+
+describe('rollup — 검증 오류 기간은 "빠진 기간"과 같게 본다 (2026-09-15)', () => {
+	// 2분기만 총 인건비 > 영업비용 (validateInputs 오류) — 매출 110, 영업비용 98, 인건비 500
+	const bad = rec(Q(2025, 2), 110, 12, 500, 31);
+	const others = [
+		rec(Q(2025, 1), 100, 10, 40, 30),
+		rec(Q(2025, 3), 120, 14, 42, 33),
+		rec(Q(2025, 4), 130, 16, 43, 34)
+	];
+
+	it('오류 분기가 든 상위 기간(반기·연간)은 합산하지 않는다 — 오류 분기 자체는 목록에 남는다', () => {
+		const out = rollup([bad, ...others], basis);
+		expect(keys(out)).toContain('2025-Q2');
+		expect(keys(out)).not.toContain('2025-H1');
+		expect(keys(out)).not.toContain('2025-Y1');
+		// 오류가 섞이지 않은 하반기는 그대로 만들어진다
+		expect(keys(out)).toContain('2025-H2');
+	});
+
+	it('오류를 고치면 상위 기간이 다시 생긴다', () => {
+		const fixed = rec(Q(2025, 2), 110, 12, 41, 31);
+		const out = rollup([fixed, ...others], basis);
+		expect(keys(out)).toContain('2025-H1');
+		expect(keys(out)).toContain('2025-Y1');
+		expect(find(out, '2025-Y1').inputs.hcCost).toBe(166);
+	});
+
+	it('오류 하위 기간이 있으면 차감(연간 − 나머지)도 하지 않는다', () => {
+		const y = rec(Y(2025), 460, 52, 166, 32);
+		const badQ1 = rec(Q(2025, 1), 100, 10, 400, 30);
+		const out = rollup(
+			[y, badQ1, rec(Q(2025, 2), 110, 12, 41, 31), rec(Q(2025, 3), 120, 14, 42, 33)],
+			basis
+		);
+		expect(keys(out)).not.toContain('2025-Q4');
+	});
+
+	it('blockedRollups 가 만들지 못한 상위 기간과 원인 기간을 알려 준다', () => {
+		const blocked = blockedRollups([bad, ...others], basis);
+		expect(blocked.map((b) => periodKey(b.period))).toEqual(['2025-H1', '2025-Y1']);
+		expect(blocked[0].blockedBy.map(periodKey)).toEqual(['2025-Q2']);
+		expect(blockedRollups([rec(Q(2025, 2), 110, 12, 41, 31), ...others], basis)).toEqual([]);
 	});
 });

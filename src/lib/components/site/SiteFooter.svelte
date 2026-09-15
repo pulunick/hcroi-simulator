@@ -5,17 +5,17 @@
 	const guide = resolve('/guide');
 </script>
 
-<footer class="bg-page">
+<footer class="border-t border-line bg-surface">
 	<div class="mx-auto max-w-[1200px] px-5 sm:px-6">
 		<div
-			class="flex flex-col gap-3 border-t border-ink pt-6 pb-10 text-[13px] text-muted sm:flex-row sm:items-baseline sm:justify-between sm:pt-8 sm:pb-12"
+			class="flex flex-col gap-3 pt-6 pb-10 text-[13px] text-muted sm:flex-row sm:items-baseline sm:justify-between sm:pt-8 sm:pb-12"
 		>
 			<div class="flex items-baseline gap-3 sm:gap-4">
-				<span class="font-display text-[15px] font-semibold text-ink">헤드룸</span>
+				<span class="text-[15px] font-bold text-ink">헤드룸</span>
 				<span>무료 · 개인 프로젝트</span>
 			</div>
 			<div class="flex flex-wrap gap-4 sm:gap-5">
-				<a href={guide} class="hover:text-brand">사용 설명서</a>
+				<a href={guide} class="hover:text-brand">가이드</a>
 				<a href="{resolve('/guide')}#formula" class="hover:text-brand">산식 근거</a>
 				<a
 					href="https://github.com/pulunick/hcroi-simulator"

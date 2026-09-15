@@ -30,8 +30,8 @@
 		: 'border-b border-line'}"
 >
 	<div class="flex flex-col gap-2 md:gap-3">
-		<span class="font-mono text-xs tracking-[0.08em] text-muted">{label}</span>
-		<h2 class="text-[22px] leading-[1.35] text-ink">{title}</h2>
+		<span class="text-xs font-semibold tracking-wide text-muted">{label}</span>
+		<h2 class="text-xl leading-[1.35] font-semibold text-ink">{title}</h2>
 		<p class="text-[13px] text-muted">{hint}</p>
 	</div>
 	<div class="max-w-[720px] min-w-0">

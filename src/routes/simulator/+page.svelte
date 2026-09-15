@@ -32,7 +32,13 @@
 
 	const SERIES_COLORS = ['var(--color-series-1)', 'var(--color-series-2)', 'var(--color-series-3)'];
 
-	const base = $derived(workspace.base);
+	/**
+	 * 기준 기간 — 검증 오류가 있는 레코드는 시나리오에서 제외한다 (2026-09-15).
+	 * 고른 기간이 오류면 `validBase` 가 null 이 되고 아래에서 안내만 보여 준다.
+	 */
+	const base = $derived(workspace.validBase);
+	/** 고른 기준 기간이 검증 오류라 시나리오를 낼 수 없을 때의 문구 */
+	const baseErrors = $derived(workspace.base && !base ? workspace.errorsOf(workspace.base) : []);
 	const cmp = $derived(base ? compareScenarios(base.inputs, workspace.scenarios) : null);
 	const b = $derived(cmp?.baseline.metrics ?? null);
 
@@ -136,7 +142,7 @@
 		기준 기간
 		<select
 			class="field-input w-auto py-1.5"
-			value={base?.id ?? ''}
+			value={workspace.base?.id ?? ''}
 			onchange={(e) => (workspace.baseId = (e.currentTarget as HTMLSelectElement).value || null)}
 		>
 			{#each workspace.effective as y (y.id)}
@@ -147,9 +153,20 @@
 </div>
 
 {#if !base || !cmp || !b}
-	<div class="card px-6 py-10 text-center">
-		<p class="text-ink-2">기준 기간 데이터가 없습니다.</p>
-		<a href={resolve('/data')} class="mt-4 btn btn-primary">데이터 입력하기</a>
+	<div class="card px-6 py-10 text-center" role={baseErrors.length ? 'alert' : undefined}>
+		{#if baseErrors.length}
+			<p class="font-semibold text-status-critical-ink">입력 오류 — 데이터 화면에서 수정</p>
+			<p class="mt-1 text-[15px] text-ink-2">
+				{workspace.base ? periodLabel(workspace.base.period) : ''} 입력값에 오류가 있어 시나리오를 계산하지
+				않습니다. 다른 기간을 고르거나 값을 고치세요.
+			</p>
+			<ul class="mt-3 space-y-1 text-[15px] text-status-critical-ink">
+				{#each baseErrors as e (e)}<li>· {e}</li>{/each}
+			</ul>
+		{:else}
+			<p class="text-ink-2">기준 기간 데이터가 없습니다.</p>
+		{/if}
+		<a href={resolve('/data')} class="mt-4 btn inline-flex btn-primary">데이터 화면으로 →</a>
 	</div>
 {:else}
 	<!-- 기준선 요약 -->
@@ -157,11 +174,11 @@
 		<div class="mb-3 flex flex-wrap items-center gap-3">
 			<h2 id="baseline-h" class="text-base font-semibold text-ink">
 				<span
-					class="mr-1.5 inline-block h-3 w-3 rounded-[2px] align-middle"
+					class="mr-1.5 inline-block h-3 w-3 rounded-sm align-middle"
 					style="background:{SERIES_COLORS[0]}"
 				></span>
 				기준선 (Baseline) — {periodLabel(base.period)}{#if base.derived}<span
-						class="ml-2 rounded-[2px] bg-surface-2 px-1.5 py-0.5 text-xs font-normal text-muted"
+						class="ml-2 rounded bg-surface-2 px-1.5 py-0.5 text-xs font-normal text-muted"
 						>{derivedLabel(base.derived)}</span
 					>{/if}
 			</h2>
@@ -204,7 +221,7 @@
 				<div class="flex items-center justify-between gap-3">
 					<label class="flex flex-1 items-center gap-2">
 						<span
-							class="inline-block h-3 w-3 shrink-0 rounded-[2px]"
+							class="inline-block h-3 w-3 shrink-0 rounded-sm"
 							style="background:{color}"
 							aria-hidden="true"
 						></span>
@@ -226,13 +243,13 @@
 					<div class="flex items-center justify-between">
 						<span class="text-sm font-semibold text-ink-2">인원 변동</span>
 						<div
-							class="inline-flex rounded-[2px] border border-line-2 p-0.5 text-sm"
+							class="inline-flex rounded-md border border-line-2 p-0.5 text-sm"
 							role="group"
 							aria-label="인원 조정 방식"
 						>
 							<button
 								type="button"
-								class="rounded-[2px] px-2.5 py-0.5 font-medium {s.params.headcountMode === 'pct'
+								class="rounded px-2.5 py-0.5 font-medium {s.params.headcountMode === 'pct'
 									? 'bg-brand text-on-brand'
 									: 'text-ink-2'}"
 								aria-pressed={s.params.headcountMode === 'pct'}
@@ -240,7 +257,7 @@
 							>
 							<button
 								type="button"
-								class="rounded-[2px] px-2.5 py-0.5 font-medium {s.params.headcountMode === 'delta'
+								class="rounded px-2.5 py-0.5 font-medium {s.params.headcountMode === 'delta'
 									? 'bg-brand text-on-brand'
 									: 'text-ink-2'}"
 								aria-pressed={s.params.headcountMode === 'delta'}
@@ -250,7 +267,7 @@
 					</div>
 					{#if s.params.headcountMode === 'pct'}
 						<SliderField
-							label="인원 변동율"
+							label="인원 변동률"
 							bind:value={s.params.headcountPct}
 							min={-30}
 							max={30}
@@ -296,7 +313,7 @@
 					help="인당 매출 {won(b.revenuePerHead)} → {won(r.metrics.revenuePerHead)}"
 				/>
 
-				<details class="rounded-[2px] border border-line bg-surface-2 px-4 py-2">
+				<details class="rounded-lg border border-line bg-surface-2 px-4 py-2">
 					<summary class="cursor-pointer text-sm font-semibold text-ink-2"
 						>고급 가정 — 비인건비 중 변동비 비율</summary
 					>
@@ -470,7 +487,7 @@
 				<div>
 					<h3 class="mb-2 flex items-center gap-2 text-base font-semibold text-ink">
 						<span
-							class="inline-block h-3 w-3 rounded-[2px]"
+							class="inline-block h-3 w-3 rounded-sm"
 							style="background:{SERIES_COLORS[i + 1]}"
 							aria-hidden="true"
 						></span>{r.scenario.name}

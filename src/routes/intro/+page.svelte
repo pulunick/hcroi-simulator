@@ -36,7 +36,7 @@
 		<div class="flex max-w-[940px] flex-col gap-4 lg:gap-6">
 			<span class="label">DART 결산서 → HCROI · 정원/임금 시뮬레이션 · 경영진 리포트 · 무료</span>
 			<h1
-				class="text-[30px] leading-[1.32] tracking-[-0.015em] text-pretty break-keep sm:text-[40px] lg:text-[52px] lg:leading-[1.28]"
+				class="text-[30px] leading-[1.32] font-bold tracking-[-0.015em] text-pretty break-keep sm:text-[40px] lg:text-[44px] lg:leading-[1.28]"
 			>
 				DART 결산서를 엑셀에 한 칸씩 옮겨 적던 일, 이제 PDF 한 부로 끝냅니다.
 			</h1>
@@ -62,7 +62,7 @@
 				width="1100"
 				height="764"
 				alt="Headroom 대시보드 화면 — 가상 회사 샘플의 HCROI·HCVA·인당 지표와 추이 차트"
-				class="block h-auto w-full max-w-[1100px] border border-ink"
+				class="block h-auto w-full max-w-[1100px] rounded-2xl border border-line shadow-card"
 			/>
 			<span class="label tight">실제 화면 — 가상 회사 샘플. 화면 속 수치는 예시입니다.</span>
 		</div>
@@ -75,7 +75,7 @@
 		>
 			<div class="flex flex-col gap-2.5 lg:gap-3.5">
 				<span class="label">시작하기 · 세 가지 길</span>
-				<h2 class="text-[22px] leading-[1.35] lg:text-[30px]">
+				<h2 class="text-[22px] leading-[1.35] font-bold lg:text-[28px]">
 					숫자를 넣는 방법은 셋, 결과는 하나
 				</h2>
 				<p class="text-[15px] text-pretty break-keep text-ink-2">
@@ -84,7 +84,7 @@
 				</p>
 			</div>
 
-			<div class="flex flex-col border-t border-ink">
+			<div class="card flex flex-col px-5 sm:px-6">
 				<div class="start">
 					<span class="num text-brand">01</span>
 					<div class="titles">
@@ -108,7 +108,7 @@
 						양식을 내려받아 기간별로 채우면 검증 열이 바로 표시됩니다. 연·반기·분기·월 어느 단위든,
 						상위 기간은 합산합니다.
 					</p>
-					<a href={dataPage} class="go underlink sm">양식 내려받기 →</a>
+					<a href="{dataPage}?start=excel" class="go underlink sm">양식 내려받기 →</a>
 				</div>
 
 				<div class="start last">
@@ -131,12 +131,10 @@
 		>
 			<div class="flex flex-col gap-2.5 lg:gap-3.5">
 				<span class="label">01 · 산식</span>
-				<h2 class="text-[22px] leading-[1.35] lg:text-[30px]">공개된 식, 검증된 계산</h2>
+				<h2 class="text-[22px] leading-[1.35] font-bold lg:text-[28px]">공개된 식, 검증된 계산</h2>
 			</div>
 			<div class="flex max-w-[720px] flex-col gap-5 lg:gap-8">
-				<div
-					class="flex flex-col gap-2 border border-ink bg-page px-5 py-[18px] lg:gap-2.5 lg:px-7 lg:py-6"
-				>
+				<div class="card flex flex-col gap-2 px-5 py-[18px] lg:gap-2.5 lg:px-7 lg:py-6">
 					<div
 						class="tabular text-[17px] leading-[1.5] font-medium break-keep lg:text-[26px] lg:leading-[1.4] lg:tracking-[-0.01em]"
 					>
@@ -173,7 +171,7 @@
 		>
 			<div class="flex flex-col gap-2.5 lg:gap-3.5">
 				<span class="label">02 · 데이터 보관</span>
-				<h2 class="text-[22px] leading-[1.35] lg:text-[30px]">
+				<h2 class="text-[22px] leading-[1.35] font-bold lg:text-[28px]">
 					귀사 데이터는 귀사 PC 를 떠나지 않습니다
 				</h2>
 			</div>
@@ -184,7 +182,7 @@
 					<span class="tabular text-[14px] lg:text-[15px]">.json</span> 파일에만 하고, 그 파일이 곧 백업이자
 					동료에게 건네는 수단입니다.
 				</p>
-				<div class="flex flex-col border-t border-ink">
+				<div class="card flex flex-col px-5 sm:px-6">
 					<div class="cell">
 						<span class="cell-k">서버로 보내는 것</span>
 						<span class="cell-v">없음. 계정도 없습니다.</span>
@@ -218,16 +216,17 @@
 <SiteFooter />
 
 <style>
-	/* 시안의 반복 요소 — 라벨(모노 12px) · 주홍 버튼 · 밑줄 링크 · 시작하기 행 · 표 행 */
+	/* 반복 요소 — 작은 라벨 · 파랑 버튼 · 링크 · 시작하기 행 · 표 행 (앱 화면과 같은 룩) */
 	.label {
-		font-family: var(--font-mono);
 		font-size: 12px;
+		font-weight: 600;
 		line-height: 1.6;
-		letter-spacing: 0.08em;
+		letter-spacing: 0.02em;
 		color: var(--color-muted);
 	}
 	.label.tight {
-		letter-spacing: 0.02em;
+		letter-spacing: normal;
+		font-weight: 500;
 	}
 
 	.cta {
@@ -236,7 +235,7 @@
 		justify-content: center;
 		height: 48px;
 		padding: 0 24px;
-		border-radius: 2px;
+		border-radius: 0.5rem;
 		background: var(--color-brand);
 		color: var(--color-on-brand);
 		font-size: 16px;
@@ -248,16 +247,16 @@
 
 	.underlink {
 		font-size: 16px;
-		font-weight: 500;
+		font-weight: 600;
 		line-height: 1.4;
-		border-bottom: 1px solid var(--color-ink);
+		color: var(--color-brand);
+		border-bottom: 1px solid currentColor;
 	}
 	.underlink.sm {
 		font-size: 15px;
 	}
 	.underlink:hover {
-		color: var(--color-brand);
-		border-bottom-color: var(--color-brand);
+		color: var(--color-brand-hover);
 	}
 
 	/* 시작하기 행 — 모바일: 번호+제목 한 줄 → 설명 → 링크 / 데스크톱: 4열 */
@@ -274,9 +273,9 @@
 		border-bottom: 0;
 	}
 	.start .num {
-		font-family: var(--font-mono);
 		font-variant-numeric: tabular-nums;
 		font-size: 18px;
+		font-weight: 700;
 	}
 	.start .titles {
 		display: flex;
@@ -330,13 +329,16 @@
 		gap: 2px;
 		padding: 12px 0;
 		border-bottom: 1px solid var(--color-line);
+	}
+	.cell:last-child {
+		border-bottom: 0;
 		font-size: 15px;
 		line-height: 1.65;
 		word-break: keep-all;
 	}
 	.cell .cell-k {
-		font-family: var(--font-mono);
 		font-size: 12px;
+		font-weight: 600;
 		letter-spacing: 0.02em;
 		color: var(--color-muted);
 	}
@@ -348,8 +350,8 @@
 		}
 		.cell .cell-k {
 			flex: 0 0 160px;
-			font-family: var(--font-sans);
 			font-size: 15px;
+			font-weight: 500;
 			letter-spacing: normal;
 		}
 		.cell .cell-v {

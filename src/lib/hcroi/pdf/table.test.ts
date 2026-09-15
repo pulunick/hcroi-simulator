@@ -63,6 +63,18 @@ describe('normalizeLabel / parseUnitScale', () => {
 		expect(parseUnitScale('(단위 : 명)')).toBeNull();
 		expect(parseUnitScale('영업수익')).toBeNull();
 	});
+	it('전각 공백(　)을 지우되 라벨 속 숫자 0·3 은 그대로 둔다 (회귀: [\\s3000] 오타)', () => {
+		// 오타 정규식 /[\s3000]/g 는 문자 클래스 [\s,'3','0'] 이라 라벨의 0·3 을 지워버렸다.
+		expect(normalizeLabel('30. 연결재무제표')).toBe('30.연결재무제표');
+		expect(normalizeLabel('구　분')).toBe('구분');
+		expect(normalizeLabel('303')).toBe('303');
+	});
+	it('전각 공백이 낀 단위 문구도 배수를 읽고, 문구 속 숫자를 지우지 않는다 (회귀: [\\s3000] 오타)', () => {
+		expect(parseUnitScale('(단위　:　천원)')).toBe(1000);
+		// 오타 버전은 '30천원' → '천원' 으로 숫자를 지워버려도 우연히 같은 결과가 나오지만,
+		// 숫자 자체는 보존돼야 한다는 것을 직접 확인한다.
+		expect(parseUnitScale('(단위 : 30천원)')).toBe(1000);
+	});
 });
 
 describe('clusterRows — 손익계산서 (report-b p85)', () => {

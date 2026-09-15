@@ -24,6 +24,11 @@
 		type MapOptions,
 		type PdfPrefs
 	} from '$lib/hcroi/pdf/map';
+	import {
+		detectPeriod,
+		periodForThreeMonthColumn,
+		type PeriodDetection
+	} from '$lib/hcroi/pdf/detectPeriod';
 	import { buildRecord, type BuildResult } from '$lib/hcroi/pdf/toRecord';
 
 	interface Props {
@@ -42,6 +47,10 @@
 		scan: DocScan | null;
 		options: MapOptions;
 		period: Period;
+		/** 기간이 정해졌는가 — 표지에서 못 읽고 사용자도 고르지 않았으면 false (미리보기 잠금) */
+		periodKnown: boolean;
+		/** 표지에서 읽은 기간 (근거 문구·확인 필요 표시용) */
+		detected: PeriodDetection | null;
 		/** 입력 칸별 고른 후보 순번 (기본 0 = 선호 후보) */
 		chosen: Partial<Record<FieldKey, number>>;
 		/** 직접 입력(원) — 후보 대신 쓴다 */
@@ -81,6 +90,8 @@
 			scan: null,
 			options: { consolidated: false, column: 'period' },
 			period: { year: new Date().getFullYear(), type: 'Q', index: 1 },
+			periodKnown: false,
+			detected: null,
 			chosen: {},
 			manual: {},
 			manualHeadcount: null,
@@ -96,14 +107,17 @@
 			});
 			const scan = scanDocument(pages);
 			st.scan = scan;
+			st.detected = detectPeriod(pages);
 			const pref = scan.cover.companyName ? workspace.pdfPrefs[scan.cover.companyName] : undefined;
 			if (pref) {
 				st.options = { consolidated: pref.consolidated, column: pref.column };
 				st.include = { ...pref.include };
 				st.remembered = true;
+			} else if (st.detected?.period.type === 'H') {
+				// 반기보고서를 읽었으면 값도 반기(누적) 열이어야 라벨과 맞는다
+				st.options.column = 'cumulative';
 			}
-			const p = periodForColumn(scan.cover, st.options.column);
-			if (p) st.period = p;
+			applyProposedPeriod(st);
 			st.status = 'ready';
 		} catch (err) {
 			st.status = 'error';
@@ -143,19 +157,47 @@
 		}
 		return built;
 	}
-	function problemsOf(built: BuildResult): string[] {
-		return built.missing.length
+	function problemsOf(st: FileState, built: BuildResult): string[] {
+		const problems = built.missing.length
 			? built.missing.map((m) => `${m} 값을 찾지 못했습니다 — 직접 입력하세요.`)
 			: validateRecord(built.record);
+		if (!st.periodKnown) problems.unshift('기간을 고르세요 — 표지에서 읽지 못했습니다.');
+		return problems;
 	}
 
+	/**
+	 * 제안할 기간: **표지에서 읽은 것이 1순위**(손익 열이 3개월이면 그 분기로 맞춘다),
+	 * 못 읽었으면 기존 표지 스캔(`periodForColumn`). 둘 다 없으면 null — 사용자가 고른다.
+	 * `workspace.pdfPrefs` 는 기간을 기억하지 않는다(연결/별도·열·인건비 항목만).
+	 */
+	function proposedPeriod(st: FileState): Period | null {
+		if (st.detected) {
+			if (st.options.column === 'period') return periodForThreeMonthColumn(st.detected.period);
+			// 1–9월 누적은 담을 기간이 없다(3분기 실적이 아니다) — 기존 규칙 유지
+			if (st.scan?.cover.spanMonths === 9) return null;
+			return st.detected.period;
+		}
+		return st.scan ? periodForColumn(st.scan.cover, st.options.column) : null;
+	}
+	function applyProposedPeriod(st: FileState) {
+		const p = proposedPeriod(st);
+		if (!p) return;
+		st.period = p;
+		st.periodKnown = true;
+	}
 	function setColumn(st: FileState, column: MapOptions['column']) {
 		st.options.column = column;
-		const p = st.scan ? periodForColumn(st.scan.cover, column) : null;
-		if (p) st.period = p;
+		applyProposedPeriod(st);
 	}
 	function setPeriodType(st: FileState, type: PeriodType) {
+		if (!type) return;
 		st.period = { year: st.period.year, type, index: 1 };
+		st.periodKnown = true;
+	}
+	function setPeriodYear(st: FileState, raw: string) {
+		const y = Number(raw);
+		if (!Number.isInteger(y) || y < 1990 || y > 2100) return;
+		st.period = { ...st.period, year: y };
 	}
 	function sourceText(c: Candidate): string {
 		const parts = [`${c.page}쪽`, c.rowLabel];
@@ -201,7 +243,7 @@
 	}
 	function sendAll() {
 		const ready = files.filter(
-			(f) => f.status === 'ready' && problemsOf(buildOf(f, fieldsOf(f))).length === 0
+			(f) => f.status === 'ready' && problemsOf(f, buildOf(f, fieldsOf(f))).length === 0
 		);
 		if (ready.length === 0) return;
 		ready.forEach(remember);
@@ -248,9 +290,7 @@
 	</div>
 
 	{#if files.length === 0}
-		<p
-			class="rounded-[2px] border border-dashed border-line px-4 py-6 text-center text-sm text-muted"
-		>
+		<p class="rounded-md border border-dashed border-line px-4 py-6 text-center text-sm text-muted">
 			분기마다 결산서 한 부씩 올리세요. 스캔 이미지(글자를 드래그해 복사할 수 없는 PDF)는 읽지
 			못합니다.
 		</p>
@@ -259,9 +299,9 @@
 	{#each files as st (st.id)}
 		{@const fields = fieldsOf(st)}
 		{@const built = st.status === 'ready' ? buildOf(st, fields) : null}
-		{@const problems = built ? problemsOf(built) : []}
+		{@const problems = built ? problemsOf(st, built) : []}
 		{@const emp = st.scan?.employees[0] ?? null}
-		<article class="mb-4 rounded-[2px] border border-line bg-surface-2/40 p-4" aria-label={st.name}>
+		<article class="mb-4 rounded-lg border border-line bg-surface-2/40 p-4" aria-label={st.name}>
 			<header class="mb-3 flex flex-wrap items-start justify-between gap-3">
 				<div class="min-w-0">
 					<h3 class="truncate font-semibold text-ink">{st.name}</h3>
@@ -280,7 +320,7 @@
 							{/if}
 							· 표 {st.scan.tables.length}개 · 직원 현황 {st.scan.employees.length}개
 							{#if st.remembered}<span
-									class="ml-1 rounded-[2px] bg-brand/10 px-1.5 py-0.5 text-xs text-brand"
+									class="ml-1 rounded bg-brand/10 px-1.5 py-0.5 text-xs text-brand"
 									>이 회사의 저장된 설정 적용</span
 								>{/if}
 						</p>
@@ -325,30 +365,54 @@
 						<input
 							type="number"
 							class="field-input w-24 py-1"
-							bind:value={st.period.year}
+							value={st.periodKnown ? st.period.year : ''}
+							placeholder="연도"
 							min="1990"
 							max="2100"
+							oninput={(e) => setPeriodYear(st, (e.currentTarget as HTMLInputElement).value)}
 						/>
 						<select
 							class="field-input w-auto py-1"
-							value={st.period.type}
+							value={st.periodKnown ? st.period.type : ''}
 							onchange={(e) =>
 								setPeriodType(st, (e.currentTarget as HTMLSelectElement).value as PeriodType)}
 						>
+							{#if !st.periodKnown}
+								<option value="">기간을 고르세요</option>
+							{/if}
 							{#each PERIOD_TYPES as t (t)}
 								<option value={t}>{PERIOD_TYPE_LABELS[t]}</option>
 							{/each}
 						</select>
-						{#if periodIndexCount(st.period.type) > 1}
+						{#if st.periodKnown && periodIndexCount(st.period.type) > 1}
 							<select class="field-input w-auto py-1" bind:value={st.period.index}>
 								{#each Array.from({ length: periodIndexCount(st.period.type) }, (_, i) => i + 1) as i (i)}
 									<option value={i}>{i}</option>
 								{/each}
 							</select>
 						{/if}
-						<span class="text-muted">→ {periodLabel(st.period)}</span>
+						{#if st.periodKnown}
+							<span class="text-muted">→ {periodLabel(st.period)}</span>
+						{/if}
 					</div>
 				</div>
+
+				<p class="mb-3 text-sm" class:text-muted={st.detected} class:text-ink-2={!st.detected}>
+					{#if st.detected}
+						표지에서 읽음: {st.detected.evidence} → {periodLabel(st.detected.period)}
+						{#if st.periodKnown && st.period.type !== st.detected.period.type}
+							· 3개월 열 기준 {periodLabel(st.period)}
+						{/if}
+						{#if st.detected.confidence === 'low'}
+							<span
+								class="ml-1 rounded bg-status-warning-bg px-1.5 py-0.5 text-xs text-status-warning-ink"
+								>확인 필요</span
+							>
+						{/if}
+					{:else}
+						표지에서 기간을 읽지 못했습니다 — 기간을 직접 고른 뒤 미리보기로 보내세요.
+					{/if}
+				</p>
 
 				<div class="overflow-x-auto">
 					<table class="w-full text-sm">
@@ -419,7 +483,7 @@
 											<label class="flex items-center gap-2 text-ink">
 												<input
 													type="checkbox"
-													class="rounded-[2px] border-line-2 text-brand"
+													class="rounded border-line-2 text-brand"
 													bind:checked={st.include[key]}
 												/>
 												{FIELD_LABELS[key]}
@@ -501,14 +565,14 @@
 
 				{#if problems.length}
 					<ul
-						class="mt-3 space-y-1 rounded-[2px] border border-status-critical/40 bg-status-critical-bg px-4 py-2 text-sm text-status-critical-ink"
+						class="mt-3 space-y-1 rounded-md border border-status-critical/40 bg-status-critical-bg px-4 py-2 text-sm text-status-critical-ink"
 					>
 						{#each problems as p, i (i)}<li>{p}</li>{/each}
 					</ul>
 				{/if}
 				{#if built && built.warnings.length}
 					<ul
-						class="mt-3 space-y-1 rounded-[2px] border border-status-warning/40 bg-status-warning-bg px-4 py-2 text-sm text-status-warning-ink"
+						class="mt-3 space-y-1 rounded-md border border-status-warning/40 bg-status-warning-bg px-4 py-2 text-sm text-status-warning-ink"
 					>
 						{#each built.warnings as w, i (i)}<li>{w.replace(/\*\*/g, '')}</li>{/each}
 					</ul>

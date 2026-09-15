@@ -130,7 +130,7 @@ export function scenarioSheet(baseLabel: string, cmp: Comparison): ScenarioSheet
 			numFmt: '@'
 		},
 		{
-			label: '인원 변동율(%)',
+			label: '인원 변동률(%)',
 			values: p((r) => r.scenario.params.headcountPct),
 			numFmt: NUM_FMT.pct
 		},
@@ -207,7 +207,7 @@ export const FORMULA_LINES: readonly string[] = [
 	'1.0배 미만 위험(영업손실) · 1.0~1.5배 보통 · 1.5배 이상 우수',
 	'',
 	'시뮬레이션 가정',
-	"인원' = 기준 인원 × (1 + 인원 변동율) 또는 기준 인원 ± 변동 인원 (정수 반올림, 최소 0)",
+	"인원' = 기준 인원 × (1 + 인원 변동률) 또는 기준 인원 ± 변동 인원 (정수 반올림, 최소 0)",
 	"총 인건비' = 인원' × 기준 인당 인건비 × (1 + 임금 인상률)",
 	"매출액' = 인원' × 기준 인당 매출 × (1 + 생산성 변화율)",
 	"비인건비' = 고정비 + 변동비 × (매출액' ÷ 매출액)  — 변동비 비율 기본 0% (전액 고정비)",

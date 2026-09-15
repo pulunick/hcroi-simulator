@@ -17,7 +17,7 @@
 	이 도구의 모든 계산은 아래 정의를 엄격히 따릅니다. 시뮬레이션 가정과 기본값도 함께 명시합니다.
 </p>
 
-<div class="grid gap-6 lg:grid-cols-2">
+<div class="grid items-start gap-6 lg:grid-cols-2">
 	<section id="formula" class="card scroll-mt-24 px-6 py-5" aria-labelledby="f-h">
 		<h2 id="f-h" class="mb-4 text-lg font-semibold text-ink">핵심 수식</h2>
 		<dl class="space-y-4 text-[15px]">
@@ -25,17 +25,13 @@
 				<dt class="font-semibold text-ink">
 					1. 인적자본 투입 전 이익 (Operating Profit before Human Capital)
 				</dt>
-				<dd
-					class="mt-1 rounded-[2px] bg-surface-2 px-3 py-2 font-mono text-sm break-keep text-ink-2"
-				>
+				<dd class="mt-1 rounded-md bg-surface-2 px-3 py-2 font-mono text-sm break-keep text-ink-2">
 					영업이익 + 총 인건비 = 매출액 − (영업비용 − 총 인건비)
 				</dd>
 			</div>
 			<div>
 				<dt class="font-semibold text-ink">2. HCROI (Human Capital Return on Investment)</dt>
-				<dd
-					class="mt-1 rounded-[2px] bg-surface-2 px-3 py-2 font-mono text-sm break-keep text-ink-2"
-				>
+				<dd class="mt-1 rounded-md bg-surface-2 px-3 py-2 font-mono text-sm break-keep text-ink-2">
 					[매출액 − (영업비용 − 총 인건비)] ÷ 총 인건비 = (영업이익 + 총 인건비) ÷ 총 인건비
 				</dd>
 				<dd class="mt-1 text-sm text-ink-2">
@@ -47,9 +43,7 @@
 				<dt class="font-semibold text-ink">
 					3. HCVA (Human Capital Value Added, 인적자본 부가가치)
 				</dt>
-				<dd
-					class="mt-1 rounded-[2px] bg-surface-2 px-3 py-2 font-mono text-sm break-keep text-ink-2"
-				>
+				<dd class="mt-1 rounded-md bg-surface-2 px-3 py-2 font-mono text-sm break-keep text-ink-2">
 					[매출액 − (영업비용 − 총 인건비)] ÷ 총 임직원 수 (원/인)
 				</dd>
 			</div>
@@ -64,9 +58,7 @@
 			</div>
 			<div>
 				<dt class="font-semibold text-ink">5. 총 인건비 (Total Human Capital Cost)</dt>
-				<dd
-					class="mt-1 rounded-[2px] bg-surface-2 px-3 py-2 font-mono text-sm break-keep text-ink-2"
-				>
+				<dd class="mt-1 rounded-md bg-surface-2 px-3 py-2 font-mono text-sm break-keep text-ink-2">
 					기본급 + 성과급/수당 + 퇴직급여 + 법정후생비 + 기타 복리후생비 + 교육훈련비
 				</dd>
 			</div>
@@ -119,7 +111,7 @@
 		<h2 id="s-h" class="mb-4 text-lg font-semibold text-ink">시뮬레이션 가정</h2>
 		<ol class="list-decimal space-y-2 pl-5 text-[15px] text-ink-2">
 			<li>
-				<strong class="text-ink">인원'</strong> = 기준 인원 × (1 + 인원 변동율) 또는 기준 인원 ± 변동
+				<strong class="text-ink">인원'</strong> = 기준 인원 × (1 + 인원 변동률) 또는 기준 인원 ± 변동
 				인원수 (정수 반올림, 최소 0명)
 			</li>
 			<li>

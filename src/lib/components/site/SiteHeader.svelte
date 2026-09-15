@@ -15,9 +15,9 @@
 		'flex min-h-11 items-center text-[15px] font-semibold text-brand hover:text-brand-hover';
 </script>
 
-<header class="bg-page">
+<header class="border-b border-line bg-surface">
 	<div class="mx-auto max-w-[1200px] px-5 sm:px-6">
-		<div class="flex h-14 items-center justify-between gap-4 border-b border-ink md:h-[72px]">
+		<div class="flex h-14 items-center justify-between gap-4 md:h-16">
 			<!-- 다크에서는 밝은 글자 SVG 로 교체 (layout.css 의 .wordmark-light/.wordmark-dark) -->
 			<a href={introHref} aria-label="Headroom 소개" title="Headroom 소개" class="block shrink-0">
 				<img
@@ -32,8 +32,8 @@
 			<nav aria-label="소개 페이지 메뉴" class="hidden items-center gap-8 md:flex">
 				<a href="#formula" class={linkClass}>산식</a>
 				<a href="#privacy" class={linkClass}>데이터 보관</a>
-				<a href={guideHref} class={linkClass}>사용 설명서</a>
-				<a href={appHref} class={startClass}>시작하기 →</a>
+				<a href={guideHref} class={linkClass}>가이드</a>
+				<a href={appHref} class="btn btn-primary">시작하기</a>
 			</nav>
 
 			<!-- 모바일 (<768) -->
@@ -65,7 +65,7 @@
 					onclick={() => (menuOpen = false)}
 					class="{linkClass} border-b border-line">데이터 보관</a
 				>
-				<a href={guideHref} onclick={() => (menuOpen = false)} class={linkClass}>사용 설명서</a>
+				<a href={guideHref} onclick={() => (menuOpen = false)} class={linkClass}>가이드</a>
 			</nav>
 		{/if}
 	</div>

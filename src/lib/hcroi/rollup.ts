@@ -8,7 +8,7 @@ import {
 	type PeriodRecord,
 	type PeriodType
 } from './types';
-import { validateInputs } from './formulas';
+import { validateInputs, validateRecord } from './formulas';
 import {
 	childPeriods,
 	childType,
@@ -25,6 +25,9 @@ import {
  *
  * - 사슬: 월×3 → 분기, 분기×2 → 반기, 반기×2 → 연간. 중간 단위가 직접 입력이면 그것을 쓴다(직접 입력 우선).
  * - 하위 기간이 모두 있을 때만 만든다. 빠진 기간을 추정하지 않는다.
+ * - **검증 오류인 기간(`validateRecord`)은 "빠진 기간"과 똑같이 취급한다** — 그 기간이 든 상위 기간은
+ *   합산도 차감도 만들지 않는다(2026-09-15). 오류 레코드를 빼고 조용히 작아진 합계가 지표·리포트로
+ *   나가는 것이 빠진 합계보다 위험하기 때문. 오류 레코드 자체는 목록에 그대로 남는다(화면이 고칠 수 있게).
  * - 차감: 직접 입력한 상위 기간이 있고 하위 기간이 하나만 비면 `상위 − 나머지 합` 으로 그 하나를 만든다
  *   (사업보고서의 4분기 = 연간 − 1~3분기). 검증을 통과할 때만.
  * - 금액은 합계. 임직원 수는 산정 방식을 따른다 — 기간 평균이면 하위 기간 평균(반올림), 기말이면 마지막 하위 기간 값.
@@ -146,12 +149,26 @@ function descendantPeriods(p: Period, type: PeriodType): Period[] {
  * 직접 입력한 레코드 + 계산된 상위/차감 레코드 = 화면이 쓰는 전체 목록 (시간순).
  * 직접 입력한 기간은 그대로 두고, 없는 기간만 만든다.
  */
-export function rollup(records: PeriodRecord[], basis: HeadcountBasis): PeriodRecord[] {
+export function rollup(
+	records: PeriodRecord[],
+	basis: HeadcountBasis,
+	/** 내부용 — `true` 면 검증 오류 기간도 정상처럼 써서 합산한다 (`blockedRollups` 의 비교 기준) */
+	opts: { ignoreInvalid?: boolean } = {}
+): PeriodRecord[] {
 	const manual = new Map(records.map((r) => [periodKey(r.period), r]));
 	const derived = new Map<string, PeriodRecord>();
 	const exact: ExactHeads = new Map();
 	const get = (p: Period) => manual.get(periodKey(p)) ?? derived.get(periodKey(p));
 	const all = () => [...manual.values(), ...derived.values()];
+	// 검증 오류 기간 — 자리는 차지하되(그 위에 합산을 만들지 않는다) 합산 재료로는 쓰지 않는다
+	const invalid = new Set(
+		opts.ignoreInvalid
+			? []
+			: records.filter((r) => validateRecord(r).length > 0).map((r) => periodKey(r.period))
+	);
+	/** 합산 재료로 쓸 수 있는 레코드만 (검증 오류면 없는 것으로 본다) */
+	const usable = (r: PeriodRecord | undefined) =>
+		r && !invalid.has(periodKey(r.period)) ? r : undefined;
 
 	// 합산 → 차감 → (차감으로 생긴 기간이 새 합산을 만들 수 있으니) 다시 합산. 변화가 없을 때까지, 최대 4회
 	for (let pass = 0; pass < 4; pass++) {
@@ -161,12 +178,12 @@ export function rollup(records: PeriodRecord[], basis: HeadcountBasis): PeriodRe
 			const childT = childType(parentT) as PeriodType;
 			const candidates = new Map<string, Period>();
 			for (const r of all()) {
-				if (r.period.type !== childT) continue;
+				if (r.period.type !== childT || !usable(r)) continue;
 				const parent = parentPeriod(r.period, parentT);
 				if (parent && !get(parent)) candidates.set(periodKey(parent), parent);
 			}
 			for (const parent of candidates.values()) {
-				const kids = childPeriods(parent).map(get);
+				const kids = childPeriods(parent).map((p) => usable(get(p)));
 				if (kids.every((k): k is PeriodRecord => !!k)) {
 					derived.set(periodKey(parent), sumRecords(parent, kids, basis, exact));
 					changed = true;
@@ -176,8 +193,11 @@ export function rollup(records: PeriodRecord[], basis: HeadcountBasis): PeriodRe
 		// ② 차감: 직접 입력한 상위 기간의 하위 기간(반기·분기·월 어느 단위든)이 하나만 빈 경우
 		//    연간 + 1~3분기 → 4분기 = 연간 − (1~3분기 합). 하반기는 다음 pass 의 합산이 만든다
 		for (const parent of manual.values()) {
+			if (!usable(parent)) continue;
 			for (let t = childType(parent.period.type); t; t = childType(t)) {
 				const kidsP = descendantPeriods(parent.period, t);
+				// 오류인 하위 기간이 섞여 있으면 차감도 하지 않는다 (그 값이 빠진 채로 나머지에 몰린다)
+				if (kidsP.some((p) => get(p) && !usable(get(p)))) continue;
 				const missing = kidsP.filter((p) => !get(p));
 				if (missing.length !== 1) continue;
 				const others = kidsP.filter((p) => !!get(p)).map((p) => get(p) as PeriodRecord);
@@ -191,6 +211,40 @@ export function rollup(records: PeriodRecord[], basis: HeadcountBasis): PeriodRe
 		if (!changed) break;
 	}
 	return all().sort((a, b) => comparePeriods(a.period, b.period));
+}
+
+/** 검증 오류 때문에 만들지 못한 상위 기간 (데이터 화면이 "합산 없음 — 하위 기간 오류(…)" 로 알린다) */
+export interface BlockedRollup {
+	/** 만들어졌어야 할 상위 기간 */
+	period: Period;
+	/** 그 안에서 검증 오류가 난 하위 기간들 */
+	blockedBy: Period[];
+}
+
+/** `parent` 기간이 `child` 기간을 품는가 (같은 해 · 더 짧은 단위 · 월 범위 포함) */
+function containsPeriod(parent: Period, child: Period): boolean {
+	if (parent.year !== child.year) return false;
+	const p = periodMonths(parent);
+	const c = periodMonths(child);
+	return c.start >= p.start && c.end <= p.end && c.end - c.start < p.end - p.start;
+}
+
+/**
+ * 검증 오류가 없었다면 생겼을 상위 기간 중 실제로는 만들어지지 않은 것들.
+ * 화면은 이 목록으로 "2025 연간 — 합산 없음(하위 기간 오류: 2025 2분기)" 한 줄을 보여 준다.
+ */
+export function blockedRollups(records: PeriodRecord[], basis: HeadcountBasis): BlockedRollup[] {
+	const invalid = records.filter((r) => validateRecord(r).length > 0);
+	if (!invalid.length) return [];
+	const actual = new Set(rollup(records, basis).map((r) => periodKey(r.period)));
+	return rollup(records, basis, { ignoreInvalid: true })
+		.filter((r) => r.derived && !actual.has(periodKey(r.period)))
+		.map((r) => ({
+			period: r.period,
+			blockedBy: invalid.map((iv) => iv.period).filter((p) => containsPeriod(r.period, p))
+		}))
+		.filter((b) => b.blockedBy.length > 0)
+		.sort((a, b) => comparePeriods(a.period, b.period));
 }
 
 /** 직접 입력 레코드와 하위 기간 합산이 다른 항목 (값은 직접 입력이 우선이고, 이건 경고용) */

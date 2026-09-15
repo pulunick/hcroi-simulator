@@ -1,5 +1,6 @@
 import { normalizePdfPrefs, type PdfPrefs } from '$lib/hcroi/pdf/map';
 import { browser } from '$app/environment';
+import { PRODUCT_NAME } from '$lib/site-config';
 import { sampleRecords } from '$lib/hcroi/defaults';
 import { DEFAULT_SCENARIO_PARAMS } from '$lib/hcroi/scenario';
 import type {
@@ -21,8 +22,14 @@ import {
 } from '$lib/hcroi/period';
 import { PERIODS_PER_YEAR, PERIOD_TYPES } from '$lib/hcroi/types';
 import { DEFAULT_HEADCOUNT_BASIS } from '$lib/hcroi/types';
-import { sumHcCost, sumHeadcount } from '$lib/hcroi/formulas';
-import { rollup, rollupMismatch, type RollupMismatch } from '$lib/hcroi/rollup';
+import { sumHcCost, sumHeadcount, validateRecord } from '$lib/hcroi/formulas';
+import {
+	blockedRollups,
+	rollup,
+	rollupMismatch,
+	type BlockedRollup,
+	type RollupMismatch
+} from '$lib/hcroi/rollup';
 import { DEFAULT_AMOUNT_UNIT, isAmountUnit, type AmountUnit } from '$lib/hcroi/format';
 
 /**
@@ -180,13 +187,22 @@ function normalizeRecord(raw: unknown): PeriodRecord | null {
 			}
 		: { year: Number(o.year), type: 'Y', index: 1 };
 	if (!isValidPeriod(period) || typeof o.id !== 'string' || !o.inputs) return null;
+	// `copiedFrom`(2026-09-15 추가)이 없는 옛 저장값은 "복사됨 아님"으로 읽는다
+	const copied = o.copiedFrom
+		? {
+				year: Number(o.copiedFrom.year),
+				type: o.copiedFrom.type as Period['type'],
+				index: Number(o.copiedFrom.index ?? 1)
+			}
+		: null;
 	return {
 		id: o.id,
 		period,
 		inputs: { ...o.inputs },
 		breakdown: o.breakdown ?? null,
 		headcountBreakdown: o.headcountBreakdown ?? null,
-		memo: o.memo
+		memo: o.memo,
+		copiedFrom: copied && isValidPeriod(copied) ? copied : null
 	};
 }
 
@@ -285,7 +301,7 @@ class Workspace {
 
 	/** 헤더 로고 자리에 보이는 이름 — 회사/조직 이름, 비어 있으면 도구 이름 */
 	get brand(): string {
-		return this.orgName.trim() || 'HCROI 시뮬레이터';
+		return this.orgName.trim() || PRODUCT_NAME;
 	}
 	/** 브라우저 탭 제목. 대시보드는 "○○ 대시보드"(탭 메뉴 이름과 통일), 나머지는 "화면 — ○○" */
 	pageTitle(section?: string): string {
@@ -301,9 +317,32 @@ class Workspace {
 	 * 직접 입력 레코드는 같은 객체라 여기서 고쳐도 저장된다. 계산 레코드는 편집 대상이 아니다.
 	 */
 	effective = $derived(rollup(this.records, this.headcountBasis));
+	/**
+	 * 검증 오류(`validateRecord`)가 있는 레코드 id — 저장은 그대로 두되(초안 허용)
+	 * 지표·등급·추이·시나리오·리포트에서는 빼야 한다 (2026-09-15 결정).
+	 */
+	invalidIds = $derived(
+		new Set(this.effective.filter((r) => validateRecord(r).length > 0).map((r) => r.id))
+	);
+	/** 지표를 낼 수 있는 레코드만 — 추이·시나리오·리포트가 쓰는 목록 (표·조회 셀렉트는 `effective`) */
+	validEffective = $derived(this.effective.filter((r) => !this.invalidIds.has(r.id)));
+	/** 검증 오류 때문에 만들어지지 않은 상위 기간 (데이터 표가 "합산 없음" 한 줄로 알린다) */
+	blocked = $derived<BlockedRollup[]>(blockedRollups(this.records, this.headcountBasis));
 	/** 가장 최근 기간 — 같은 끝 월이면 연간이 뒤에 오므로 연간(합산 포함)이 우선된다 */
 	latest = $derived(this.effective.at(-1) ?? null);
 	base = $derived(this.effective.find((y) => y.id === this.baseId) ?? this.latest);
+	/** 지표를 낼 수 있는 기준 기간 — 시뮬레이터가 쓴다 (선택한 기준이 오류면 null) */
+	validBase = $derived(this.base && !this.invalidIds.has(this.base.id) ? this.base : null);
+
+	/** 이 레코드에 검증 오류가 없는가 (화면 공통 판정 — 규칙은 코어 `validateRecord` 한 곳) */
+	isValid(rec: PeriodRecord | null | undefined): boolean {
+		return !!rec && !this.invalidIds.has(rec.id);
+	}
+
+	/** 이 레코드의 검증 오류 문구 (없으면 빈 배열) */
+	errorsOf(rec: PeriodRecord | null | undefined): string[] {
+		return rec ? validateRecord(rec) : [];
+	}
 	/** 작업공간에 있는 기간 유형들 (Y → H → Q → M 순, 합산으로 생긴 유형 포함) */
 	periodTypes = $derived(
 		PERIOD_TYPES.filter((t) => this.effective.some((r) => r.period.type === t))
@@ -478,11 +517,15 @@ class Workspace {
 	/**
 	 * 설정 화면의 "이 PC 의 데이터 지우기" — `resetToSample()` 과 달리 레코드·시나리오뿐 아니라
 	 * 회사/조직 이름·리포트 작성자·소속·PDF 읽기 설정·마지막 백업 시각·되돌리기(가져오기 되돌리기) 저장분까지
-	 * 전부 지우고 샘플로 되돌린다. 화면 테마(`hcroi:theme`)는 회사 데이터가 아니라 이 브라우저의 개인 표시
+	 * 전부 지운다. 화면 테마(`hcroi:theme`)는 회사 데이터가 아니라 이 브라우저의 개인 표시
 	 * 설정이라 지우지 않는다(지워도 다음 로드 때 `app.html` 인라인 스크립트가 다시 기기 설정으로 채워 의미가 없다).
+	 *
+	 * **샘플로 되돌리지 않는다**(2026-09-15): "지우기"를 누른 뒤 가상 회사 실적이 되살아나면
+	 * 대시보드·리포트가 지운 줄 알았던 숫자를 계속 인쇄하게 된다. 샘플이 필요하면 빈 화면의
+	 * "샘플 데이터로 시작" 버튼으로 다시 넣는다.
 	 */
 	wipeAll() {
-		this.records = sampleRecords();
+		this.records = [];
 		this.scenarios = defaultScenarios();
 		this.baseId = null;
 		this.orgName = '';
@@ -538,10 +581,21 @@ class Workspace {
 						Object.entries(src.breakdown).map(([key, v]) => [key, scale(v)])
 					) as unknown as HcCostBreakdown)
 				: null,
-			headcountBreakdown: src?.headcountBreakdown ? { ...src.headcountBreakdown } : null
+			headcountBreakdown: src?.headcountBreakdown ? { ...src.headcountBreakdown } : null,
+			// 복사해 온 값이라는 표시 — 화면이 "복사됨 · 확인 필요" 칩을 붙이고, 값을 고치면 지워진다
+			copiedFrom: src ? { ...src.period } : null
 		};
 		this.records.push(rec);
 		return rec;
+	}
+
+	/**
+	 * 레코드 값을 손댔다는 신호 — "복사됨 · 확인 필요" 표시를 지운다.
+	 * 편집 화면의 입력 바인딩이 값을 쓸 때마다 호출한다 (합산 레코드는 편집 대상이 아니라 무시).
+	 */
+	markEdited(id: string) {
+		const r = this.getRecord(id);
+		if (r?.copiedFrom) r.copiedFrom = null;
 	}
 
 	removeRecord(id: string) {

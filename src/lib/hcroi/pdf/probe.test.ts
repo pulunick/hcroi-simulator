@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
+import { detectPeriod } from './detectPeriod';
 import { scanDocument } from './locate';
 import { DEFAULT_HC_INCLUDE, mapFields, periodForColumn } from './map';
 import { buildRecord } from './toRecord';
@@ -68,6 +69,7 @@ describe.skipIf(files.length === 0)('pdf probe', () => {
 				});
 				const summary = {
 					pages: pages.length,
+					detectedPeriod: detectPeriod(pages),
 					cover: scan.cover,
 					consolidatedRange: scan.consolidatedRange,
 					tables: scan.tables.map((t) => ({

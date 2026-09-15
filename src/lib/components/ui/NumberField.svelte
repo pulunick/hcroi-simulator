@@ -13,10 +13,17 @@
 		hintUnit?: AmountUnit;
 		/** 정수만 허용 */
 		integer?: boolean;
+		/**
+		 * 이 값보다 작으면 **오류로 표시**한다 (테두리 + `aria-invalid`).
+		 * 입력값을 말없이 끌어올리지 않는다 — 0 을 넣었는데 1 이 저장되면 화면과 표가 어긋난다(2026-09-15).
+		 * 실제 판정 문구는 코어 `validateRecord` 가 낸다.
+		 */
 		min?: number;
 		readonly?: boolean;
 		help?: string;
 		error?: string | null;
+		/** 바깥(검증)에서 이 칸이 틀렸다고 알려 줄 때 — 테두리만 붉게, 문구는 패널 상단에서 보여 준다 */
+		invalid?: boolean;
 	}
 
 	let {
@@ -29,7 +36,8 @@
 		min,
 		readonly = false,
 		help,
-		error = null
+		error = null,
+		invalid = false
 	}: Props = $props();
 
 	const id = $props.id();
@@ -54,8 +62,13 @@
 		const raw = (e.currentTarget as HTMLInputElement).value;
 		text = raw;
 		const n = parse(raw);
-		if (n !== null) value = min !== undefined ? Math.max(min, n) : n;
+		// 적힌 숫자를 그대로 싣는다 (min 으로 올려 치지 않는다) — 범위를 벗어나면 아래에서 오류로 보인다
+		if (n !== null) value = n;
 	}
+
+	/** 입력값이 허용 범위 아래인가 — 붉은 테두리·aria-invalid 의 근거 */
+	const belowMin = $derived(min !== undefined && Number.isFinite(value) && value < min);
+	const showInvalid = $derived(!!error || invalid || belowMin);
 
 	function onBlur() {
 		focused = false;
@@ -72,9 +85,10 @@
 			inputmode={integer ? 'numeric' : 'decimal'}
 			class="tabular field-input pr-12 text-right"
 			class:opacity-70={readonly}
+			class:border-status-critical={showInvalid}
 			value={text}
 			{readonly}
-			aria-invalid={error ? 'true' : undefined}
+			aria-invalid={showInvalid ? 'true' : undefined}
 			aria-describedby={help || krwHint ? `${id}-help` : undefined}
 			onfocus={() => (focused = true)}
 			oninput={onInput}

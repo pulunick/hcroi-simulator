@@ -11,6 +11,7 @@
 	import {
 		YEAR_MAX,
 		YEAR_MIN,
+		comparePeriods,
 		isValidPeriod,
 		isValidYear,
 		periodIndexCount,
@@ -18,6 +19,7 @@
 		periodLabel,
 		periodText
 	} from '$lib/hcroi/period';
+	import type { BlockedRollup } from '$lib/hcroi/rollup';
 	import {
 		mergeRecords,
 		parseAmountUnit,
@@ -38,8 +40,12 @@
 		PERIOD_TYPES,
 		PERIOD_TYPE_LABELS,
 		sameHeadcountBasis,
+		type BaseInputs,
+		type HcCostBreakdown,
 		type HeadcountBasis,
+		type HeadcountBreakdown,
 		type Period,
+		type PeriodRecord,
 		type PeriodType
 	} from '$lib/hcroi/types';
 	import {
@@ -71,6 +77,48 @@
 		workspace.effective.find((y) => y.id === selectedId) ?? workspace.latest
 	);
 	const errors = $derived(selected ? validateRecord(selected) : []);
+	/**
+	 * 오류 문구를 해당 입력 칸에 이어 준다 — 칸에는 붉은 테두리(`aria-invalid`)만 두고
+	 * 문구 자체는 패널 **상단**에서 한 번만 보여 준다. 판정은 언제나 코어 `validateRecord` 다.
+	 */
+	const fieldInvalid = $derived.by(() => {
+		const has = (...needles: string[]) => errors.some((e) => needles.some((n) => e.startsWith(n)));
+		return {
+			revenue: has('매출액'),
+			operatingCost: has('영업비용', '총 인건비가 영업비용보다'),
+			hcCost: has('총 인건비', '인건비 세부'),
+			headcount: has('총 임직원 수'),
+			headcountBreakdown: has('인원 구분')
+		};
+	});
+	/** 편집 패널 — 모바일(≤1024px)에서 행을 고르면 여기로 스크롤한다 (패널이 표 한참 아래에 있다) */
+	let editPanel = $state<HTMLElement | null>(null);
+	function selectRecord(id: string) {
+		selectedId = id;
+		if (typeof window !== 'undefined' && window.innerWidth <= 1024) {
+			// 패널이 다시 그려진 뒤 움직인다
+			requestAnimationFrame(() =>
+				editPanel?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+			);
+		}
+	}
+
+	// --- 편집 입력 (값을 고치면 "복사됨 · 확인 필요" 표시가 풀린다) ---
+	function setInput<K extends keyof BaseInputs>(k: K, v: number) {
+		if (!selected || selected.derived) return;
+		selected.inputs[k] = v;
+		workspace.markEdited(selected.id);
+	}
+	function setBreakdownField(k: keyof HcCostBreakdown, v: number) {
+		if (!selected?.breakdown) return;
+		selected.breakdown[k] = v;
+		workspace.markEdited(selected.id);
+	}
+	function setHeadField(k: keyof HeadcountBreakdown, v: number) {
+		if (!selected?.headcountBreakdown) return;
+		selected.headcountBreakdown[k] = v;
+		workspace.markEdited(selected.id);
+	}
 	/** 직접 입력한 값이 하위 기간 합산과 다른 항목 */
 	const mismatch = $derived(selected ? workspace.mismatchOf(selected) : []);
 	function editDerived() {
@@ -104,13 +152,18 @@
 			addError = `${periodLabel(newPeriod)} 데이터가 이미 있습니다.`;
 			return;
 		}
+		// 추가 전 연도를 잡아 둔다 — `newYear` 는 `workspace.latest` 에 기대는 $derived 라서
+		// addPeriod() 뒤에 읽으면 이미 한 해 올라가 있다(그대로 +1 하면 한 해를 건너뛴다)
+		const addedYear = newYear;
 		const rec = workspace.addPeriod(newPeriod);
 		selectedId = rec.id;
 		// 다음 기간으로 넘긴다: 4분기 다음은 이듬해 1분기
-		if (newIndex < periodIndexCount(newType)) newIndex += 1;
-		else {
+		if (newIndex < periodIndexCount(newType)) {
+			newIndex += 1;
+			newYearInput = addedYear;
+		} else {
 			newIndex = 1;
-			newYearInput = newYear + 1;
+			newYearInput = addedYear + 1;
 		}
 	}
 	/** 선택 기간의 값을 표준 레퍼런스 기본값으로 되돌린다 (매출액·인원은 유지) */
@@ -213,8 +266,10 @@
 		if (window.location.hash === '#pdf') pdfOpen = true;
 	});
 	/**
-	 * 소개 페이지 "결산서 PDF 로 시작" 진입점(`/data?start=pdf`) — 작업공간에 가상 회사 샘플이 섞여 있으면
-	 * 사용자의 결산서 값이 샘플과 합산되어 버리므로, PDF 카드를 펼치기 전에 샘플을 비운다.
+	 * 소개 페이지 시작 경로(`/data?start=pdf` · `/data?start=excel`) — 작업공간에 가상 회사 샘플이
+	 * 섞여 있으면 사용자 값이 샘플과 합산되어 버리므로, 시작 영역을 열기 전에 샘플을 비운다.
+	 * 두 경로의 규칙은 같다(샘플뿐이면 조용히 비움 / 사용자 데이터면 확인) — 다른 것은 안내 문구와
+	 * 어느 영역으로 데려가느냐뿐이다(PDF 카드 / 엑셀 템플릿·가져오기 줄).
 	 * `workspace.loaded` 가 켜진 뒤(레이아웃의 onMount 가 localStorage 를 읽은 뒤) 한 번만 처리한다 —
 	 * 이 페이지의 onMount 는 레이아웃보다 먼저 실행돼 로드 전 상태(샘플 기본값)만 보일 수 있다.
 	 */
@@ -223,20 +278,32 @@
 		if (!workspace.loaded || startHandled) return;
 		startHandled = true;
 		const params = new URLSearchParams(window.location.search);
-		if (params.get('start') !== 'pdf') return;
+		const start = params.get('start');
+		if (start !== 'pdf' && start !== 'excel') return;
+		const isPdf = start === 'pdf';
 		if (workspace.isSampleOnly()) {
 			workspace.startFresh();
-			ioMessage = '샘플을 비웠습니다. 결산서 PDF 를 올리면 첫 기간이 됩니다.';
+			ioMessage = isPdf
+				? '샘플을 비웠습니다. 결산서 PDF 를 올리면 첫 기간이 됩니다.'
+				: '샘플을 비웠습니다. 엑셀 템플릿을 내려받아 채운 뒤 가져오세요.';
 		} else if (
 			confirm(
-				'입력된 데이터가 있습니다. 지우고 결산서 PDF 로 새로 시작할까요? (취소하면 현재 데이터에 추가합니다)'
+				isPdf
+					? '입력된 데이터가 있습니다. 지우고 결산서 PDF 로 새로 시작할까요? (취소하면 현재 데이터에 추가합니다)'
+					: '입력된 데이터가 있습니다. 지우고 엑셀 양식으로 새로 시작할까요? (취소하면 현재 데이터에 추가합니다)'
 			)
 		) {
 			workspace.startFresh();
 		}
-		pdfOpen = true;
+		if (isPdf) pdfOpen = true;
 		// 처리 후 쿼리를 지워 새로고침 시 반복되지 않게 한다
 		replaceState(resolve('/data'), {});
+		// 해당 시작 영역으로 스크롤 (렌더 뒤에)
+		queueMicrotask(() =>
+			document
+				.getElementById(isPdf ? 'pdf' : 'excel')
+				?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+		);
 	});
 	/** PDF 카드에서 확인한 값 → 엑셀 가져오기와 같은 미리보기·병합·되돌리기 경로 */
 	function fromPdf(fileName: string, records: ParsedRecord[], companyName: string | null) {
@@ -410,11 +477,42 @@
 		}
 	}
 	function clearAll() {
-		if (confirm('모든 기간 데이터를 삭제할까요? (되돌릴 수 없습니다)')) {
+		if (
+			confirm(
+				'모든 기간 데이터를 삭제할까요? (되돌릴 수 없습니다)\n\n먼저 설정 → 백업 파일 저장을 권합니다.'
+			)
+		) {
 			workspace.clearAll();
 			selectedId = null;
 		}
 	}
+	/**
+	 * 표에 그릴 줄 — 레코드 + "합산 없음" 안내 줄(검증 오류인 하위 기간 때문에 만들지 못한 상위 기간).
+	 * 조용히 작아진 합계를 내보내지 않는 대신, 그 자리가 비어 있는 이유를 한 줄로 알린다.
+	 */
+	type TableRow = { key: string; rec: PeriodRecord } | { key: string; blocked: BlockedRollup };
+	const tableRows = $derived.by((): TableRow[] => {
+		const rows: TableRow[] = [
+			...workspace.effective.map((r) => ({ key: `r:${r.id}`, rec: r })),
+			...workspace.blocked.map((b) => ({ key: `b:${periodKey(b.period)}`, blocked: b }))
+		];
+		const at = (row: TableRow) => ('rec' in row ? row.rec.period : row.blocked.period);
+		return rows.sort((a, b) => comparePeriods(at(a), at(b)));
+	});
+	/** 표가 가로로 더 스크롤될 수 있는지 (끝에 닿으면 안내를 숨긴다) */
+	let tableScroll = $state<HTMLElement | null>(null);
+	let canScrollRight = $state(false);
+	function updateScrollHint() {
+		const el = tableScroll;
+		canScrollRight = !!el && el.scrollWidth - el.clientWidth - el.scrollLeft > 4;
+	}
+	$effect(() => {
+		// 표 내용·표시 단위가 바뀌면 다시 잰다
+		void tableRows;
+		void colUnit;
+		updateScrollHint();
+	});
+
 	const sharePct = REFERENCE_DEFAULTS.breakdownSharePct;
 </script>
 
@@ -437,7 +535,7 @@
 			>
 		</p>
 	</div>
-	<div class="flex flex-wrap items-center gap-2">
+	<div id="excel" class="flex scroll-mt-24 flex-wrap items-center gap-2">
 		<button type="button" class="btn btn-primary" onclick={exportExcel} disabled={busy}
 			>엑셀 내보내기</button
 		>
@@ -473,7 +571,7 @@
 		<details class="relative">
 			<summary class="btn list-none text-sm btn-ghost text-muted">고급 (JSON)</summary>
 			<div
-				class="absolute right-0 z-10 mt-1 flex w-max flex-col gap-1 rounded-[2px] border border-line bg-surface p-2"
+				class="absolute right-0 z-10 mt-1 flex w-max flex-col gap-1 rounded-lg border border-line bg-surface p-2 shadow-md"
 			>
 				<button
 					type="button"
@@ -499,7 +597,7 @@
 </div>
 {#if ioMessage}
 	<p
-		class="mb-4 rounded-[2px] border border-line bg-surface px-4 py-2 text-sm text-ink-2"
+		class="mb-4 rounded-md border border-line bg-surface px-4 py-2 text-sm text-ink-2"
 		role="status"
 	>
 		{ioMessage}
@@ -531,7 +629,7 @@
 				<label class="flex items-center gap-2 text-sm text-ink-2">
 					<input
 						type="checkbox"
-						class="rounded-[2px] border-line-2 text-brand"
+						class="rounded border-line-2 text-brand"
 						bind:checked={overwrite}
 					/>
 					기존 기간 덮어쓰기
@@ -540,7 +638,7 @@
 					<label class="flex items-center gap-2 text-sm text-ink-2">
 						<input
 							type="checkbox"
-							class="rounded-[2px] border-line-2 text-brand"
+							class="rounded border-line-2 text-brand"
 							bind:checked={skipErrors}
 						/>
 						오류 행 건너뛰고 반영
@@ -550,7 +648,7 @@
 					<label class="flex items-center gap-2 text-sm text-ink-2">
 						<input
 							type="checkbox"
-							class="rounded-[2px] border-line-2 text-brand"
+							class="rounded border-line-2 text-brand"
 							bind:checked={applyBasisFromFile}
 						/>
 						<span class="whitespace-nowrap"
@@ -562,7 +660,7 @@
 					<label class="flex items-center gap-2 text-sm text-ink-2">
 						<input
 							type="checkbox"
-							class="rounded-[2px] border-line-2 text-brand"
+							class="rounded border-line-2 text-brand"
 							bind:checked={applyOrgName}
 						/>
 						<span class="whitespace-nowrap">
@@ -578,7 +676,7 @@
 		</div>
 		{#if res.headerError}
 			<p
-				class="rounded-[2px] border border-status-critical/40 bg-status-critical-bg px-4 py-3 text-sm text-status-critical-ink"
+				class="rounded-md border border-status-critical/40 bg-status-critical-bg px-4 py-3 text-sm text-status-critical-ink"
 			>
 				{res.headerError}
 			</p>
@@ -608,7 +706,7 @@
 								<td class="px-3 py-2 font-semibold whitespace-nowrap">{r.label ?? '—'}</td>
 								<td class="px-3 py-2">
 									<span
-										class="rounded-[2px] px-1.5 py-0.5 text-xs font-semibold {r.status === '오류'
+										class="rounded px-1.5 py-0.5 text-xs font-semibold {r.status === '오류'
 											? 'bg-status-critical-bg text-status-critical-ink'
 											: r.status === '신규'
 												? 'bg-status-good-bg text-status-good-ink'
@@ -654,14 +752,16 @@
 	</section>
 {/if}
 
-<div class="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+<div
+	class="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] xl:grid-cols-[minmax(0,1.75fr)_minmax(0,1fr)]"
+>
 	<!-- 연도 목록 -->
 	<section class="card overflow-hidden" aria-labelledby="years-h">
 		<div class="flex flex-wrap items-center justify-between gap-3 px-5 pt-4 pb-3">
 			<div>
 				<h2 id="years-h" class="text-lg font-semibold text-ink">기간별 데이터</h2>
 				<p class="text-xs text-muted">
-					행을 클릭하면 오른쪽에서 편집할 수 있습니다. <span class="rounded-[2px] bg-surface-2 px-1"
+					행을 클릭하면 오른쪽에서 편집할 수 있습니다. <span class="rounded bg-surface-2 px-1"
 						>합산</span
 					> 은 하위 기간에서 계산된 기간(저장되지 않음)
 				</p>
@@ -705,107 +805,151 @@
 			</form>
 		</div>
 		{#if addError}<p class="px-5 pb-2 text-sm text-status-critical-ink">{addError}</p>{/if}
-		<div class="relative overflow-x-auto">
-			<table class="w-full min-w-[640px] text-[15px]">
-				<thead>
-					<tr class="border-y border-line bg-surface-2 text-sm text-ink-2">
-						<th scope="col" class="px-4 py-2 text-center font-semibold">기간</th>
-						<th scope="col" class="px-3 py-2 text-center font-semibold">매출액{colUnit}</th>
-						<th scope="col" class="px-3 py-2 text-center font-semibold">영업이익{colUnit}</th>
-						<th scope="col" class="px-3 py-2 text-center font-semibold">총 인건비{colUnit}</th>
-						<th scope="col" class="px-3 py-2 text-center font-semibold">인원</th>
-						<th scope="col" class="px-3 py-2 text-center font-semibold"
-							><span class="ml-auto block w-36 text-center">HCROI</span></th
-						>
-						<th scope="col" class="w-12 px-2 py-2"><span class="sr-only">삭제</span></th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each workspace.effective as y (y.id)}
-						{@const m = computeMetrics(y.inputs)}
-						<tr
-							class="cursor-pointer border-b border-line transition-colors last:border-0 hover:bg-surface-2 {selected?.id ===
-							y.id
-								? 'bg-brand-tint/60 hover:bg-brand-tint/60'
-								: y.derived
-									? 'text-ink-2'
-									: ''}"
-							aria-selected={selected?.id === y.id}
-							onclick={() => (selectedId = y.id)}
-						>
-							<th
-								scope="row"
-								class="px-4 py-2 text-left align-middle font-semibold whitespace-nowrap text-ink"
-							>
-								<button
-									type="button"
-									class="underline-offset-2 hover:underline"
-									onclick={() => (selectedId = y.id)}>{periodLabel(y.period)}</button
-								>
-								{#if y.derived}<span
-										class="ml-1 rounded-[2px] bg-surface-2 px-1.5 py-0.5 text-xs font-normal whitespace-nowrap text-muted"
-										title={derivedLabel(y.derived)}>합산</span
-									>{:else if y.id.startsWith('sample-')}<span
-										class="ml-1 text-xs font-normal whitespace-nowrap text-muted">샘플</span
-									>{/if}
-							</th>
-							<td class="tabular px-3 py-2 text-right align-middle">{cellWon(y.inputs.revenue)}</td>
-							<td class="tabular px-3 py-2 text-right align-middle">{cellWon(m.operatingProfit)}</td
-							>
-							<td class="tabular px-3 py-2 text-right align-middle">{cellWon(y.inputs.hcCost)}</td>
-							<td class="tabular px-3 py-2 text-right align-middle"
-								>{formatHeadcount(y.inputs.headcount)}</td
-							>
-							<td class="tabular px-3 py-2 text-right align-middle"
-								><span class="inline-flex w-36 items-center justify-end gap-2"
-									><span class="tabular">{formatMultiple(m.hcroi)}</span><span
-										class="inline-flex w-[4.75rem] justify-end"
-										><GradeBadge grade={gradeOf(m.hcroi)} /></span
-									></span
-								></td
-							>
-							<td class="px-2 py-2 text-right align-middle">
-								{#if !y.derived}
-									<button
-										type="button"
-										class="btn p-1.5 btn-ghost text-status-critical-ink hover:bg-status-critical-bg"
-										aria-label="{periodLabel(y.period)} 삭제"
-										title="{periodLabel(y.period)} 삭제"
-										onclick={(e) => {
-											e.stopPropagation();
-											removeRecord(y.id, periodLabel(y.period));
-										}}
-									>
-										<svg
-											width="16"
-											height="16"
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="2"
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											aria-hidden="true"
-											><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" /></svg
-										>
-									</button>
-								{/if}
-							</td>
+		{#if canScrollRight}
+			<p class="px-5 pb-1 text-right text-[11px] whitespace-nowrap text-muted" aria-hidden="true">
+				옆으로 넘기기 →
+			</p>
+		{/if}
+		<div class="relative">
+			<div class="overflow-x-auto" bind:this={tableScroll} onscroll={updateScrollHint}>
+				<table class="w-full min-w-[560px] text-[15px]">
+					<thead>
+						<tr class="border-y border-line bg-surface-2 text-sm text-ink-2">
+							<th scope="col" class="px-4 py-2 text-center font-semibold">기간</th>
+							<th scope="col" class="px-3 py-2 text-center font-semibold">매출액{colUnit}</th>
+							<th scope="col" class="px-3 py-2 text-center font-semibold">영업이익{colUnit}</th>
+							<th scope="col" class="px-3 py-2 text-center font-semibold">총 인건비{colUnit}</th>
+							<th scope="col" class="px-3 py-2 text-center font-semibold">인원</th>
+							<th scope="col" class="px-3 py-2 text-center font-semibold">HCROI</th>
+							<th scope="col" class="w-12 px-2 py-2"><span class="sr-only">삭제</span></th>
 						</tr>
-					{:else}
-						<tr
-							><td colspan="7" class="px-4 py-8 text-center text-muted"
-								>데이터가 없습니다. 기간을 추가하거나 샘플로 초기화하세요.</td
-							></tr
-						>
-					{/each}
-				</tbody>
-			</table>
+					</thead>
+					<tbody>
+						{#each tableRows as row (row.key)}
+							{#if 'blocked' in row}
+								<!-- 하위 기간에 검증 오류가 있어 합산을 만들지 않은 상위 기간 (조용히 작아진 합계를 내보내지 않는다) -->
+								<tr class="border-b border-line bg-status-warning-bg/50 last:border-0">
+									<th
+										scope="row"
+										class="px-4 py-2 text-left align-middle font-semibold whitespace-nowrap text-ink-2"
+										>{periodLabel(row.blocked.period)}</th
+									>
+									<td colspan="6" class="px-3 py-2 text-sm text-status-warning-ink">
+										합산 없음 — 하위 기간 오류({row.blocked.blockedBy
+											.map((p) => periodLabel(p))
+											.join(', ')})
+									</td>
+								</tr>
+							{:else}
+								{@const y = row.rec}
+								{@const m = computeMetrics(y.inputs)}
+								{@const invalid = !workspace.isValid(y)}
+								<tr
+									class="cursor-pointer border-b border-line transition-colors last:border-0 hover:bg-surface-2 {selected?.id ===
+									y.id
+										? 'bg-brand-tint/60 hover:bg-brand-tint/60'
+										: invalid
+											? 'bg-status-critical-bg/40'
+											: y.derived
+												? 'text-ink-2'
+												: ''}"
+									aria-selected={selected?.id === y.id}
+									onclick={() => selectRecord(y.id)}
+								>
+									<th
+										scope="row"
+										class="px-4 py-2 text-left align-middle font-semibold whitespace-nowrap text-ink"
+									>
+										<button
+											type="button"
+											class="underline-offset-2 hover:underline"
+											onclick={() => selectRecord(y.id)}>{periodLabel(y.period)}</button
+										>
+										{#if y.derived}<span
+												class="ml-1 rounded bg-surface-2 px-1.5 py-0.5 text-xs font-normal whitespace-nowrap text-muted"
+												title={derivedLabel(y.derived)}>합산</span
+											>{:else if y.id.startsWith('sample-')}<span
+												class="ml-1 text-xs font-normal whitespace-nowrap text-muted">샘플</span
+											>{/if}
+										{#if y.copiedFrom}<span
+												class="ml-1 rounded bg-status-warning-bg px-1.5 py-0.5 text-xs font-normal whitespace-nowrap text-status-warning-ink"
+												title="{periodLabel(y.copiedFrom)} 값을 복사해 왔습니다 — 실적으로 바꾸세요"
+												>복사됨 · 확인 필요</span
+											>{/if}
+										{#if invalid}<span
+												class="ml-1 rounded bg-status-critical-bg px-1.5 py-0.5 text-xs font-normal whitespace-nowrap text-status-critical-ink"
+												title="입력 오류 — 지표·추이·리포트에서 제외됩니다">입력 오류</span
+											>{/if}
+									</th>
+									<td class="tabular px-3 py-2 text-right align-middle"
+										>{cellWon(y.inputs.revenue)}</td
+									>
+									<td class="tabular px-3 py-2 text-right align-middle"
+										>{cellWon(m.operatingProfit)}</td
+									>
+									<td class="tabular px-3 py-2 text-right align-middle"
+										>{cellWon(y.inputs.hcCost)}</td
+									>
+									<td class="tabular px-3 py-2 text-right align-middle"
+										>{formatHeadcount(y.inputs.headcount)}</td
+									>
+									<td class="tabular px-3 py-2 text-right align-middle"
+										><span class="inline-flex items-center justify-end gap-1.5 whitespace-nowrap"
+											><span class="tabular">{invalid ? '—' : formatMultiple(m.hcroi)}</span
+											>{#if !invalid}<GradeBadge grade={gradeOf(m.hcroi)} />{/if}</span
+										></td
+									>
+									<td class="px-2 py-2 text-right align-middle">
+										{#if !y.derived}
+											<button
+												type="button"
+												class="btn p-1.5 btn-ghost text-status-critical-ink hover:bg-status-critical-bg"
+												aria-label="{periodLabel(y.period)} 삭제"
+												title="{periodLabel(y.period)} 삭제"
+												onclick={(e) => {
+													e.stopPropagation();
+													removeRecord(y.id, periodLabel(y.period));
+												}}
+											>
+												<svg
+													width="16"
+													height="16"
+													viewBox="0 0 24 24"
+													fill="none"
+													stroke="currentColor"
+													stroke-width="2"
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													aria-hidden="true"
+													><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" /></svg
+												>
+											</button>
+										{/if}
+									</td>
+								</tr>
+							{/if}
+						{:else}
+							<tr
+								><td colspan="7" class="px-4 py-8 text-center text-muted"
+									>데이터가 없습니다. 기간을 추가하거나 샘플로 초기화하세요.</td
+								></tr
+							>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+			{#if canScrollRight}
+				<!-- 그라데이션 대신 오른쪽 끝 1px 선만 (표 내용을 가리지 않는다). 끝까지 밀면 사라진다 -->
+				<div
+					class="pointer-events-none absolute inset-y-0 right-0 w-px bg-line-2"
+					aria-hidden="true"
+				></div>
+			{/if}
 		</div>
 	</section>
 
 	<!-- 편집 패널 -->
-	<section class="card px-5 py-5" aria-labelledby="edit-h">
+	<section class="card scroll-mt-24 px-5 py-5" aria-labelledby="edit-h" bind:this={editPanel}>
 		{#if selected?.derived}
 			{@const m = computeMetrics(selected.inputs)}
 			<h2 id="edit-h" class="text-lg font-semibold text-ink">
@@ -859,22 +1003,51 @@
 					onclick={resetYear}>초기화</button
 				>
 			</div>
+			{#if selected.copiedFrom}
+				<p
+					class="mb-4 rounded-md border border-status-warning/40 bg-status-warning-bg px-4 py-2 text-sm text-status-warning-ink"
+				>
+					<strong>복사됨 · 확인 필요</strong> — {periodLabel(selected.copiedFrom)} 값을 그대로 복사해
+					왔습니다. 실적으로 바꾸면 이 표시가 사라집니다.
+				</p>
+			{/if}
+			{#if errors.length}
+				<!-- 오류는 패널 맨 위에 — 아래 입력 칸은 붉은 테두리(aria-invalid)로 어디가 문제인지 알린다 -->
+				<div
+					class="mb-4 rounded-md border border-status-critical/40 bg-status-critical-bg px-4 py-3 text-sm text-status-critical-ink"
+					role="alert"
+				>
+					<p class="font-semibold">
+						입력 오류 — 이 기간은 지표·추이·시나리오·리포트에서 제외됩니다
+					</p>
+					<ul class="mt-1 space-y-1">
+						{#each errors as e (e)}<li>{e}</li>{/each}
+					</ul>
+				</div>
+			{/if}
 			<div class="space-y-4">
-				<NumberField {hintUnit} label="매출액" bind:value={selected.inputs.revenue} min={0} />
+				<NumberField
+					{hintUnit}
+					label="매출액"
+					bind:value={() => selected.inputs.revenue, (v) => setInput('revenue', v)}
+					min={0}
+					invalid={fieldInvalid.revenue}
+				/>
 				<NumberField
 					{hintUnit}
 					label="영업비용 (인건비 포함)"
-					bind:value={selected.inputs.operatingCost}
+					bind:value={() => selected.inputs.operatingCost, (v) => setInput('operatingCost', v)}
 					min={0}
+					invalid={fieldInvalid.operatingCost}
 					help="영업이익 = {won(selected.inputs.revenue - selected.inputs.operatingCost)}"
 				/>
-				<div class="rounded-[2px] border border-line bg-surface-2 p-4">
+				<div class="rounded-lg border border-line bg-surface-2 p-4">
 					<div class="mb-3 flex items-center justify-between gap-3">
 						<h3 class="text-sm font-semibold text-ink-2">총 임직원 수</h3>
 						<label class="flex items-center gap-2 text-sm text-ink-2">
 							<input
 								type="checkbox"
-								class="rounded-[2px] border-line-2 text-brand focus:ring-brand/30"
+								class="rounded border-line-2 text-brand focus:ring-brand/30"
 								checked={!!selected.headcountBreakdown}
 								onchange={toggleHeadcountBreakdown}
 							/>
@@ -887,9 +1060,10 @@
 								<NumberField
 									{hintUnit}
 									label={HEADCOUNT_LABELS[k] + (k === 'regular' ? ' (항상 포함)' : '')}
-									bind:value={selected.headcountBreakdown[k]}
+									bind:value={() => selected.headcountBreakdown![k], (v) => setHeadField(k, v)}
 									unit="명"
 									min={0}
+									invalid={fieldInvalid.headcountBreakdown}
 									help={k === 'regular' || workspace.headcountBasis.include[k]
 										? undefined
 										: '지금 기준에서는 총원에 넣지 않습니다'}
@@ -915,21 +1089,22 @@
 						<NumberField
 							{hintUnit}
 							label="총 임직원 수"
-							bind:value={selected.inputs.headcount}
+							bind:value={() => selected.inputs.headcount, (v) => setInput('headcount', v)}
 							unit="명"
 							min={1}
+							invalid={fieldInvalid.headcount}
 							help={basisLabel}
 						/>
 					{/if}
 				</div>
 
-				<div class="rounded-[2px] border border-line bg-surface-2 p-4">
+				<div class="rounded-lg border border-line bg-surface-2 p-4">
 					<div class="mb-3 flex items-center justify-between gap-3">
 						<h3 class="text-sm font-semibold text-ink-2">총 인건비</h3>
 						<label class="flex items-center gap-2 text-sm text-ink-2">
 							<input
 								type="checkbox"
-								class="rounded-[2px] border-line-2 text-brand focus:ring-brand/30"
+								class="rounded border-line-2 text-brand focus:ring-brand/30"
 								checked={!!selected.breakdown}
 								onchange={toggleBreakdown}
 							/>
@@ -942,7 +1117,7 @@
 								<NumberField
 									{hintUnit}
 									label="{HC_COST_LABELS[k]} ({sharePct[k]}%)"
-									bind:value={selected.breakdown[k]}
+									bind:value={() => selected.breakdown![k], (v) => setBreakdownField(k, v)}
 									min={0}
 								/>
 							{/each}
@@ -951,8 +1126,9 @@
 							<NumberField
 								{hintUnit}
 								label="총 인건비 (총액)"
-								bind:value={selected.inputs.hcCost}
+								bind:value={() => selected.inputs.hcCost, (v) => setInput('hcCost', v)}
 								min={0}
+								invalid={fieldInvalid.hcCost}
 							/>
 							<div class="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm">
 								<div class="text-ink-2">
@@ -992,8 +1168,9 @@
 						<NumberField
 							{hintUnit}
 							label="총 인건비 (총액)"
-							bind:value={selected.inputs.hcCost}
+							bind:value={() => selected.inputs.hcCost, (v) => setInput('hcCost', v)}
 							min={0}
+							invalid={fieldInvalid.hcCost}
 							help="기본급+성과급/수당+퇴직급여+법정후생비+기타 복리후생비+교육훈련비"
 						/>
 					{/if}
@@ -1004,13 +1181,14 @@
 					<input
 						class="mt-1 field-input"
 						bind:value={selected.memo}
+						oninput={() => selected && workspace.markEdited(selected.id)}
 						placeholder="예: 2025년 결산 확정치"
 					/>
 				</label>
 
 				{#if mismatch.length}
 					<div
-						class="rounded-[2px] border border-status-warning/40 bg-status-warning-bg px-4 py-3 text-sm text-status-warning-ink"
+						class="rounded-md border border-status-warning/40 bg-status-warning-bg px-4 py-3 text-sm text-status-warning-ink"
 					>
 						<p class="font-semibold">하위 기간 합산과 다릅니다 — 직접 입력한 값을 씁니다</p>
 						<ul class="mt-1 space-y-0.5">
@@ -1029,13 +1207,7 @@
 						</p>
 					</div>
 				{/if}
-				{#if errors.length}
-					<ul
-						class="space-y-1 rounded-[2px] border border-status-critical/40 bg-status-critical-bg px-4 py-3 text-sm text-status-critical-ink"
-					>
-						{#each errors as e (e)}<li>{e}</li>{/each}
-					</ul>
-				{:else}
+				{#if !errors.length}
 					<p class="text-sm text-status-good-ink">
 						입력값이 유효합니다. 변경 사항은 자동 저장됩니다.
 					</p>

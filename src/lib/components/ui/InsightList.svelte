@@ -21,7 +21,7 @@
 	<ul class="space-y-3">
 		{#each insights as ins, i (i)}
 			{@const t = tone[ins.tone]}
-			<li class="rounded-[2px] border border-l-4 border-line {t.border} bg-surface px-4 py-3">
+			<li class="rounded-lg border border-l-4 border-line {t.border} bg-surface px-4 py-3">
 				<div class="mb-1 flex items-center gap-2">
 					<span class="text-xs font-bold tracking-wide uppercase {t.ink}">{t.label}</span>
 					<h3 class="text-[15px] font-semibold text-ink">{ins.title}</h3>

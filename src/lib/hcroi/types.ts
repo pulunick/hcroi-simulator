@@ -156,6 +156,12 @@ export interface PeriodRecord {
 	headcountBreakdown: HeadcountBreakdown | null;
 	memo?: string;
 	/**
+	 * 기간을 새로 추가할 때 **직전 기간 값을 복사해 왔다**는 표시 (출처 기간).
+	 * 복사된 값은 아직 실적이 아니므로 화면이 "복사됨 · 확인 필요" 칩을 보여 준다.
+	 * 값을 하나라도 고치면 지워진다(`workspace.markEdited`). 저장 대상이다(localStorage·JSON).
+	 */
+	copiedFrom?: Period | null;
+	/**
 	 * 하위 기간에서 계산된 레코드 표시 (`rollup.ts`). 직접 입력한 레코드에는 없다.
 	 * 계산 레코드는 저장하지 않으며 id 는 `derived:<periodKey>` 로 고정된다.
 	 */
@@ -208,7 +214,7 @@ export interface Metrics {
 export interface ScenarioParams {
 	/** 인원 조정 방식: 비율(%) 또는 증감 인원(명) */
 	headcountMode: 'pct' | 'delta';
-	/** 인원 변동율 (%) — headcountMode === 'pct' 일 때 사용 */
+	/** 인원 변동률 (%) — headcountMode === 'pct' 일 때 사용 */
 	headcountPct: number;
 	/** 변동 인원수 (명, +/-) — headcountMode === 'delta' 일 때 사용 */
 	headcountDelta: number;

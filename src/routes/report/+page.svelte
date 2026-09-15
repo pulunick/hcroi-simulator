@@ -17,8 +17,14 @@
 	let selectedId = $state<string | null>(null);
 	const rec = $derived(workspace.effective.find((r) => r.id === selectedId) ?? workspace.base);
 	const prev = $derived(rec ? workspace.previousOf(rec) : null);
-	const blocker = $derived(reportBlocker(rec));
+	/**
+	 * 리포트 재료 — `workspace.loaded` 전에는 판단하지 않는다. 로드 전 상태는 아직 localStorage 를
+	 * 읽지 않은 초기 샘플이라, 그대로 그리면 지운 데이터가 인쇄될 수 있다(2026-09-15).
+	 */
+	const blocker = $derived(workspace.loaded ? reportBlocker(rec) : { kind: 'no-data' as const });
 	const today = todayText();
+	/** 회사 이름이 비어 있으면 머리글이 빈 채로 인쇄된다 — 막지는 않고 알리기만 한다 */
+	const missingOrgName = $derived(workspace.orgName.trim() === '');
 
 	// 인쇄 규칙(헤더·탭·도구 줄 숨김)은 이 화면에서만 켠다 — 다른 화면 인쇄에 영향을 주지 않도록 클래스로 가둔다
 	onMount(() => {
@@ -51,6 +57,15 @@
 			</span>
 		</div>
 	</div>
+
+	{#if missingOrgName && !blocker}
+		<p
+			class="mb-3 rounded-md border border-status-warning/40 bg-status-warning-bg px-4 py-2 text-sm text-status-warning-ink"
+			role="status"
+		>
+			회사 이름이 비어 있습니다 — 상단에서 입력하세요. (비워 둔 채로도 인쇄는 됩니다)
+		</p>
+	{/if}
 
 	<div class="card flex flex-wrap items-end gap-4 px-4 py-3">
 		{#if workspace.effective.length}
@@ -116,7 +131,7 @@
 		<ReportPaper
 			record={rec}
 			{prev}
-			effective={workspace.effective}
+			effective={workspace.validEffective}
 			scenarios={workspace.scenarios}
 			basis={workspace.headcountBasis}
 			amountUnit={workspace.amountUnit}

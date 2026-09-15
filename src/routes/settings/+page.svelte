@@ -113,20 +113,20 @@
 					'지워지는 것: 모든 기간 레코드 · 시나리오 · 회사/조직 이름 · 임직원 수 산정 기준 · ' +
 					'PDF 읽기 설정 · 리포트 작성자/소속 · 마지막 백업 기록 · 가져오기 되돌리기 저장분.\n' +
 					'화면 테마(밝게/어둡게)는 유지됩니다.\n\n' +
-					'지운 뒤에는 샘플 회사로 시작합니다.'
+					'지운 뒤에는 빈 화면으로 시작합니다. 먼저 백업 파일을 저장하는 것을 권합니다.'
 			)
 		)
 			return;
 		workspace.wipeAll();
-		message = '데이터를 지우고 샘플 회사로 시작합니다.';
+		message = '이 PC 의 데이터를 모두 지웠습니다. 빈 화면에서 다시 시작하세요.';
 	}
 </script>
 
 <svelte:head><title>{workspace.pageTitle('설정')}</title></svelte:head>
 
 <div class="flex max-w-[720px] flex-col gap-2 pb-2">
-	<span class="font-mono text-xs tracking-[0.08em] text-muted">설정</span>
-	<h1 class="text-[28px] leading-[1.3] text-ink sm:text-[34px]">표시 방식과 산정 기준, 백업</h1>
+	<span class="text-xs font-semibold tracking-wide text-muted">설정</span>
+	<h1 class="text-2xl leading-[1.3] font-bold text-ink">표시 방식과 산정 기준, 백업</h1>
 	<p class="text-[15px] text-pretty text-ink-2">
 		여기 값은 모든 화면에 함께 적용됩니다. 기간·시나리오·PDF 열 선택은 각 화면 안에서 바꿉니다.
 	</p>
@@ -211,7 +211,7 @@
 	last
 >
 	<div class="flex flex-col gap-6">
-		<dl class="border-t border-ink">
+		<dl class="border-t border-line-2">
 			<div
 				class="grid gap-0.5 border-b border-line py-3 sm:grid-cols-[160px_minmax(0,1fr)] sm:gap-0"
 			>
@@ -239,14 +239,14 @@
 				>백업 파일 저장 (.json)</button
 			>
 			<label
-				class="border-b border-ink text-[15px] leading-[1.4] font-medium text-ink hover:border-brand hover:text-brand"
+				class="text-[15px] leading-[1.4] font-medium text-brand underline underline-offset-2 hover:text-brand-hover"
 			>
 				파일 열기
 				<input type="file" accept="application/json,.json" class="sr-only" onchange={openBackup} />
 			</label>
 			<button
 				type="button"
-				class="border-b border-ink text-[15px] leading-[1.4] font-medium text-ink hover:border-brand hover:text-brand disabled:opacity-50"
+				class="text-[15px] leading-[1.4] font-medium text-brand underline underline-offset-2 hover:text-brand-hover disabled:opacity-50"
 				disabled={busy}
 				onclick={exportExcel}>{busy ? '내보내는 중…' : '엑셀로 내보내기'}</button
 			>
@@ -259,11 +259,12 @@
 		<div class="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line pt-4">
 			<button
 				type="button"
-				class="border-b border-brand text-[15px] leading-[1.4] font-semibold text-brand"
+				class="text-[15px] leading-[1.4] font-semibold text-status-critical-ink underline underline-offset-2"
 				onclick={clearThisPc}>이 PC 의 데이터 지우기</button
 			>
 			<span class="text-[13px] text-muted"
-				>되돌릴 수 없습니다. 먼저 백업 파일을 저장하세요. 지운 뒤에는 샘플 회사로 시작합니다.</span
+				>되돌릴 수 없습니다. 먼저 백업 파일을 저장하세요. 지운 뒤에는 빈 화면으로 시작합니다(샘플이
+				필요하면 데이터 화면의 `샘플로 초기화` 를 쓰세요).</span
 			>
 		</div>
 	</div>

@@ -85,6 +85,26 @@
 	const metrics = $derived(rec ? computeMetrics(rec.inputs) : null);
 	const diag = $derived(diagnose(metrics?.hcroi ?? null));
 	const errors = $derived(rec ? validateRecord(rec) : []);
+	/** 어느 입력 칸이 오류에 걸렸는지 — 칸에는 붉은 테두리만, 문구는 아래 안내 상자에서 한 번만 */
+	const fieldInvalid = $derived.by(() => {
+		const has = (...needles: string[]) => errors.some((e) => needles.some((n) => e.startsWith(n)));
+		return {
+			revenue: has('매출액'),
+			operatingCost: has('영업비용', '총 인건비가 영업비용보다'),
+			hcCost: has('총 인건비', '인건비 세부'),
+			headcount: has('총 임직원 수')
+		};
+	});
+	/**
+	 * 입력 칸 → 레코드. `rec` 은 $derived 라 프로퍼티를 직접 `bind:` 하면 Svelte 가
+	 * `binding_property_non_reactive` 를 경고한다 — get/set 쌍으로 쓴다.
+	 * 값을 고치면 "복사됨 · 확인 필요" 표시도 함께 풀린다.
+	 */
+	function setInput(k: 'revenue' | 'operatingCost' | 'hcCost' | 'headcount', v: number) {
+		if (!rec || rec.derived) return;
+		rec.inputs[k] = v;
+		workspace.markEdited(rec.id);
+	}
 
 	/** 전기 = 같은 유형의 바로 앞 기간 (연간이면 전년, 분기면 직전 분기) */
 	const prev = $derived(rec ? workspace.previousOf(rec) : null);
@@ -107,7 +127,8 @@
 	);
 	let trendRangeChoice = $state<TrendRange | null>(null);
 	const trendRange = $derived<TrendRange>(trendRangeChoice ?? defaultTrendRange(trendType));
-	const trendPoints = $derived(trendSeries(workspace.effective, trendType, trendRange));
+	// 추이·인사이트는 검증을 통과한 레코드만 (오류 레코드는 지표에서 제외 — 2026-09-15)
+	const trendPoints = $derived(trendSeries(workspace.validEffective, trendType, trendRange));
 	/** 본체 유형만 — 금액 누적 막대·추이 인사이트 (표·라인은 참조점까지 `seriesRows`) */
 	const ownSeries = $derived(trendPoints.filter((p) => !p.reference).map((p) => p.record));
 	const refYears = $derived(referenceYears(trendPoints));
@@ -163,13 +184,40 @@
 
 	// 대시보드 제목 — 회사/조직 이름은 헤더 로고 자리에서 편집한다(+layout.svelte). 저장은 workspace.orgName 한 곳
 	const pageTitle = $derived(workspace.pageTitle());
+	/** 아직 가상 회사 샘플뿐인가 — 제목 옆 "샘플 데이터" 칩의 근거 */
+	const isSampleOnly = $derived(workspace.records.length > 0 && workspace.isSampleOnly());
+
+	/** 지표 표가 가로로 더 스크롤될 수 있는지 (데이터 화면 표와 같은 방식 — 끝에 닿으면 안내를 숨긴다) */
+	let tableScroll = $state<HTMLElement | null>(null);
+	let canScrollRight = $state(false);
+	function updateScrollHint() {
+		const el = tableScroll;
+		canScrollRight = !!el && el.scrollWidth - el.clientWidth - el.scrollLeft > 4;
+	}
+	$effect(() => {
+		// 표 내용·표시 단위가 바뀌면 다시 잰다
+		void seriesRows;
+		void colUnit;
+		updateScrollHint();
+	});
 </script>
 
 <svelte:head><title>{pageTitle}</title></svelte:head>
 
 <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
 	<div>
-		<h1 class="text-2xl font-bold text-ink">{pageTitle}</h1>
+		<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+			<h1 class="text-2xl font-bold text-ink">{pageTitle}</h1>
+			{#if isSampleOnly}
+				<span
+					class="rounded bg-status-warning-bg px-2 py-0.5 text-xs font-semibold whitespace-nowrap text-status-warning-ink"
+					>샘플 데이터</span
+				>
+				<a href={resolve('/data')} class="text-sm font-medium text-brand-ink hover:underline"
+					>데이터 화면에서 자사 실적으로 교체 →</a
+				>
+			{/if}
+		</div>
 		<p class="mt-1 text-[15px] text-ink-2">
 			재무·HR 데이터를 입력하면 인적자본 투자효율 지표가 실시간으로 산출됩니다. 회사 이름은 상단의
 			회사 이름을 눌러 바꿉니다.
@@ -214,7 +262,7 @@
 				>
 			</div>
 			{#if rec.derived}
-				<p class="mb-3 rounded-[2px] border border-line bg-surface-2 px-3 py-2 text-sm text-ink-2">
+				<p class="mb-3 rounded-md border border-line bg-surface-2 px-3 py-2 text-sm text-ink-2">
 					<strong class="text-ink">{derivedLabel(rec.derived)}</strong> — 하위 기간에서 계산된
 					값이라 여기서는 고칠 수 없습니다. 개별 기간을 데이터 관리에서 수정하거나,
 					<button type="button" class="font-semibold text-brand-ink underline" onclick={editDerived}
@@ -226,21 +274,22 @@
 				<NumberField
 					{hintUnit}
 					label="매출액"
-					bind:value={rec.inputs.revenue}
+					bind:value={() => rec.inputs.revenue, (v) => setInput('revenue', v)}
 					min={0}
+					invalid={fieldInvalid.revenue}
 					readonly={!!rec.derived}
 				/>
 				<div>
 					<div class="mb-1.5 flex items-center justify-between">
 						<span class="text-sm font-semibold text-ink-2">비용 입력 방식</span>
 						<div
-							class="inline-flex rounded-[2px] border border-line-2 p-0.5 text-sm"
+							class="inline-flex rounded-md border border-line-2 p-0.5 text-sm"
 							role="group"
 							aria-label="비용 입력 방식"
 						>
 							<button
 								type="button"
-								class="rounded-[2px] px-2.5 py-0.5 font-medium {costMode === 'cost'
+								class="rounded px-2.5 py-0.5 font-medium {costMode === 'cost'
 									? 'bg-brand text-on-brand'
 									: 'text-ink-2'}"
 								aria-pressed={costMode === 'cost'}
@@ -248,7 +297,7 @@
 							>
 							<button
 								type="button"
-								class="rounded-[2px] px-2.5 py-0.5 font-medium {costMode === 'profit'
+								class="rounded px-2.5 py-0.5 font-medium {costMode === 'profit'
 									? 'bg-brand text-on-brand'
 									: 'text-ink-2'}"
 								aria-pressed={costMode === 'profit'}
@@ -260,8 +309,9 @@
 						<NumberField
 							{hintUnit}
 							label="영업비용 (인건비 포함)"
-							bind:value={rec.inputs.operatingCost}
+							bind:value={() => rec.inputs.operatingCost, (v) => setInput('operatingCost', v)}
 							min={0}
+							invalid={fieldInvalid.operatingCost}
 							readonly={!!rec.derived}
 							help="영업이익 {won(metrics.operatingProfit)}"
 						/>
@@ -271,7 +321,7 @@
 							label="영업이익"
 							bind:value={
 								() => rec.inputs.revenue - rec.inputs.operatingCost,
-								(v) => (rec.inputs.operatingCost = rec.inputs.revenue - v)
+								(v) => setInput('operatingCost', rec.inputs.revenue - v)
 							}
 							readonly={!!rec.derived}
 							help="영업비용 {won(rec.inputs.operatingCost)}"
@@ -281,8 +331,9 @@
 				<NumberField
 					{hintUnit}
 					label="총 인건비"
-					bind:value={rec.inputs.hcCost}
+					bind:value={() => rec.inputs.hcCost, (v) => setInput('hcCost', v)}
 					min={0}
+					invalid={fieldInvalid.hcCost}
 					readonly={!!rec.derived}
 					help={rec.breakdown
 						? `세부 합계 ${won(sumHcCost(rec.breakdown))}${
@@ -295,9 +346,10 @@
 				<NumberField
 					{hintUnit}
 					label="총 임직원 수"
-					bind:value={rec.inputs.headcount}
+					bind:value={() => rec.inputs.headcount, (v) => setInput('headcount', v)}
 					unit="명"
 					min={1}
+					invalid={fieldInvalid.headcount}
 					readonly={!!rec.headcountBreakdown || !!rec.derived}
 					help={rec.headcountBreakdown
 						? `인원 구분 합계 · ${basisLabel} (데이터 관리에서 수정)`
@@ -306,14 +358,15 @@
 			</div>
 			{#if errors.length}
 				<ul
-					class="mt-4 space-y-1 rounded-[2px] border border-status-critical/40 bg-status-critical-bg px-4 py-3 text-sm text-status-critical-ink"
+					class="mt-4 space-y-1 rounded-md border border-status-critical/40 bg-status-critical-bg px-4 py-3 text-sm text-status-critical-ink"
+					role="alert"
 				>
 					{#each errors as e (e)}<li>{e}</li>{/each}
 				</ul>
 			{/if}
 			{#if mismatch.length}
 				<div
-					class="mt-4 rounded-[2px] border border-status-warning/40 bg-status-warning-bg px-4 py-3 text-sm text-status-warning-ink"
+					class="mt-4 rounded-md border border-status-warning/40 bg-status-warning-bg px-4 py-3 text-sm text-status-warning-ink"
 				>
 					<p class="font-semibold">
 						직접 입력한 값이 하위 기간 합산과 다릅니다 (직접 입력을 씁니다)
@@ -335,101 +388,140 @@
 
 		<!-- 지표 -->
 		<div class="space-y-4">
-			<section class="card px-6 py-5" aria-labelledby="hcroi-h">
-				<div class="flex flex-wrap items-start justify-between gap-4">
-					<div>
-						<h2 id="hcroi-h" class="text-sm font-medium text-ink-2">HCROI (인적자본 투자수익률)</h2>
-						<div class="mt-1 flex flex-wrap items-baseline gap-x-3">
-							<span class="tabular text-5xl font-semibold tracking-tight text-ink"
-								>{formatMultiple(metrics.hcroi)}</span
-							>
-							<span class="text-base text-muted">= {multipleToPct(metrics.hcroi)}</span>
-						</div>
-						{#if prevMetrics}
-							{@const d = delta(metrics.hcroi, prevMetrics.hcroi, formatMultiple)}
-							{#if d}
-								<div
-									class="mt-1 text-sm font-medium {d.direction === 'flat'
-										? 'text-muted'
-										: d.direction === 'up'
-											? 'text-status-good-ink'
-											: 'text-status-critical-ink'}"
+			{#if errors.length}
+				<!--
+				  검증 오류 레코드는 지표·등급·추이·시나리오·리포트에서 제외한다 (2026-09-15).
+				  저장은 그대로 두되(초안 허용) 여기서는 등급 대신 "어디를 고쳐야 하는지"만 보여 준다.
+				-->
+				<section
+					class="card border-status-critical/40 px-6 py-8"
+					aria-labelledby="invalid-h"
+					role="alert"
+				>
+					<h2 id="invalid-h" class="text-lg font-semibold text-status-critical-ink">
+						입력 오류 — 데이터 화면에서 수정
+					</h2>
+					<p class="mt-1 text-[15px] text-ink-2">
+						{periodLabel(rec.period)} 입력값에 오류가 있어 HCROI·등급·인사이트를 내지 않습니다. 이 기간은
+						추이·시뮬레이터·리포트에서도 빠집니다.
+					</p>
+					<ul class="mt-3 space-y-1 text-[15px] text-status-critical-ink">
+						{#each errors as e (e)}<li>· {e}</li>{/each}
+					</ul>
+					<a href={resolve('/data')} class="mt-5 btn inline-flex btn-primary"
+						>데이터 화면에서 수정 →</a
+					>
+				</section>
+			{:else}
+				{#if rec.copiedFrom}
+					<p
+						class="rounded-md border border-status-warning/40 bg-status-warning-bg px-4 py-2 text-sm text-status-warning-ink"
+						role="status"
+					>
+						<strong>복사됨 · 확인 필요</strong> — {periodLabel(rec.period)} 값은
+						{periodLabel(rec.copiedFrom)} 에서 복사해 온 그대로입니다. 실적으로 바꾸기 전까지 지표를 그대로
+						믿지 마세요.
+						<a href={resolve('/data')} class="font-semibold underline">데이터 화면에서 입력 →</a>
+					</p>
+				{/if}
+				<section class="card px-6 py-5" aria-labelledby="hcroi-h">
+					<div class="flex flex-wrap items-start justify-between gap-4">
+						<div>
+							<h2 id="hcroi-h" class="text-sm font-medium text-ink-2">
+								HCROI (인적자본 투자수익률)
+							</h2>
+							<div class="mt-1 flex flex-wrap items-baseline gap-x-3">
+								<span class="tabular text-5xl font-semibold tracking-tight text-ink"
+									>{formatMultiple(metrics.hcroi)}</span
 								>
-									{d.text}
+								<span class="text-base text-muted">= {multipleToPct(metrics.hcroi)}</span>
+							</div>
+							{#if prevMetrics}
+								{@const d = delta(metrics.hcroi, prevMetrics.hcroi, formatMultiple)}
+								{#if d}
+									<div
+										class="mt-1 text-sm font-medium {d.direction === 'flat'
+											? 'text-muted'
+											: d.direction === 'up'
+												? 'text-status-good-ink'
+												: 'text-status-critical-ink'}"
+									>
+										{d.text}
+									</div>
+								{/if}
+							{/if}
+							{#if yearAgo && yearAgoMetrics && yearAgoMetrics.hcroi !== null && metrics.hcroi !== null}
+								<!-- 반기·분기는 계절성이 있어 직전 기간보다 전년 동기가 더 공정한 비교다 -->
+								<div class="mt-0.5 text-sm text-muted">
+									{formatSigned(metrics.hcroi - yearAgoMetrics.hcroi, formatMultiple)} vs 전년 동기({periodLabel(
+										yearAgo.period
+									)})
 								</div>
 							{/if}
-						{/if}
-						{#if yearAgo && yearAgoMetrics && yearAgoMetrics.hcroi !== null && metrics.hcroi !== null}
-							<!-- 반기·분기는 계절성이 있어 직전 기간보다 전년 동기가 더 공정한 비교다 -->
-							<div class="mt-0.5 text-sm text-muted">
-								{formatSigned(metrics.hcroi - yearAgoMetrics.hcroi, formatMultiple)} vs 전년 동기({periodLabel(
-									yearAgo.period
-								)})
-							</div>
-						{/if}
+						</div>
+						<GradeBadge grade={gradeOf(metrics.hcroi)} size="lg" />
 					</div>
-					<GradeBadge grade={gradeOf(metrics.hcroi)} size="lg" />
-				</div>
-				<p class="mt-3 text-[15px] leading-relaxed text-ink-2">
-					{diag?.summary ?? '총 인건비가 0이어서 HCROI 를 계산할 수 없습니다.'}
-				</p>
-				<p class="tabular mt-2 text-sm text-muted">
-					산식: (영업이익 {won(metrics.operatingProfit)} + 총 인건비 {won(rec.inputs.hcCost)}) ÷ 총
-					인건비 {won(rec.inputs.hcCost)}
-				</p>
-			</section>
+					<p class="mt-3 text-[15px] leading-relaxed text-ink-2">
+						{diag?.summary ?? '총 인건비가 0이어서 HCROI 를 계산할 수 없습니다.'}
+					</p>
+					<p class="tabular mt-2 text-sm text-muted">
+						산식: (영업이익 {won(metrics.operatingProfit)} + 총 인건비 {won(rec.inputs.hcCost)}) ÷
+						총 인건비 {won(rec.inputs.hcCost)}
+					</p>
+				</section>
 
-			<div class="grid gap-4 sm:grid-cols-3">
-				<StatTile
-					label="HCVA (인당 부가가치)"
-					value={won(metrics.hcva)}
-					sub="/인"
-					delta={delta(metrics.hcva, prevMetrics?.hcva, (n) => won(n))}
-				/>
-				<StatTile
-					label="인당 매출액"
-					value={won(metrics.revenuePerHead)}
-					sub="/인"
-					delta={delta(metrics.revenuePerHead, prevMetrics?.revenuePerHead, (n) => won(n))}
-				/>
-				<StatTile
-					label="인당 인건비"
-					value={won(metrics.hcCostPerHead)}
-					sub="/인"
-					delta={delta(metrics.hcCostPerHead, prevMetrics?.hcCostPerHead, (n) => won(n), false)}
-				/>
-			</div>
-			<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-				<StatTile
-					label="영업이익"
-					value={won(metrics.operatingProfit)}
-					delta={delta(metrics.operatingProfit, prevMetrics?.operatingProfit, (n) => won(n))}
-				/>
-				<StatTile
-					label="영업이익률"
-					value={formatPct(metrics.operatingMargin)}
-					delta={delta(
-						metrics.operatingMargin,
-						prevMetrics?.operatingMargin,
-						(n) => `${n.toFixed(1)}%p`
-					)}
-				/>
-				<StatTile
-					label="매출 대비 인건비율"
-					value={formatPct(metrics.hcCostToRevenue)}
-					delta={delta(
-						metrics.hcCostToRevenue,
-						prevMetrics?.hcCostToRevenue,
-						(n) => `${n.toFixed(1)}%p`,
-						false
-					)}
-				/>
-				<StatTile
-					label="총 임직원 수"
-					value={formatHeadcount(rec.inputs.headcount)}
-					delta={delta(rec.inputs.headcount, prev?.inputs.headcount, (n) => `${n}명`)}
-				/>
-			</div>
+				<div class="grid gap-4 sm:grid-cols-3">
+					<StatTile
+						label="HCVA (인당 부가가치)"
+						value={won(metrics.hcva)}
+						sub="/인"
+						delta={delta(metrics.hcva, prevMetrics?.hcva, (n) => won(n))}
+					/>
+					<StatTile
+						label="인당 매출액"
+						value={won(metrics.revenuePerHead)}
+						sub="/인"
+						delta={delta(metrics.revenuePerHead, prevMetrics?.revenuePerHead, (n) => won(n))}
+					/>
+					<StatTile
+						label="인당 인건비"
+						value={won(metrics.hcCostPerHead)}
+						sub="/인"
+						delta={delta(metrics.hcCostPerHead, prevMetrics?.hcCostPerHead, (n) => won(n), false)}
+					/>
+				</div>
+				<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+					<StatTile
+						label="영업이익"
+						value={won(metrics.operatingProfit)}
+						delta={delta(metrics.operatingProfit, prevMetrics?.operatingProfit, (n) => won(n))}
+					/>
+					<StatTile
+						label="영업이익률"
+						value={formatPct(metrics.operatingMargin)}
+						delta={delta(
+							metrics.operatingMargin,
+							prevMetrics?.operatingMargin,
+							(n) => `${n.toFixed(1)}%p`
+						)}
+					/>
+					<StatTile
+						label="매출 대비 인건비율"
+						value={formatPct(metrics.hcCostToRevenue)}
+						delta={delta(
+							metrics.hcCostToRevenue,
+							prevMetrics?.hcCostToRevenue,
+							(n) => `${n.toFixed(1)}%p`,
+							false
+						)}
+					/>
+					<StatTile
+						label="총 임직원 수"
+						value={formatHeadcount(rec.inputs.headcount)}
+						delta={delta(rec.inputs.headcount, prev?.inputs.headcount, (n) => `${n}명`)}
+					/>
+				</div>
+			{/if}
 		</div>
 	</div>
 
@@ -506,7 +598,7 @@
 	</div>
 
 	<!-- 추이 인사이트 + 표 -->
-	<div class="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+	<div class="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.65fr)]">
 		<section aria-labelledby="trend-h">
 			<h2 id="trend-h" class="mb-3 text-lg font-semibold text-ink">추이 인사이트</h2>
 			<InsightList
@@ -514,48 +606,56 @@
 				emptyText="같은 단위({trendTitle})의 기간이 2개 이상 있으면 추이 인사이트가 표시됩니다."
 			/>
 		</section>
-		<section class="card overflow-x-auto" aria-labelledby="table-h">
-			<h2 id="table-h" class="px-5 pt-4 pb-2 text-lg font-semibold text-ink">
-				{trendTitle} 지표 표
-			</h2>
-			<table class="w-full min-w-[640px] text-[15px]">
-				<thead>
-					<tr class="border-y border-line bg-surface-2 text-left text-sm text-ink-2">
-						<th scope="col" class="px-4 py-2 font-semibold">기간</th>
-						<th scope="col" class="px-3 py-2 text-right font-semibold">매출액{colUnit}</th>
-						<th scope="col" class="px-3 py-2 text-right font-semibold">영업이익{colUnit}</th>
-						<th scope="col" class="px-3 py-2 text-right font-semibold">총 인건비{colUnit}</th>
-						<th scope="col" class="px-3 py-2 text-right font-semibold">인원</th>
-						<th scope="col" class="px-3 py-2 text-right font-semibold">HCROI</th>
-						<th scope="col" class="px-3 py-2 text-right font-semibold">HCVA{colUnit}</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each seriesRows as { y, m, ref } (y.id)}
-						<tr
-							class="border-b border-line last:border-0 {y.id === rec.id
-								? 'bg-brand-tint/60'
-								: ''} {ref ? 'text-muted' : ''}"
-						>
-							<th scope="row" class="px-4 py-2 text-left font-semibold whitespace-nowrap text-ink"
-								>{periodLabel(y.period)}{#if ref}<span
-										class="ml-1 text-xs font-normal text-muted"
-										title="{trendTitle} 자료가 없는 해 — 연간 값(참조)">연간 참조</span
-									>{/if}{#if y.derived}<span
-										class="ml-1 text-xs font-normal text-muted"
-										title={derivedLabel(y.derived)}>합산</span
-									>{/if}</th
-							>
-							<td class="tabular px-3 py-2 text-right">{cellWon(y.inputs.revenue)}</td>
-							<td class="tabular px-3 py-2 text-right">{cellWon(m.operatingProfit)}</td>
-							<td class="tabular px-3 py-2 text-right">{cellWon(y.inputs.hcCost)}</td>
-							<td class="tabular px-3 py-2 text-right">{formatHeadcount(y.inputs.headcount)}</td>
-							<td class="tabular px-3 py-2 text-right font-semibold">{formatMultiple(m.hcroi)}</td>
-							<td class="tabular px-3 py-2 text-right">{cellWon(m.hcva)}</td>
+		<section class="card overflow-hidden" aria-labelledby="table-h">
+			<div class="flex flex-wrap items-baseline justify-between gap-2 px-5 pt-4 pb-2">
+				<h2 id="table-h" class="text-lg font-semibold text-ink">{trendTitle} 지표 표</h2>
+				{#if canScrollRight}
+					<p class="text-[11px] whitespace-nowrap text-muted" aria-hidden="true">옆으로 넘기기 →</p>
+				{/if}
+			</div>
+			<div class="overflow-x-auto" bind:this={tableScroll} onscroll={updateScrollHint}>
+				<table class="w-full min-w-[600px] text-[15px]">
+					<thead>
+						<tr class="border-y border-line bg-surface-2 text-left text-sm text-ink-2">
+							<th scope="col" class="px-4 py-2 font-semibold">기간</th>
+							<th scope="col" class="px-2.5 py-2 text-right font-semibold">매출액{colUnit}</th>
+							<th scope="col" class="px-2.5 py-2 text-right font-semibold">영업이익{colUnit}</th>
+							<th scope="col" class="px-2.5 py-2 text-right font-semibold">총 인건비{colUnit}</th>
+							<th scope="col" class="px-2.5 py-2 text-right font-semibold">인원</th>
+							<th scope="col" class="px-2.5 py-2 text-right font-semibold">HCROI</th>
+							<th scope="col" class="px-2.5 py-2 text-right font-semibold">HCVA{colUnit}</th>
 						</tr>
-					{/each}
-				</tbody>
-			</table>
+					</thead>
+					<tbody>
+						{#each seriesRows as { y, m, ref } (y.id)}
+							<tr
+								class="border-b border-line last:border-0 {y.id === rec.id
+									? 'bg-brand-tint/60'
+									: ''} {ref ? 'text-muted' : ''}"
+							>
+								<th scope="row" class="px-4 py-2 text-left font-semibold whitespace-nowrap text-ink"
+									>{periodLabel(y.period)}{#if ref}<span
+											class="ml-1 text-xs font-normal text-muted"
+											title="{trendTitle} 자료가 없는 해 — 연간 값(참조)">연간 참조</span
+										>{/if}{#if y.derived}<span
+											class="ml-1 text-xs font-normal text-muted"
+											title={derivedLabel(y.derived)}>합산</span
+										>{/if}</th
+								>
+								<td class="tabular px-2.5 py-2 text-right">{cellWon(y.inputs.revenue)}</td>
+								<td class="tabular px-2.5 py-2 text-right">{cellWon(m.operatingProfit)}</td>
+								<td class="tabular px-2.5 py-2 text-right">{cellWon(y.inputs.hcCost)}</td>
+								<td class="tabular px-2.5 py-2 text-right">{formatHeadcount(y.inputs.headcount)}</td
+								>
+								<td class="tabular px-2.5 py-2 text-right font-semibold"
+									>{formatMultiple(m.hcroi)}</td
+								>
+								<td class="tabular px-2.5 py-2 text-right">{cellWon(m.hcva)}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
 		</section>
 	</div>
 

@@ -8,6 +8,7 @@
 	 * - 값은 전부 코어(`src/lib/hcroi/**`)가 계산하고, 배치·문장 엮기는 `src/lib/report/data.ts` 가 한다.
 	 */
 	import wordmark from '$lib/assets/headroom-wordmark.svg';
+	import { PRODUCT_NAME, SITE_ENABLED } from '$lib/site-config';
 	import ReportTrendChart from './ReportTrendChart.svelte';
 	import { periodLabel, periodShortLabel } from '$lib/hcroi/period';
 	import {
@@ -321,9 +322,10 @@
 				{gradeScale}.
 			</p>
 			<div class="foot-row">
-				<span>Headroom 으로 작성 · 수치는 회사가 입력한 결산 자료 기준</span>
+				<span>{PRODUCT_NAME} 으로 작성 · 수치는 회사가 입력한 결산 자료 기준</span>
 				<span class="foot-mark">
-					<img src={wordmark} alt="Headroom" />
+					<!-- 워드마크는 공개판 표식 — 사내 도구(SITE_ENABLED=false)에서는 쪽 번호만 -->
+					{#if SITE_ENABLED}<img src={wordmark} alt="Headroom" />{/if}
 					<span class="mono">1 / 1</span>
 				</span>
 			</div>

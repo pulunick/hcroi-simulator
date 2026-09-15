@@ -23,6 +23,7 @@ import {
 	headerText
 } from './schema';
 import { inputRows, scenarioSheet, summaryRows } from './toRows';
+import { INPUT_COLUMN_BY_HEADER } from './schema';
 import { DEFAULT_HEADCOUNT_BASIS, type HeadcountBasis } from '../types';
 import { comparePeriods, periodKey } from '../period';
 import { rollup } from '../rollup';
@@ -239,6 +240,22 @@ describe('toRows ↔ fromRows 왕복', () => {
 		expect(s.metrics).toHaveLength(9);
 		const hc = s.metrics.find((m) => m.label.startsWith('총 임직원'))!;
 		expect(hc.values).toEqual([36, 40, 4, 34, -2]);
+	});
+
+	/**
+	 * `시나리오 비교` 시트는 **내보내기 전용**이라 여기 라벨을 고쳐도 가져오기가 깨지지 않는다.
+	 * (2026-09-15 "인원 변동율" → "인원 변동률" 오타 수정 때 확인 — 가져오기가 읽는 헤더는
+	 * `입력 데이터` 시트의 `INPUT_COLUMNS` 뿐이고 거기엔 이 낱말이 없다.)
+	 */
+	it('"인원 변동률" 라벨은 시나리오 시트에만 있고 가져오기 헤더 표에는 없다', () => {
+		const cmp = compareScenarios(sampleEffective()[0].inputs, [
+			{ id: 'a', name: 'A', params: { ...DEFAULT_SCENARIO_PARAMS } }
+		]);
+		const labels = scenarioSheet('2025년', cmp).params.map((r) => r.label);
+		expect(labels).toContain('인원 변동률(%)');
+		expect(labels).not.toContain('인원 변동율(%)');
+		const headers = [...INPUT_COLUMN_BY_HEADER.keys()];
+		expect(headers.some((h) => h.includes('변동'))).toBe(false);
 	});
 });
 

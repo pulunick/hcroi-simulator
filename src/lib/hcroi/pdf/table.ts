@@ -17,6 +17,9 @@ export const CELL_GAP = 3;
 /** 두 줄 라벨을 합칠 때 허용하는 세로 간격 (pt) — 보통 줄 간격 8~10pt */
 export const LABEL_MERGE_GAP = 12;
 
+/** 공백류(반각 + 전각 공백 \u3000) — 라벨·단위 문구 비교 전 제거용 */
+const WHITESPACE_RE = /[\s\u3000]/g;
+
 const NUMBER_RE = /^[(△▲-]?\s*\d{1,3}(,\d{3})*(\.\d+)?\s*\)?$|^[(△▲-]?\s*\d+(\.\d+)?\s*\)?$/;
 
 /** 숫자 셀 파싱. "1,234" → 1234, "(1,234)" · "△1,234" · "-1,234" → -1234. 숫자가 아니면 null */
@@ -35,13 +38,13 @@ export function parseCellNumber(text: string): number | null {
 export function normalizeLabel(text: string): string {
 	return text
 		.replace(/\(주[^)]*\)/g, '')
-		.replace(/[\s3000]/g, '')
+		.replace(WHITESPACE_RE, '')
 		.trim();
 }
 
 /** `(단위 : 천원)` 류 문구에서 배수. 없으면 null */
 export function parseUnitScale(text: string): UnitScale | null {
-	const m = text.replace(/[\s3000]/g, '').match(/\(단위[:：]?([^)]+)\)/);
+	const m = text.replace(WHITESPACE_RE, '').match(/\(단위[:：]?([^)]+)\)/);
 	if (!m) return null;
 	const u = m[1];
 	if (/억원/.test(u)) return 100_000_000;
