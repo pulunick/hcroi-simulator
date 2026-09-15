@@ -1,0 +1,163 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@500;600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+  <style>
+    body { margin: 0; font-family: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+    .root { --paper: #f7f5f0; --panel: #efece5; --ink: #1a1917; --ink2: #4a4741; --muted: #7d786f; --line: #d9d4c9; --accent: #c24a2c; }
+    .root.dark { --paper: #1a1917; --panel: #242220; --ink: #f0ece4; --ink2: #b8b2a6; --muted: #8a847a; --line: #3a3733; --accent: #d9603f; }
+    a { color: var(--ink); text-decoration: none; } a:hover { color: var(--accent); }
+    p { margin: 0; }
+    h1 { margin: 0; font-family: 'Hahmlet', 'Noto Serif KR', Batang, serif; font-weight: 600; font-size: 34px; letter-spacing: -0.01em; line-height: 1.3; }
+    h2 { margin: 0; font-family: 'Hahmlet', 'Noto Serif KR', Batang, serif; font-weight: 600; font-size: 22px; letter-spacing: -0.01em; line-height: 1.35; }
+    .mono { font-family: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace; font-variant-numeric: tabular-nums; }
+    .label { font-size: 12px; letter-spacing: 0.08em; color: var(--muted); font-family: 'IBM Plex Mono', monospace; }
+    .nav a { font-size: 15px; color: var(--ink2); padding: 24px 0; border-bottom: 2px solid transparent; }
+    .nav a:hover { color: var(--ink); }
+    .nav a.on { color: var(--ink); font-weight: 600; border-bottom-color: var(--ink); }
+    .sec { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 64px; align-items: start; padding: 48px 0; border-bottom: 1px solid var(--line); }
+    .cell { padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+    .opt { display: inline-flex; align-items: center; height: 44px; padding: 0 16px; border: 1px solid var(--line); border-radius: 2px; font-size: 15px; color: var(--ink2); }
+    .opt.on { border-color: var(--ink); color: var(--ink); font-weight: 600; background: var(--panel); }
+    .box { display: inline-block; width: 16px; height: 16px; border: 1px solid var(--ink); border-radius: 2px; box-sizing: border-box; flex-shrink: 0; }
+    .box.on { background: var(--ink); }
+    .check { display: inline-flex; align-items: center; gap: 10px; font-size: 15px; min-height: 44px; }
+    .btn { display: inline-flex; align-items: center; height: 44px; padding: 0 20px; background: var(--accent); color: #f7f5f0; font-size: 15px; font-weight: 600; border-radius: 2px; }
+    .btn:hover { color: #f7f5f0; }
+    .link { font-weight: 500; border-bottom: 1px solid var(--ink); line-height: 1.4; }
+    .hint { font-size: 13px; color: var(--muted); }
+  </style>
+</helmet>
+<div class="root {{theme}}" style="width: 1440px; min-height: 1700px; background: var(--paper); color: var(--ink); display: flex; flex-direction: column;">
+
+  <header style="width: 1200px; margin: 0 auto; height: 72px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--ink);">
+    <div style="display: flex; align-items: center; gap: 32px;">
+      <div style="display: flex; align-items: center; gap: 16px;">
+        <sc-if value="{{light}}" hint-placeholder-val="{{true}}"><img src="headroom-wordmark.svg" alt="Headroom" style="height: 24px; width: auto; display: block;"></sc-if>
+        <sc-if value="{{dark}}" hint-placeholder-val="{{false}}"><img src="headroom-wordmark-light.svg" alt="Headroom" style="height: 24px; width: auto; display: block;"></sc-if>
+        <span style="width: 1px; height: 20px; background: var(--line);"></span>
+        <a href="#" style="font-size: 15px; font-weight: 600; border-bottom: 1px dashed var(--muted); line-height: 1.4;" title="이름 편집">[회사명 A] 주식회사</a>
+      </div>
+      <nav class="nav" style="display: flex; align-items: center; gap: 24px;">
+        <a href="#">대시보드</a>
+        <a href="#">시뮬레이터</a>
+        <a href="#">데이터</a>
+        <a href="#">리포트</a>
+        <a href="#" class="on">설정</a>
+        <a href="#">가이드</a>
+      </nav>
+    </div>
+    <span class="label" style="letter-spacing: 0.02em;">이 PC 에만 저장 · 2분 전</span>
+  </header>
+
+  <main style="width: 1200px; margin: 0 auto; padding: 56px 0 64px; display: flex; flex-direction: column;">
+
+    <div style="display: flex; flex-direction: column; gap: 10px; max-width: 720px; padding-bottom: 8px;">
+      <span class="label">설정</span>
+      <h1>표시 방식과 산정 기준, 백업</h1>
+      <p style="color: var(--ink2); text-wrap: pretty;">여기 값은 모든 화면에 함께 적용됩니다. 기간·시나리오·PDF 열 선택은 각 화면 안에서 바꿉니다.</p>
+    </div>
+
+    <section class="sec">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <span class="label">01 · 금액 표시 단위</span>
+        <h2>표와 카드에 쓰는 단위</h2>
+        <p class="hint">저장값은 항상 원 단위 정수. 표시만 바뀝니다. 차트 축은 자동 축약을 유지합니다.</p>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 16px; max-width: 720px;">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <a href="#" class="opt">자동 (억·만 축약)</a>
+          <a href="#" class="opt">원</a>
+          <a href="#" class="opt on">천원</a>
+          <a href="#" class="opt">백만원</a>
+          <a href="#" class="opt">억원</a>
+        </div>
+        <p class="hint">예: 총 인건비 3,384,000,000원 → <span class="mono">3,384,000</span> 천원. 열 머리글에 단위가 붙습니다.</p>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <span class="label">02 · 임직원 수 산정 기준</span>
+        <h2>기간 평균 · 정규직만</h2>
+        <p class="hint">HCVA·인당 지표의 분모. 결산서 직원 현황은 기말 인원이라 화면마다 기준을 표기합니다.</p>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 24px; max-width: 720px;">
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <span class="hint">산정 방식</span>
+          <div style="display: flex; gap: 8px;">
+            <a href="#" class="opt on">기간 평균 (FTE)</a>
+            <a href="#" class="opt">기말 인원</a>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <span class="hint">총 임직원 수에 포함 — 실무 기준상 셋 다 기본 제외</span>
+          <div style="display: flex; flex-direction: column;">
+            <span class="check"><span class="box"></span><span>계약직 · 기간제</span></span>
+            <span class="check"><span class="box"></span><span>파견 · 소속 외 근로자</span></span>
+            <span class="check"><span class="box"></span><span>등기임원</span></span>
+          </div>
+        </div>
+        <p class="hint">바꾸면 모든 기간의 총원이 다시 계산됩니다. 구분 인원이 없는 기간은 입력한 총원을 그대로 씁니다.</p>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <span class="label">03 · 화면</span>
+        <h2>밝게 · 어둡게</h2>
+        <p class="hint">기본은 기기 설정을 따릅니다. 차트 범주색과 등급색은 두 모드에서 같습니다.</p>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 16px; max-width: 720px;">
+        <div style="display: flex; gap: 8px;">
+          <a href="#" class="opt on">기기 설정 따라감</a>
+          <a href="#" class="opt">밝게</a>
+          <a href="#" class="opt">어둡게</a>
+        </div>
+        <p class="hint">인쇄용 리포트는 항상 밝은 바탕으로 나갑니다.</p>
+      </div>
+    </section>
+
+    <section class="sec" style="border-bottom: 0;">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <span class="label">04 · 백업 · 데이터</span>
+        <h2>서버가 없으니 파일이 전부입니다</h2>
+        <p class="hint">브라우저 사이트 데이터를 지우면 입력한 것도 지워집니다.</p>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 24px; max-width: 720px;">
+        <div style="display: grid; grid-template-columns: 160px minmax(0, 1fr); border-top: 1px solid var(--ink);">
+          <div class="cell" style="color: var(--muted);">저장소 사용량</div><div class="cell mono" style="font-size: 14px;">0.4 MB / 브라우저 한도 약 5 MB</div>
+          <div class="cell" style="color: var(--muted);">마지막 백업</div><div class="cell">5일 전 · <span class="mono" style="font-size: 14px;">회사명A-2026-09-09.hcroi</span></div>
+          <div class="cell" style="color: var(--muted);">파일에 담기는 것</div><div class="cell">회사 이름 · 모든 기간 레코드 · 시나리오 · 이 화면의 설정. 엑셀로 내보내면 입력값 시트만.</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 24px; flex-wrap: wrap;">
+          <a href="#" class="btn">백업 파일 저장 (.hcroi)</a>
+          <a href="#" class="link">파일 열기</a>
+          <a href="#" class="link">엑셀로 내보내기</a>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px; padding-top: 8px; border-top: 1px solid var(--line);">
+          <a href="#" style="font-weight: 600; color: var(--accent); border-bottom: 1px solid var(--accent); line-height: 1.4;">이 PC 의 데이터 지우기</a>
+          <span class="hint">되돌릴 수 없습니다. 먼저 백업 파일을 저장하세요. 지운 뒤에는 샘플 회사로 시작합니다.</span>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"dark":{"editor":"boolean","default":false,"section":"Theme"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = !!this.props.dark;
+    return { dark, light: !dark, theme: dark ? 'dark' : '' };
+  }
+}
+</script>
+</body>
+</html>

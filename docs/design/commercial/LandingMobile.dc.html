@@ -1,0 +1,125 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@500;600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+  <style>
+    body { margin: 0; font-family: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; font-size: 16px; line-height: 1.65; -webkit-font-smoothing: antialiased; }
+    .root { --paper: #f7f5f0; --panel: #efece5; --ink: #1a1917; --ink2: #4a4741; --muted: #7d786f; --line: #d9d4c9; --accent: #c24a2c; }
+    .root.dark { --paper: #1a1917; --panel: #242220; --ink: #f0ece4; --ink2: #b8b2a6; --muted: #8a847a; --line: #3a3733; --accent: #d9603f; }
+    a { color: var(--ink); text-decoration: none; } a:hover { color: var(--accent); }
+    p { margin: 0; }
+    h1 { margin: 0; font-family: 'Hahmlet', 'Noto Serif KR', Batang, serif; font-weight: 600; font-size: 30px; letter-spacing: -0.01em; line-height: 1.32; text-wrap: pretty; }
+    h2 { margin: 0; font-family: 'Hahmlet', 'Noto Serif KR', Batang, serif; font-weight: 600; font-size: 22px; letter-spacing: -0.01em; line-height: 1.35; }
+    .mono { font-family: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace; font-variant-numeric: tabular-nums; }
+    .label { font-size: 12px; letter-spacing: 0.08em; color: var(--muted); font-family: 'IBM Plex Mono', monospace; }
+    .cell { padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; height: 48px; padding: 0 24px; background: var(--accent); color: #f7f5f0; font-size: 16px; font-weight: 600; border-radius: 2px; }
+    .btn:hover { color: #f7f5f0; }
+    .link { font-size: 16px; font-weight: 500; border-bottom: 1px solid var(--ink); line-height: 1.4; }
+    .start { display: flex; flex-direction: column; gap: 8px; padding: 20px 0; border-bottom: 1px solid var(--line); }
+  </style>
+</helmet>
+<div class="root {{theme}}" style="width: 390px; min-height: 2700px; background: var(--paper); color: var(--ink); display: flex; flex-direction: column;">
+
+  <header style="margin: 0 20px; height: 56px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--ink);">
+    <sc-if value="{{light}}" hint-placeholder-val="{{true}}"><img src="headroom-wordmark.svg" alt="Headroom" style="height: 22px; width: auto; display: block;"></sc-if>
+    <sc-if value="{{dark}}" hint-placeholder-val="{{false}}"><img src="headroom-wordmark-light.svg" alt="Headroom" style="height: 22px; width: auto; display: block;"></sc-if>
+    <div style="display: flex; align-items: center; gap: 20px;">
+      <a href="#" style="font-size: 15px; color: var(--accent); font-weight: 600;">시작하기</a>
+      <a href="#" style="font-size: 15px; color: var(--ink2); padding: 12px 0;">메뉴</a>
+    </div>
+  </header>
+
+  <section style="padding: 40px 20px 36px; display: flex; flex-direction: column; gap: 28px;">
+    <div style="display: flex; flex-direction: column; gap: 16px;">
+      <span class="label" style="line-height: 1.6;">DART 결산서 → HCROI · 시뮬레이션 · 리포트 · 무료</span>
+      <h1>DART 결산서를 엑셀에 한 칸씩 옮겨 적던 일, 이제 PDF 한 부로 끝냅니다.</h1>
+      <p style="font-size: 16px; color: var(--ink2); text-wrap: pretty;">사업·반기·분기보고서를 올리면 손익계산서와 직원 현황을 찾아 숫자를 뽑고, 그 자리에서 HCROI 를 계산합니다. 사람이 하는 일은 확인뿐. 데이터는 서버로 가지 않습니다.</p>
+      <div style="display: flex; flex-direction: column; gap: 16px; padding-top: 4px;">
+        <a href="#" class="btn">결산서 PDF 로 시작</a>
+        <a href="#" class="link" style="align-self: flex-start;">가상 회사 샘플 열어 보기 →</a>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <img src="dashboard-hero.jpg" alt="Headroom 대시보드 — 가상 회사 샘플" style="width: 100%; height: auto; display: block; border: 1px solid var(--ink);">
+      <span class="label" style="letter-spacing: 0.02em; line-height: 1.6;">실제 화면(데스크톱) — 가상 회사 샘플. 휴대폰에서는 카드가 한 열로 쌓입니다.</span>
+    </div>
+  </section>
+
+  <section style="background: var(--panel); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 40px 20px; display: flex; flex-direction: column; gap: 20px;">
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span class="label">시작하기 · 세 가지 길</span>
+      <h2>숫자를 넣는 방법은 셋, 결과는 하나</h2>
+      <p style="color: var(--ink2); font-size: 15px; text-wrap: pretty;">필요한 값은 다섯 개 — 매출액, 영업비용(또는 영업이익), 총 인건비, 임직원 수, 기간.</p>
+    </div>
+    <div style="display: flex; flex-direction: column; border-top: 1px solid var(--ink);">
+      <div class="start">
+        <div style="display: flex; align-items: baseline; gap: 12px;"><span class="mono" style="font-size: 18px; color: var(--accent);">01</span><span style="font-size: 17px; font-weight: 600;">결산서 PDF 올리기</span><span class="label" style="letter-spacing: 0.02em;">추천</span></div>
+        <p style="color: var(--ink2); font-size: 15px; text-wrap: pretty;">사업·반기·분기보고서. 손익계산서·직원 현황 표를 찾아 값을 제안하고, 확인한 것만 들어갑니다.</p>
+        <a href="#" class="link" style="font-size: 15px; align-self: flex-start;">PDF 고르기 →</a>
+      </div>
+      <div class="start">
+        <div style="display: flex; align-items: baseline; gap: 12px;"><span class="mono" style="font-size: 18px; color: var(--muted);">02</span><span style="font-size: 17px; font-weight: 600;">엑셀 양식 채우기</span></div>
+        <p style="color: var(--ink2); font-size: 15px; text-wrap: pretty;">양식을 내려받아 기간별로 채우면 검증 열이 바로 표시됩니다.</p>
+        <a href="#" class="link" style="font-size: 15px; align-self: flex-start;">양식 내려받기 →</a>
+      </div>
+      <div class="start" style="border-bottom: 0;">
+        <div style="display: flex; align-items: baseline; gap: 12px;"><span class="mono" style="font-size: 18px; color: var(--muted);">03</span><span style="font-size: 17px; font-weight: 600;">직접 입력</span></div>
+        <p style="color: var(--ink2); font-size: 15px; text-wrap: pretty;">기간 하나, 숫자 다섯. 샘플 회사를 열어 숫자만 바꿔도 됩니다.</p>
+        <a href="#" class="link" style="font-size: 15px; align-self: flex-start;">샘플 열기 →</a>
+      </div>
+    </div>
+  </section>
+
+  <section style="padding: 44px 20px; display: flex; flex-direction: column; gap: 20px; border-bottom: 1px solid var(--line);">
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span class="label">01 · 산식</span>
+      <h2>공개된 식, 검증된 계산</h2>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 8px; padding: 18px 20px; border: 1px solid var(--ink); background: var(--paper);">
+      <div class="mono" style="font-size: 17px; font-weight: 500; line-height: 1.5;">HCROI = (영업이익 + 총 인건비) ÷ 총 인건비</div>
+      <div class="mono" style="font-size: 13px; color: var(--ink2); line-height: 1.5;">1.25배 → 인건비 1원당 1.25원 회수</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 16px; font-size: 15px;">
+      <p style="text-wrap: pretty;"><strong style="font-weight: 600;">등급은 세 단계.</strong> 1.0배 미만 위험, 1.0–1.5 보통, 1.5 이상 우수. 화면마다 다르게 계산되지 않습니다.</p>
+      <p style="text-wrap: pretty;"><strong style="font-weight: 600;">시뮬레이션은 가정을 바꾸는 것.</strong> 정원·임금·생산성 변동을 넣으면 영업이익과 HCROI 가 즉시 다시 계산됩니다.</p>
+      <p style="text-wrap: pretty;"><strong style="font-weight: 600;">인사이트는 규칙 기반.</strong> 문장 하나하나가 어느 수치에서 나왔는지 추적됩니다. 생성형 AI 는 쓰지 않습니다.</p>
+    </div>
+  </section>
+
+  <section style="padding: 44px 20px; display: flex; flex-direction: column; gap: 20px;">
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span class="label">02 · 데이터 보관</span>
+      <h2>귀사 데이터는 귀사 PC 를 떠나지 않습니다</h2>
+    </div>
+    <p style="font-size: 15px; text-wrap: pretty;">계산, PDF 읽기, 엑셀 변환이 전부 브라우저 안에서 끝납니다. 데이터를 받는 서버가 없습니다. 저장은 이 기기의 브라우저와 <span class="mono" style="font-size: 14px;">.hcroi</span> 파일에만.</p>
+    <div style="display: flex; flex-direction: column; border-top: 1px solid var(--ink);">
+      <div class="cell" style="display: flex; flex-direction: column; gap: 2px;"><span class="label" style="letter-spacing: 0.02em;">서버로 보내는 것</span><span>없음. 계정도 없습니다.</span></div>
+      <div class="cell" style="display: flex; flex-direction: column; gap: 2px;"><span class="label" style="letter-spacing: 0.02em;">저장되는 곳</span><span>브라우저 저장소, 내보낸 .hcroi · 엑셀 파일</span></div>
+      <div class="cell" style="display: flex; flex-direction: column; gap: 2px;"><span class="label" style="letter-spacing: 0.02em;">지우는 방법</span><span>설정 → 데이터 지우기, 또는 사이트 데이터 삭제</span></div>
+    </div>
+  </section>
+
+  <footer style="margin: 0 20px; padding: 24px 0 40px; border-top: 1px solid var(--ink); display: flex; flex-direction: column; gap: 12px; font-size: 13px; color: var(--muted);">
+    <div style="display: flex; align-items: baseline; gap: 12px;"><span style="font-family: 'Hahmlet', serif; font-weight: 600; font-size: 15px; color: var(--ink);">헤드룸</span><span>무료 · 개인 프로젝트 · [이메일]</span></div>
+    <div style="display: flex; gap: 16px;"><a href="#" style="color: var(--muted);">사용 설명서</a><a href="#" style="color: var(--muted);">산식 근거</a><a href="#" style="color: var(--muted);">소스 코드</a></div>
+  </footer>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"dark":{"editor":"boolean","default":false,"section":"Theme"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = !!this.props.dark;
+    return { dark, light: !dark, theme: dark ? 'dark' : '' };
+  }
+}
+</script>
+</body>
+</html>

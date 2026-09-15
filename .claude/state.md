@@ -4,17 +4,17 @@
 > 결정된 사항(바뀌지 않는 규칙)은 [brain.md](brain.md) 에만 적는다 — 여기에 중복하지 않는다.
 > 형식: 상단 "현재 상태" 스냅샷 → "다음 할 일" → 하단에 세션 로그 누적.
 
-## 현재 상태 (2026-09-09 세션 6 종료 시점)
+## 현재 상태 (2026-09-14 세션 11 진행 중)
 
-| 항목            | 상태                                                                                                                                                                                         |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 단계            | 프로토타입 + 실무 회신 반영 + 전체 검수 + **기간 합산(월→분기→연간)·엑셀 작성 편의**(2026-09-09). **결산서 PDF 가져오기 구현**(2026-09-09). 남은 큰 것: 부서별 · 동종업계 · PDF 수동 셀 지정 |
-| `npm test`      | ✅ 8 파일 / 144 passed (formulas · scenario · insights · period · rollup · excel · pdf table · pdf locate) + probe(skip)                                                                     |
-| `npm run check` | ✅ 0 errors / 0 warnings (360 files)                                                                                                                                                         |
-| `npm run lint`  | ✅                                                                                                                                                                                           |
-| git             | 원격 **github.com/pulunick/hcroi-simulator (public)**, 브랜치 **`product/commercial`** (main 1b9ff99 머지 완료). 이 브랜치의 state.md 는 상용 진행 상황만 — main 진행은 main 의 state.md     |
-| DB              | 없음(보류). 마이그레이션 SQL 준비만 됨, 어느 프로젝트에도 미적용                                                                                                                             |
-| 원격 저장소     | pulunick/hcroi-simulator (public). push 절차는 brain §1 참조                                                                                                                                 |
+| 항목            | 상태                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 단계            | 프로토타입 + 실무 회신 반영 + 전체 검수 + **기간 합산(월→분기→연간)·엑셀 작성 편의**(2026-09-09). **결산서 PDF 가져오기 구현**(2026-09-09). 남은 큰 것: 부서별 · 동종업계 · PDF 수동 셀 지정. **공개판(이 브랜치)**: 2026-09-14 밤 **방향 전환 — 판매가 아니라 인사담당자가 웹에서 써보는 무료 공개판**(초점: DART 결산서→엑셀 수기 입력의 자동화, 다크모드·반응형 필수). 워드마크 B·주홍 확정, 랜딩(1440/390)·설정·리포트 공개판 시안 완료 → **코드 이행 완료**(토큰·다크·헤더·설정·리포트·랜딩·정리, 세션 11~12) |
+| `npm test`      | ✅ 10 파일 / 180 passed (+ report/data 27) + probe(skip)                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `npm run check` | ✅ 0 errors / 0 warnings (430 files)                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `npm run lint`  | ✅                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| git             | 원격 **github.com/pulunick/hcroi-simulator (public)**, 브랜치 **`product/commercial`** (마지막 커밋 c4a5503, main 1b9ff99 머지 완료). **세션 10·11 산출물 미커밋·미push**(디자인 파일 11 + 문서 5 + CLAUDE.md, Home.dc.html 삭제). 이 브랜치의 state.md 는 상용 진행 상황만                                                                                                                                                                                                                                        |
+| DB              | 없음(보류). 마이그레이션 SQL 준비만 됨, 어느 프로젝트에도 미적용                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 원격 저장소     | pulunick/hcroi-simulator (public). push 절차는 brain §1 참조                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 ### 구현 완료
 
@@ -300,3 +300,54 @@
   2. 기획서 §10 남은 결정: 제품명(5) · 1순위 타깃(3) · 디자인 범위(7). §12-1 담당자 허락 문서화는 사용자가 직접
   3. H1 준비 = **무료 공개**: 문의 폼 1개 + 랜딩(디자인 캔버스 방향 A) → M1 다중 작업공간·온보딩 착수. 결제·라이선스 코드는 아직 아님
   4. branch-strategy.md · CLAUDE.md 브랜치 절 · decision-log 브랜치 항목을 main 에도 넣기(main 세션에서, 지시 시)
+
+### 2026-09-14 — 세션 10 (수익 모델 좁힘 · Headroom 워드마크·랜딩 2차)
+
+- 사용자 질문 흐름: 봐야 할 문서 확인 → Cyberduck 수익 구조 → 가장 효과적인 수익화 → 부업이면 웹? → UI/UX 는 Claude Design 으로 → 1차 시안 점검 "AI 티, 로고도".
+- 결정(기획서 §10-1·3·4·5·7, §11 개정, §7.4 · brain §12 · decision-log): 로컬 우선 웹 · 컨설턴트 1순위(담당자 영구 무료) · 수동 결제 · 제품명 후보 **Headroom** · 랜딩+워드마크 먼저 · 프론트 리뷰는 Claude 가 Codex MCP 에 위임(이 세션엔 Codex MCP 미연결 — 연결 필요).
+- 디자인 2차 발행(같은 캔버스, 라벨 "2차 · Headroom 워드마크·랜딩"): `Wordmark.dc.html`(3방향 + 강조색 2후보) · `Landing.dc.html` 전면 재작성(섹션 4개, tweak `mark`·`accent`, 실제 대시보드 스크린샷 `dashboard-hero.jpg` 54KB) · `canvas.json` 2페이지(브랜드·랜딩 / 9/10 앱 화면). 스크린샷은 스크래치패드 Playwright(`shot-dashboard.cjs`, Chrome channel)로 dev 서버 5173 에서. 로고 프롬프트는 채팅으로 전달(나노바나나/GPT 용, 타이포 전용).
+- 코드 변경 없음. 미커밋: `docs/design/commercial/{Landing,Wordmark}.dc.html`, `canvas.json`, `dashboard-hero.jpg`, 기획서·brain·decision-log·state.
+- **다음 세션 시작점**:
+  1. ~~워드마크 방향 선택~~ → **B 확정**. 로고는 **SVG 실물로 확정**(`headroom-wordmark*.svg`, 기본 먹색 바탕, 스크립트 `make-wordmark.py` 스크래치패드 — fontTools·uharfbuzz pip 설치). 남은 것: Headroom 도메인·상표 확인, 강조색(주홍 기본), 랜딩 헤더도 검게 할지
+     1-1. 랜딩 **03 누구에게 · 04 가격 문구 수정**(사용자 의견 받아서) — 01·02·히어로는 확인됨
+  2. 방향 확정 → 랜딩 확정본 → 홈·리포트·설정 아트보드를 같은 규칙으로(3차) → 코드 이행 순서 M4 랜딩 → M1 홈 → M3 리포트
+  3. 기획서 §11 개정 순서대로: 랜딩 + 문의 폼 → 컨설턴트 10곳 발송 목록(사용자)
+  4. 커밋은 지시 시(계정 전환 절차 brain §1). branch-strategy·CLAUDE.md 브랜치 절은 여전히 main 에도 넣어야 함
+
+### 2026-09-14 — 세션 11 (강조색·헤더 확정 · 홈·설정·리포트 3차 아트보드)
+
+- 시작 시 사용자가 지난 세션 "다음 할 일" 5줄을 그대로 붙여 넣음 → 순서대로.
+- **Codex 확인**: MCP 툴로는 안 뜨고 **플러그인**으로 로드됨(스킬 `codex:rescue` · 서브에이전트 `codex:codex-rescue`, 로컬 CLI 0.154 + 인증). brain §12 · CLAUDE.md · 메모리 문구를 "Codex MCP"→"Codex 플러그인"으로 정정.
+- **결정 3건**(AskUserQuestion): 랜딩 헤더 **현재 유지**(1px 밑줄) · 강조색 **주홍 `#c24a2c` 확정**(녹색 폐기) · 03/04 문구 제안은 **보류**(가격 확정 후). brain §12 + decision-log 기록. 제안 문구는 decision-log 에 남겨 둠.
+- **3차 아트보드**(같은 캔버스, 새 페이지 "앱 화면 3차 (9/14 브랜드 적용)", 라벨 "3차 · 홈·설정·리포트 브랜드 적용"):
+  `Home.dc.html` 재작성(장부식 목록 · 등급 글자 칩 · 백업 절), `Settings.dc.html` 신규(라이선스·금액 단위·인원 산정·리포트 표기·백업 5절), `Report.dc.html` 재작성(A4 흑백 전제, `tier` 레버 free/consultant). 옛 홈·리포트 9/10 시안은 새 파일로 대체(git 이력에만 남음). `canvas.json` 3페이지.
+  프레임 높이는 로컬 Chrome 실측(홈 946→960, 설정 2059→2080). 리포트는 처음 제목·표 머리글 줄바꿈, 차트 라벨 겹침·잘림, A4 폭 넘침(809px) → 머리 블록 세로 배치·th 본문 서체 11px nowrap·차트 240px + 좌측 눈금으로 수정, 794px 확인.
+  스크린샷 스크립트 스크래치패드 `shot-artboards.cjs`(playwright 는 세션 50919ce8 스크래치패드 node_modules 재사용, `NODE_PATH`).
+- 캔버스 발행 OK(contract 0.1.31, 저장 가능 유지) → 사용자 점검 후 **방향 전환**(아래).
+- **방향 전환(사용자, 세션 후반)**: "지금 계획이 너무 어렵게 간다. 판매가 아니라 인사담당자들이 써볼 수 있는 형태로 웹에 제공하는 게 우선. UI/UX 는 쓰기 쉽고 예쁘게. 라이선스는 고려 대상 아님" + "다크모드·반응형 필수" + "초점은 DART 를 엑셀에 하나씩 치던 것을 자동화하는 것".
+  사용자 선택: 랜딩은 소개+시작만 · 리포트는 tier 없이 포함 · 설정은 별도 화면.
+  → brain §12 를 "공개 웹 버전"으로 다시 씀(핵심 가치·UI 목표·화면 구성·다크 토큰), decision-log, 기획서 상단 배너 + §7.5. 판매 문서(§5·§10·§11)는 보류 이력으로만.
+  → 시안 재작성: `Landing.dc.html`(가격·대상 삭제, 히어로 "DART 결산서를 엑셀에 한 칸씩…", 시작 3가지 목록, `dark` 레버 = CSS 변수 토큰), `LandingMobile.dc.html`(390, 신규), `Settings.dc.html`(금액 단위·인원 산정·화면 테마·백업 4절, 앱 헤더에 회사명 편집·6탭, `dark` 레버), `Report.dc.html`(tier·로고 제거), **`Home.dc.html` 삭제**(회사 1곳이라 작업공간 목록 불필요). 다크용 워드마크 `headroom-wordmark-light.svg`(투명·#f0ece4) 추가. canvas.json 3페이지(공개판 랜딩·워드마크 / 설정·리포트 / 지난 9/10).
+  → 로컬 Chrome 실측: 랜딩 3031(프레임 3040)·모바일 2700·설정 1700·A4 794×1123, 라이트·다크 7장 모두 넘침 없음. 캔버스 재발행.
+- **코드 이행 착수(사용자 "시안 OK")**. 역할 고정: 코드는 opus/sonnet 서브에이전트, Fable 은 총괄(메모리·brain·CLAUDE.md 기록).
+  - 1단계(opus) ✅ 브랜드 토큰·다크모드(`hcroi:theme` 별도 키 + app.html 인라인 스크립트, `@theme inline` + `:root`/`[data-theme]`/`prefers-color-scheme` 3중)·Google Fonts(Plex Sans KR/Mono·함렛)·헤더(워드마크 SVG `src/lib/assets/`, 회사명 편집, 탭 6개, `savedLabel`)·`/report`·`/settings` 스텁. 상태색 `-ink/-bg` 만 다크 변형(핵심 4색·범주색 유지). 본문 폭 1200.
+  - Codex 리뷰(플러그인) ✅ 중간 2(다크 버튼 글자 대비 3.4:1 → `--on-accent` 먹색 필요 · 저장 실패 시 "방금" 오표시) · 낮음 2(회사명 버튼 aria-label · 대시보드 "연필" 문구) → 정리 에이전트에 위임 예정.
+  - 2단계(opus) ✅ `/settings` 4절(`components/settings/SettingsSection·ChipRadio`), `lastBackupAt`·`markBackedUp`·`storageBytes`, 헤더 빈 회사명 플레이스홀더. 남긴 것: `/data` 상단 단위·산정 셀렉트 중복, JSON/엑셀 내보내기 함수가 `/data` 와 중복(`src/lib/` 추출 필요), `.hcroi` 확장자 미도입(`.json` 유지).
+  - 스윕(sonnet) ✅ 11 파일 ~40곳 `rounded-*` → 2px, `GradeBadge` 알약 → 사각 칩(아이콘 제거), 그림자 제거, h1/pageTitle "시뮬레이터·데이터·가이드" 통일(대시보드 제목은 `workspace.pageTitle()` 소관 → 정리 에이전트).
+  - 3단계(opus) ✅ `/report` A4: `src/lib/report/data.ts`(+27 테스트, 코어 함수만 사용) · `components/report/ReportPaper·ReportTrendChart` · `reportAuthor/reportOrg` · `@media print` A4 1장(PDF `/Type /Page` 1개) · 종이는 다크에서도 흰색. 대시보드·시뮬레이터와 수치 전부 일치.
+  - 4단계(opus) ✅ `/intro` 랜딩: `components/site/SiteHeader·SiteFooter`, `+layout.svelte` 는 `/intro` 에서 앱 헤더 미렌더, `static/hero-dashboard.jpg`(실제 화면 1100×764, 87 KB, 가상 회사명), 390/768/1024/1440 넘침 없음.
+  - 정리(sonnet, 세션 한도로 1회 중단 → 재개 완료) ✅ 다크 버튼 `--on-accent` 먹색(대비 4.76:1, 위험 4.69:1) · `saveError` + 헤더 "저장 실패 · 변경사항 미저장" · 회사명 버튼 aria-label · 대시보드 제목 "대시보드"(`pageTitle`) · `/data` 상단 단위·산정 컨트롤 → 요약+`설정에서 바꾸기` · `src/lib/state/io.ts`(JSON/엑셀 내보내기·가져오기 공용, `/data`·`/settings` 사용) · 앵커 `/data#pdf`(자동 펼침)·`/guide#formula` · 랜딩 시작 3가지 열 폭. 라이트 위험 버튼 4.41:1 은 기존값(범위 밖).
+  - Codex 최종 리뷰(전체 변경분) ✅ 높음 1 · 중간 4 · 낮음 2 → sonnet 수정 완료(프로세스 종료로 1회 중단 → 재개): `wipeAll()`(회사명·작성자·PDF 설정·되돌리기 키까지 삭제, `hcroi:theme` 만 유지) · 저장 실패 경고 전 폭 노출 · 이름 있는 `@page report`(`/` 인쇄 영향 없음 확인) · 리포트 `ResizeObserver` 2단계 압축(compact → compact2 추이 표 생략) · 우수 배지 옅은 배경+진한 글자(라이트 6.62:1 · 다크 7.62:1) · JSON 읽기 실패 `ImportResult` + `finally` 초기화 · 소개 페이지 `.json` 안내.
+  - 백그라운드 Codex 결과는 총괄이 `codex-companion.mjs status/result <task-id>` 로 직접 받는다(메모리 기록).
+  - 문서 ✅ user-guide(공개판 안내·§9 리포트·§10 설정·§11 소개·FAQ 다크/모바일·§7 표), requirements-coverage §3-B.
+  - 매 단계 Fable 재검수: 153 tests · check 0 · lint OK · 스크린샷(스크래치패드 `step1/ step2/ sweep/`).
+- 커밋 안 함(지시 대기).
+- 최종 검수(Fable): format 적용(state·decision-log) · lint OK · check 430 files 0 errors · test 180 passed. 식별자 스캔 이상 없음.
+- **사용자 화면 점검 → 수정 5건(sonnet)**: 시작 경로(`/data?start=pdf` 샘플 비움·확인 / `/?start=sample` 샘플 적재, `isSampleOnly`·`startFresh`) · 앱 ↔ 소개 왕복(워드마크 → `/intro`, 푸터 `소개`) · PDF 카드 기간 셀렉트 `w-auto` · 리포트 인쇄 여백(종이 패딩 14/16mm 유지 + `@page report` 여백 0, 최소 여백 14.3mm) · 설정 02 `Checkbox.svelte`. 리포트 기간 선택은 이미 있어 수정 없음.
+- **사용자 결정(2026-09-15)**: (1) 공개판 UI 를 main 에도 — product → main 1회 역머지, main 은 intro·소개 링크 제거 + 헤더 워드마크 대신 회사 이름. (2) PDF 기간 자동 감지(표지 문구 추정 + 사용자 확인)를 main 코어에 구현. 문서 개정: brain §12 · CLAUDE.md · branch-strategy §1 · decision-log.
+- **다음 세션 시작점**:
+  1. 사용자가 실제 화면 점검(`npm run dev` → `/intro`, `/`, `/settings`, `/report`, 다크·390px) → 지적 반영(코드는 서브에이전트)
+  2. **커밋·push**(지시 시, brain §1 계정 전환) — 미커밋 범위: 디자인 11 + 문서 7 + 코드(신규 라우트 3 · 컴포넌트 3 그룹 · `lib/report` · `state/io.ts` · 토큰/헤더/스윕 수정 15 파일 · `static/hero-dashboard.jpg`)
+  3. **Vercel 배포**(사용자 대시보드에서 import) → 배포 URL 에서 pdf.js worker 로드·다크·인쇄 재확인. 진입 동선(`/` ↔ `/intro`) 결정: 지금은 `/` = 대시보드, `/intro` 링크 없음
+  4. 사용자 몫: Headroom 도메인·상표 확인, 라이트 위험 버튼 대비 4.41:1(기존값) 손볼지
+  5. main 에도 넣어야 할 것: branch-strategy·CLAUDE.md 브랜치 절. 코어 밖 보조 함수(`pctChange`·`nextPeriod`·`splitMultiple`)를 코어로 옮길지는 main 에서 판단

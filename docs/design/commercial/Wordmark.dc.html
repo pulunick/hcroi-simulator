@@ -1,0 +1,153 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Gothic+A1:wght@700;800&family=Hahmlet:wght@500;600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
+  <style>
+    body { margin: 0; background: #f7f5f0; color: #1a1917; font-family: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; font-size: 15px; -webkit-font-smoothing: antialiased; }
+    a { color: #c24a2c; text-decoration: none; } a:hover { color: #a23a20; }
+    p { margin: 0; }
+    .mono { font-family: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace; }
+    .serif { font-family: 'Newsreader', Georgia, 'Times New Roman', serif; }
+    .grotesk { font-family: 'Bricolage Grotesque', 'Segoe UI', Helvetica, Arial, sans-serif; }
+    .kr-serif { font-family: 'Hahmlet', 'Noto Serif KR', Batang, serif; }
+    .kr-gothic { font-family: 'Gothic A1', 'IBM Plex Sans KR', sans-serif; }
+    .label { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #7d786f; font-family: 'IBM Plex Mono', monospace; }
+  </style>
+</helmet>
+<div style="width: 1440px; min-height: 1560px; background: #f7f5f0; padding: 56px 72px; box-sizing: border-box; display: flex; flex-direction: column; gap: 40px;">
+
+  <div style="display: grid; grid-template-columns: 420px minmax(0, 1fr); gap: 48px; align-items: end; border-bottom: 1px solid #1a1917; padding-bottom: 24px;">
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <span class="label">Wordmark · B 확정 (9/14) · 3 directions</span>
+      <h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.3;">Headroom · 헤드룸</h1>
+    </div>
+    <p style="font-size: 15px; line-height: 1.7; color: #4a4741; max-width: 720px;">아이콘 없이 글자만. 세 방향은 서체 하나씩만 다르고 색·자간·크기 규칙은 같다. 고른 방향이 랜딩 헤더·앱 헤더·리포트 머리에 그대로 들어간다. 로고 마크(그림)는 이 중 하나가 정해진 뒤 그 서체에 맞춰 외부에서 만든다.</p>
+  </div>
+
+  <!-- 확정본 — 실제 SVG (Newsreader opsz72 wght500, 자간 -1%, 패스 변환) -->
+  <div style="display: grid; grid-template-columns: 420px minmax(0, 1fr); gap: 48px; align-items: start; padding: 8px 0 32px; border-bottom: 1px solid #1a1917;">
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <span class="label" style="color: #c24a2c;">확정본 · SVG</span>
+      <div style="font-size: 18px; font-weight: 600; line-height: 1.4;">기본은 먹색 바탕. 종이 바탕·주홍 바탕은 보조</div>
+      <p style="font-size: 14px; line-height: 1.7; color: #4a4741;">글자를 패스로 바꾼 SVG 라 서체 설치 없이 어디서나 같게 나온다. 파일: <span class="mono">headroom-wordmark-dark.svg</span>(기본) · <span class="mono">-paper</span> · <span class="mono">-vermilion</span> · <span class="mono">headroom-wordmark.svg</span>(먹색 글자, 투명 — 헤더·문서용) · <span class="mono">-kr</span>(헤드룸, 함렛 600, 보조 표기).</p>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+      <img src="headroom-wordmark-dark.svg" alt="Headroom — 먹색 바탕" style="width: 560px; height: auto; display: block;">
+      <div style="display: flex; gap: 20px; align-items: flex-start;">
+        <img src="headroom-wordmark-paper.svg" alt="Headroom — 종이 바탕" style="width: 300px; height: auto; display: block; border: 1px solid #d9d4c9;">
+        <img src="headroom-wordmark-vermilion.svg" alt="Headroom — 주홍 바탕" style="width: 300px; height: auto; display: block;">
+      </div>
+      <div style="display: flex; align-items: center; gap: 24px; padding: 14px 18px; background: #1a1917;">
+        <img src="headroom-wordmark-dark.svg" alt="Headroom 28px" style="height: 28px; width: auto; display: block;">
+        <span class="mono" style="font-size: 13px; color: #7d786f;">앱 헤더 28px</span>
+        <img src="headroom-wordmark-dark.svg" alt="Headroom 20px" style="height: 20px; width: auto; display: block;">
+        <span class="mono" style="font-size: 13px; color: #7d786f;">리포트 머리 20px</span>
+      </div>
+      <div style="display: flex; align-items: baseline; gap: 24px; padding: 14px 18px; background: #f7f5f0; border: 1px solid #d9d4c9;">
+        <img src="headroom-wordmark.svg" alt="Headroom" style="height: 26px; width: auto; display: block;">
+        <img src="headroom-wordmark-kr.svg" alt="헤드룸" style="height: 18px; width: auto; display: block;">
+        <span class="mono" style="font-size: 13px; color: #7d786f;">종이 바탕 헤더 26px + 한글 보조 18px</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- A · 장부 (mono) -->
+  <div style="display: grid; grid-template-columns: 420px minmax(0, 1fr); gap: 48px; align-items: start; padding: 8px 0 32px; border-bottom: 1px solid #d9d4c9;">
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <span class="label">A · 장부</span>
+      <div style="font-size: 18px; font-weight: 600; line-height: 1.4;">숫자를 다루는 도구라는 것을 서체가 먼저 말한다</div>
+      <p style="font-size: 14px; line-height: 1.7; color: #4a4741;">IBM Plex Mono. 대시보드의 숫자 서체와 같은 계열이라 제품 안팎이 하나로 읽힌다. 회계·개발 도구 느낌이 강해 "친절한 HR 도구"와는 거리가 있다 — 컨설턴트에겐 장점, 담당자에겐 차가울 수 있다.</p>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 28px;">
+      <div class="mono" style="font-size: 88px; font-weight: 500; letter-spacing: -0.02em; line-height: 1; color: #1a1917;">Headroom</div>
+      <div style="display: flex; align-items: baseline; gap: 32px;">
+        <div class="mono" style="font-size: 22px; font-weight: 500; letter-spacing: -0.01em; color: #1a1917;">Headroom</div>
+        <div class="mono" style="font-size: 22px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: #1a1917;">Headroom</div>
+        <div style="font-family: 'IBM Plex Sans KR', sans-serif; font-size: 22px; font-weight: 600; color: #1a1917;">헤드룸</div>
+        <div class="mono" style="font-size: 13px; color: #7d786f;">헤더 22px · 대문자 자간 0.06em 대안</div>
+      </div>
+      <div style="display: flex; gap: 12px;">
+        <div style="background: #1a1917; color: #f7f5f0; padding: 18px 28px; display: flex; align-items: center;"><span class="mono" style="font-size: 26px; font-weight: 500; letter-spacing: -0.01em;">Headroom</span></div>
+        <div style="background: #c24a2c; color: #f7f5f0; padding: 18px 28px; display: flex; align-items: center;"><span class="mono" style="font-size: 26px; font-weight: 500; letter-spacing: -0.01em;">Headroom</span></div>
+        <div style="background: #2f6b4f; color: #f7f5f0; padding: 18px 28px; display: flex; align-items: center;"><span class="mono" style="font-size: 26px; font-weight: 500; letter-spacing: -0.01em;">Headroom</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- B · 서식 (serif) -->
+  <div style="display: grid; grid-template-columns: 420px minmax(0, 1fr); gap: 48px; align-items: start; padding: 8px 0 32px; border-bottom: 1px solid #d9d4c9;">
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <span class="label" style="color: #c24a2c;">B · 서식 — 확정 (9/14)</span>
+      <div style="font-size: 18px; font-weight: 600; line-height: 1.4;">회계법인·노무법인 옆에 놓여도 어색하지 않은 쪽</div>
+      <p style="font-size: 14px; line-height: 1.7; color: #4a4741;">Newsreader(영문) + 함렛(한글 세리프). 신뢰·문서·보고서의 인상. 세 방향 중 "AI 가 만든 SaaS" 와 가장 멀다. 대신 화면이 조금 무거워지고, 한글 세리프는 작은 크기에서 가독성이 떨어져 본문엔 못 쓴다(제목 전용).</p>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 28px;">
+      <div class="serif" style="font-size: 96px; font-weight: 500; letter-spacing: -0.015em; line-height: 1; color: #1a1917;">Headroom</div>
+      <div style="display: flex; align-items: baseline; gap: 32px;">
+        <div class="serif" style="font-size: 26px; font-weight: 500; color: #1a1917;">Headroom</div>
+        <div class="serif" style="font-size: 26px; font-weight: 400; font-style: italic; color: #1a1917;">Headroom</div>
+        <div class="kr-serif" style="font-size: 24px; font-weight: 600; color: #1a1917;">헤드룸</div>
+        <div class="mono" style="font-size: 13px; color: #7d786f;">헤더 26px · 이탤릭 대안 · 한글 함렛</div>
+      </div>
+      <div style="display: flex; gap: 12px;">
+        <div style="background: #1a1917; color: #f7f5f0; padding: 16px 28px; display: flex; align-items: center;"><span class="serif" style="font-size: 30px; font-weight: 500;">Headroom</span></div>
+        <div style="background: #c24a2c; color: #f7f5f0; padding: 16px 28px; display: flex; align-items: center;"><span class="serif" style="font-size: 30px; font-weight: 500;">Headroom</span></div>
+        <div style="background: #2f6b4f; color: #f7f5f0; padding: 16px 28px; display: flex; align-items: center;"><span class="serif" style="font-size: 30px; font-weight: 500;">Headroom</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- C · 그로테스크 -->
+  <div style="display: grid; grid-template-columns: 420px minmax(0, 1fr); gap: 48px; align-items: start; padding: 8px 0 32px; border-bottom: 1px solid #d9d4c9;">
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <span class="label">C · 그로테스크</span>
+      <div style="font-size: 18px; font-weight: 600; line-height: 1.4;">가장 "제품" 같고, 가장 흔해질 위험이 있는 쪽</div>
+      <p style="font-size: 14px; line-height: 1.7; color: #4a4741;">Bricolage Grotesque(영문) + Gothic A1(한글). 자간을 조여 단단한 덩어리로. 국내 B2B SaaS 의 표준 문법이라 안전하지만, 그만큼 다른 도구와 구별이 덜 된다. 담당자 친화성은 셋 중 가장 높다.</p>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 28px;">
+      <div class="grotesk" style="font-size: 92px; font-weight: 700; letter-spacing: -0.04em; line-height: 1; color: #1a1917;">Headroom</div>
+      <div style="display: flex; align-items: baseline; gap: 32px;">
+        <div class="grotesk" style="font-size: 24px; font-weight: 700; letter-spacing: -0.03em; color: #1a1917;">Headroom</div>
+        <div class="grotesk" style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; color: #1a1917;">headroom</div>
+        <div class="kr-gothic" style="font-size: 24px; font-weight: 800; letter-spacing: -0.02em; color: #1a1917;">헤드룸</div>
+        <div class="mono" style="font-size: 13px; color: #7d786f;">헤더 24px · 소문자 대안 · 한글 Gothic A1</div>
+      </div>
+      <div style="display: flex; gap: 12px;">
+        <div style="background: #1a1917; color: #f7f5f0; padding: 16px 28px; display: flex; align-items: center;"><span class="grotesk" style="font-size: 28px; font-weight: 700; letter-spacing: -0.03em;">Headroom</span></div>
+        <div style="background: #c24a2c; color: #f7f5f0; padding: 16px 28px; display: flex; align-items: center;"><span class="grotesk" style="font-size: 28px; font-weight: 700; letter-spacing: -0.03em;">Headroom</span></div>
+        <div style="background: #2f6b4f; color: #f7f5f0; padding: 16px 28px; display: flex; align-items: center;"><span class="grotesk" style="font-size: 28px; font-weight: 700; letter-spacing: -0.03em;">Headroom</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 강조색 후보 -->
+  <div style="display: grid; grid-template-columns: 420px minmax(0, 1fr); gap: 48px; align-items: start;">
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <span class="label">Accent · 1 of 2</span>
+      <div style="font-size: 18px; font-weight: 600; line-height: 1.4;">강조색은 하나만. 파랑은 쓰지 않는다</div>
+      <p style="font-size: 14px; line-height: 1.7; color: #4a4741;">바탕은 종이색(#f7f5f0), 글자는 먹색(#1a1917). 강조색은 버튼·링크·등급 표시 한 곳에만. 두 후보 모두 채도·명도를 맞춰 두었고 랜딩의 tweak 으로 바꿔 볼 수 있다.</p>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px;">
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="height: 96px; background: #c24a2c;"></div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline;"><span style="font-weight: 600;">주홍 — 결산서 도장</span><span class="mono" style="font-size: 13px; color: #7d786f;">#c24a2c</span></div>
+        <p style="font-size: 14px; line-height: 1.6; color: #4a4741;">결재·확인의 색. 눈에 띄고 기억되지만 "경고"와 겹칠 수 있어 위험 등급 색과 구분이 필요하다.</p>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="height: 96px; background: #2f6b4f;"></div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline;"><span style="font-weight: 600;">녹색 — 장부</span><span class="mono" style="font-size: 13px; color: #7d786f;">#2f6b4f</span></div>
+        <p style="font-size: 14px; line-height: 1.6; color: #4a4741;">회계 장부·흑자의 색. 차분하고 신뢰감이 있으나 무난해서 인상이 약할 수 있다.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>
