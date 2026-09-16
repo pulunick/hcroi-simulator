@@ -10,7 +10,13 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import { detectPeriod } from './detectPeriod';
 import { scanDocument } from './locate';
-import { DEFAULT_HC_INCLUDE, mapFields, periodForColumn } from './map';
+import {
+	DEFAULT_HC_INCLUDE,
+	HC_ITEM_KEYS,
+	defaultCandidateIndex,
+	mapFields,
+	periodForColumn
+} from './map';
 import { buildRecord } from './toRecord';
 import { DEFAULT_HEADCOUNT_BASIS } from '../types';
 import type { PageText } from './types';
@@ -49,10 +55,23 @@ describe.skipIf(files.length === 0)('pdf probe', () => {
 			async () => {
 				const pages = await nodeExtract(file);
 				const scan = scanDocument(pages);
-				const options = { consolidated: false, column: 'period' as const };
+				const detected = detectPeriod(pages);
+				// 화면과 같은 기본값: 반기보고서면 누적 열 (PdfImport.readOne)
+				const options = {
+					consolidated: false,
+					column: detected?.period.type === 'H' ? ('cumulative' as const) : ('period' as const)
+				};
 				const fields = mapFields(scan, options);
+				// 화면과 같은 기본 선택 — 손익 열과 같은 기간 구간의 첫 후보 (없으면 비움)
+				const pick = (f: (typeof fields)[number]) => {
+					const i = defaultCandidateIndex(f.candidates, options.column);
+					return i === null ? null : f.candidates[i];
+				};
 				const values = Object.fromEntries(
-					fields.filter((f) => f.candidates.length > 0).map((f) => [f.key, f.candidates[0].value])
+					fields.flatMap((f) => {
+						const c = pick(f);
+						return c ? [[f.key, c.value] as const] : [];
+					})
 				);
 				const period = periodForColumn(scan.cover, options.column) ?? {
 					year: 0,
@@ -69,7 +88,24 @@ describe.skipIf(files.length === 0)('pdf probe', () => {
 				});
 				const summary = {
 					pages: pages.length,
-					detectedPeriod: detectPeriod(pages),
+					detectedPeriod: detected,
+					chosenColumn: options.column,
+					// 인건비 항목이 손익 열과 같은 기간 구간으로 잡혔는지 (2026-09-15 QA)
+					hcColumnKinds: Object.fromEntries(
+						HC_ITEM_KEYS.flatMap((k) => {
+							const f = fields.find((x) => x.key === k);
+							if (!f || f.candidates.length === 0) return [];
+							const c = pick(f);
+							return [
+								[
+									k,
+									c
+										? `${c.columnKind ?? '구간미상'}${c.columnKind === options.column ? ' OK' : ''}`
+										: '비움'
+								]
+							];
+						})
+					),
 					cover: scan.cover,
 					consolidatedRange: scan.consolidatedRange,
 					tables: scan.tables.map((t) => ({

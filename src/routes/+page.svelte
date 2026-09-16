@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { replaceState } from '$app/navigation';
+	import { afterNavigate, replaceState } from '$app/navigation';
 	import { workspace } from '$lib/state/workspace.svelte';
 	import {
 		computeMetrics,
@@ -53,10 +53,18 @@
 	 * 소개 페이지 "가상 회사 샘플 열어 보기" 진입점(`/?start=sample`).
 	 * `workspace.loaded` 가 켜진 뒤(레이아웃 onMount 가 localStorage 를 읽은 뒤) 한 번만 처리한다 —
 	 * 이 페이지의 $effect 는 레이아웃보다 먼저 실행될 수 있어 로드 전 상태(샘플 기본값)만 보일 수 있다.
+	 * `routerReady` 도 함께 기다린다 — 하이드레이션 중 첫 $effect 는 SvelteKit 라우터 초기화보다 먼저
+	 * 돌 수 있고, 그때 `replaceState` 를 부르면 예외가 나면서 **하이드레이션 전체가 멈춘다**
+	 * (화면이 SSR 상태로 굳어 시작 경로가 통째로 안 먹는다). `afterNavigate` 는 라우터 초기화 뒤
+	 * 첫 진입(type 'enter')에도 불리므로 이 플래그가 안전 신호가 된다.
 	 */
+	let routerReady = $state(false);
+	afterNavigate(() => {
+		routerReady = true;
+	});
 	let startHandled = false;
 	$effect(() => {
-		if (!workspace.loaded || startHandled) return;
+		if (!workspace.loaded || !routerReady || startHandled) return;
 		startHandled = true;
 		const params = new URLSearchParams(window.location.search);
 		if (params.get('start') !== 'sample') return;
@@ -138,11 +146,16 @@
 	/** 영업비용 ↔ 영업이익 입력 모드 */
 	let costMode = $state<'cost' | 'profit'>('cost');
 
+	/**
+	 * 타일의 증감 표기. `neutral` 이면 빨강/초록 대신 회색 — 총 임직원 수처럼 증감 자체에
+	 * 좋고 나쁨이 없는 값에 쓴다(2026-09-15 결정). 금액·이익 계열은 지금 색을 그대로 둔다.
+	 */
 	function delta(
 		cur: number | null | undefined,
 		before: number | null | undefined,
 		fmt: (n: number) => string,
-		goodWhenUp = true
+		goodWhenUp = true,
+		neutral = false
 	) {
 		if (cur == null || before == null) return null;
 		const d = cur - before;
@@ -150,7 +163,8 @@
 			text: `${formatSigned(d, fmt)} vs ${prev ? periodLabel(prev.period) : '—'}`,
 			direction:
 				Math.abs(d) < 1e-9 ? ('flat' as const) : d > 0 ? ('up' as const) : ('down' as const),
-			goodWhenUp
+			goodWhenUp,
+			neutral
 		};
 	}
 
@@ -518,7 +532,7 @@
 					<StatTile
 						label="총 임직원 수"
 						value={formatHeadcount(rec.inputs.headcount)}
-						delta={delta(rec.inputs.headcount, prev?.inputs.headcount, (n) => `${n}명`)}
+						delta={delta(rec.inputs.headcount, prev?.inputs.headcount, (n) => `${n}명`, true, true)}
 					/>
 				</div>
 			{/if}

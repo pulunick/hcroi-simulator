@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
-	import { replaceState } from '$app/navigation';
+	import { afterNavigate, replaceState } from '$app/navigation';
 	import { newId, workspace } from '$lib/state/workspace.svelte';
 	import {
 		exportWorkspaceExcel,
@@ -272,10 +272,18 @@
 	 * 어느 영역으로 데려가느냐뿐이다(PDF 카드 / 엑셀 템플릿·가져오기 줄).
 	 * `workspace.loaded` 가 켜진 뒤(레이아웃의 onMount 가 localStorage 를 읽은 뒤) 한 번만 처리한다 —
 	 * 이 페이지의 onMount 는 레이아웃보다 먼저 실행돼 로드 전 상태(샘플 기본값)만 보일 수 있다.
+	 * `routerReady` 도 함께 기다린다 — 하이드레이션 중 첫 $effect 는 SvelteKit 라우터 초기화보다 먼저
+	 * 돌 수 있고, 그때 `replaceState` 를 부르면 예외가 나면서 **하이드레이션 전체가 멈춘다**
+	 * (화면이 SSR 상태로 굳어 샘플 9행이 그대로 남고 PDF 카드도 안 열린다 — 2026-09-15 회귀).
+	 * `afterNavigate` 는 라우터 초기화 뒤 첫 진입(type 'enter')에도 불리므로 안전 신호가 된다.
 	 */
+	let routerReady = $state(false);
+	afterNavigate(() => {
+		routerReady = true;
+	});
 	let startHandled = false;
 	$effect(() => {
-		if (!workspace.loaded || startHandled) return;
+		if (!workspace.loaded || !routerReady || startHandled) return;
 		startHandled = true;
 		const params = new URLSearchParams(window.location.search);
 		const start = params.get('start');

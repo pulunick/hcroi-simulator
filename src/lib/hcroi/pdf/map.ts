@@ -249,6 +249,42 @@ export function mapFields(scan: DocScan, options: MapOptions): FieldMatch[] {
 	}));
 }
 
+/** 손익 열 선택의 화면 표기 — 경고 문구가 사용자가 고른 이름 그대로 부르도록 한 곳에 둔다 */
+export const COLUMN_LABELS: Record<MapOptions['column'], string> = {
+	period: '3개월',
+	cumulative: '누적'
+};
+
+/**
+ * 카드에서 **기본으로 고를** 후보 순번. 손익 열(3개월/누적)과 **같은 기간 구간**의 후보만 기본이 된다.
+ *
+ * 구간이 섞이면 반기 누적 손익(6개월)에 3개월치 인건비가 붙어 총 인건비가 절반만 들어가고
+ * HCROI 가 부풀려진다(2026-09-15 QA). 같은 구간 후보가 없고 **다른 구간 후보만** 있으면
+ * `null` 을 돌려 기본 선택을 비운다 — 사람이 직접 고르게 한다.
+ * 구간을 알 수 없는 후보(머리글이 "제 15 기" 뿐인 사업보고서 등)는 그대로 첫 후보를 쓴다.
+ */
+export function defaultCandidateIndex(
+	candidates: readonly Candidate[],
+	column: MapOptions['column']
+): number | null {
+	const same = candidates.findIndex((c) => c.columnKind === column);
+	if (same >= 0) return same;
+	const unknown = candidates.findIndex((c) => c.columnKind === null);
+	return unknown >= 0 ? unknown : null;
+}
+
+/**
+ * 고른 후보가 손익 열과 다른 기간 구간이면 경고 문구, 같으면(또는 구간 미상이면) null.
+ * 카드에서는 항목 옆과 경고 목록 두 곳에 같은 문구를 쓴다.
+ */
+export function columnMismatchNote(
+	candidate: Candidate | undefined,
+	column: MapOptions['column']
+): string | null {
+	if (!candidate || candidate.columnKind === null || candidate.columnKind === column) return null;
+	return `이 항목은 ${COLUMN_LABELS[candidate.columnKind]} 기준 — 손익 열(${COLUMN_LABELS[column]})과 다릅니다`;
+}
+
 /**
  * 고른 열이 나타내는 기간. 반기보고서의 "3개월" 열은 2분기, "누적" 열은 상반기.
  * 3분기 보고서의 누적(1–9월)은 기간 유형이 없어 null.

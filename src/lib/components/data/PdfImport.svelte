@@ -12,9 +12,12 @@
 	import { PERIOD_TYPES, PERIOD_TYPE_LABELS, type Period, type PeriodType } from '$lib/hcroi/types';
 	import type { DocScan } from '$lib/hcroi/pdf/locate';
 	import {
+		COLUMN_LABELS,
 		DEFAULT_HC_INCLUDE,
 		FIELD_LABELS,
 		HC_ITEM_KEYS,
+		columnMismatchNote,
+		defaultCandidateIndex,
 		mapFields,
 		periodForColumn,
 		type Candidate,
@@ -51,7 +54,10 @@
 		periodKnown: boolean;
 		/** 표지에서 읽은 기간 (근거 문구·확인 필요 표시용) */
 		detected: PeriodDetection | null;
-		/** 입력 칸별 고른 후보 순번 (기본 0 = 선호 후보) */
+		/**
+		 * 입력 칸별로 **사람이 직접 고른** 후보 순번. 비어 있으면 `defaultCandidateIndex` 가 정한다
+		 * (손익 열과 같은 기간 구간의 첫 후보 — 같은 구간이 없으면 비움). 손익 열을 바꾸면 초기화.
+		 */
 		chosen: Partial<Record<FieldKey, number>>;
 		/** 직접 입력(원) — 후보 대신 쓴다 */
 		manual: Partial<Record<FieldKey, number>>;
@@ -128,9 +134,45 @@
 	function fieldsOf(st: FileState): FieldMatch[] {
 		return st.scan ? mapFields(st.scan, st.options) : [];
 	}
+	/** 이 칸에 실제로 쓰이는 후보 순번 — 사람이 고른 것이 있으면 그것, 없으면 기본(열 구간이 같은 첫 후보) */
+	function chosenIndex(fm: FieldMatch | undefined, st: FileState): number | null {
+		if (!fm) return null;
+		const picked = st.chosen[fm.key];
+		if (picked !== undefined && fm.candidates[picked]) return picked;
+		return defaultCandidateIndex(fm.candidates, st.options.column);
+	}
 	function candidateOf(st: FileState, fields: FieldMatch[], key: FieldKey): Candidate | undefined {
 		const fm = fields.find((f) => f.key === key);
-		return fm?.candidates[st.chosen[key] ?? 0];
+		const i = chosenIndex(fm, st);
+		return i === null ? undefined : fm?.candidates[i];
+	}
+	/** 선택 상자의 값 — 기본이 비어 있으면 -1(고르세요) */
+	function selectIndex(fm: FieldMatch | undefined, st: FileState): number {
+		return chosenIndex(fm, st) ?? -1;
+	}
+	function onChoose(st: FileState, key: FieldKey, e: Event) {
+		const i = Number((e.currentTarget as HTMLSelectElement).value);
+		if (Number.isInteger(i) && i >= 0) st.chosen[key] = i;
+		else delete st.chosen[key];
+	}
+	/**
+	 * 손익 열과 기간 구간이 어긋난 칸의 경고 — 항목 옆과 카드 경고 목록 두 곳에 같은 문구를 쓴다.
+	 * 기간 구간이 맞는 후보가 아예 없어 비어 있는 인건비 항목도 함께 알린다.
+	 */
+	function columnNotes(st: FileState, fields: FieldMatch[]): string[] {
+		const out: string[] = [];
+		const empty: string[] = [];
+		for (const fm of fields) {
+			if (st.manual[fm.key] !== undefined) continue;
+			const note = columnMismatchNote(candidateOf(st, fields, fm.key), st.options.column);
+			if (note) out.push(`${FIELD_LABELS[fm.key]}: ${note}`);
+			else if (fm.candidates.length > 0 && chosenIndex(fm, st) === null) empty.push(fm.label);
+		}
+		if (empty.length > 0)
+			out.push(
+				`${empty.join(' · ')} — 손익 열(${COLUMN_LABELS[st.options.column]})과 같은 기간 구간의 후보가 없어 비워 두었습니다. 직접 고르거나 입력하세요.`
+			);
+		return out;
 	}
 	function valueOf(st: FileState, fields: FieldMatch[], key: FieldKey): number | undefined {
 		return st.manual[key] ?? candidateOf(st, fields, key)?.value;
@@ -187,6 +229,8 @@
 	}
 	function setColumn(st: FileState, column: MapOptions['column']) {
 		st.options.column = column;
+		// 열을 바꾸면 기본 선택(같은 기간 구간의 첫 후보)을 다시 정한다 — 앞 열에서 고른 순번은 의미가 없다
+		st.chosen = {};
 		applyProposedPeriod(st);
 	}
 	function setPeriodType(st: FileState, type: PeriodType) {
@@ -300,6 +344,7 @@
 		{@const fields = fieldsOf(st)}
 		{@const built = st.status === 'ready' ? buildOf(st, fields) : null}
 		{@const problems = built ? problemsOf(st, built) : []}
+		{@const notes = st.status === 'ready' ? columnNotes(st, fields) : []}
 		{@const emp = st.scan?.employees[0] ?? null}
 		<article class="mb-4 rounded-lg border border-line bg-surface-2/40 p-4" aria-label={st.name}>
 			<header class="mb-3 flex flex-wrap items-start justify-between gap-3">
@@ -429,8 +474,15 @@
 								{@const fm = fields.find((f) => f.key === key)}
 								{#if fm && (fm.candidates.length > 0 || key === 'revenue' || key === 'operatingProfit')}
 									{@const c = candidateOf(st, fields, key)}
+									{@const note =
+										st.manual[key] === undefined ? columnMismatchNote(c, st.options.column) : null}
 									<tr class="border-b border-line/60">
-										<td class="py-1.5 pr-2 whitespace-nowrap text-ink">{FIELD_LABELS[key]}</td>
+										<td class="py-1.5 pr-2 text-ink">
+											<span class="whitespace-nowrap">{FIELD_LABELS[key]}</span>
+											{#if note}
+												<span class="mt-0.5 block text-xs text-status-warning-ink">{note}</span>
+											{/if}
+										</td>
 										<td
 											class="tabular py-1.5 pr-2 text-right whitespace-nowrap"
 											class:text-muted={st.manual[key] === undefined && !c}
@@ -440,11 +492,15 @@
 										<td class="py-1.5 pr-2 text-xs text-muted">
 											{#if st.manual[key] !== undefined}
 												직접 입력
-											{:else if fm.candidates.length > 1}
+											{:else if fm.candidates.length > 0 && (fm.candidates.length > 1 || !c)}
 												<select
 													class="field-input max-w-md py-0.5 text-xs"
-													bind:value={st.chosen[key]}
+													value={selectIndex(fm, st)}
+													onchange={(e) => onChoose(st, key, e)}
 												>
+													{#if !c}
+														<option value={-1}>고르세요 — 손익 열과 같은 구간 후보 없음</option>
+													{/if}
 													{#each fm.candidates as cand, i (i)}
 														<option value={i}>{formatInt(cand.value)}원 — {sourceText(cand)}</option
 														>
@@ -477,10 +533,12 @@
 							{#each HC_ITEM_KEYS as key (key)}
 								{@const fm = fields.find((f) => f.key === key)}
 								{@const c = candidateOf(st, fields, key)}
+								{@const note =
+									st.manual[key] === undefined ? columnMismatchNote(c, st.options.column) : null}
 								{#if (fm && fm.candidates.length > 0) || st.manual[key] !== undefined || DEFAULT_HC_INCLUDE[key]}
 									<tr class="border-b border-line/60">
-										<td class="py-1.5 pr-2 whitespace-nowrap">
-											<label class="flex items-center gap-2 text-ink">
+										<td class="py-1.5 pr-2">
+											<label class="flex items-center gap-2 whitespace-nowrap text-ink">
 												<input
 													type="checkbox"
 													class="rounded border-line-2 text-brand"
@@ -488,6 +546,9 @@
 												/>
 												{FIELD_LABELS[key]}
 											</label>
+											{#if note}
+												<span class="mt-0.5 block text-xs text-status-warning-ink">{note}</span>
+											{/if}
 										</td>
 										<td
 											class="tabular py-1.5 pr-2 text-right whitespace-nowrap"
@@ -498,11 +559,15 @@
 										<td class="py-1.5 pr-2 text-xs text-muted">
 											{#if st.manual[key] !== undefined}
 												직접 입력
-											{:else if fm && fm.candidates.length > 1}
+											{:else if fm && fm.candidates.length > 0 && (fm.candidates.length > 1 || !c)}
 												<select
 													class="field-input max-w-md py-0.5 text-xs"
-													bind:value={st.chosen[key]}
+													value={selectIndex(fm, st)}
+													onchange={(e) => onChoose(st, key, e)}
 												>
+													{#if !c}
+														<option value={-1}>고르세요 — 손익 열과 같은 구간 후보 없음</option>
+													{/if}
 													{#each fm.candidates as cand, i (i)}
 														<option value={i}>{formatInt(cand.value)}원 — {sourceText(cand)}</option
 														>
@@ -570,11 +635,12 @@
 						{#each problems as p, i (i)}<li>{p}</li>{/each}
 					</ul>
 				{/if}
-				{#if built && built.warnings.length}
+				{#if built && (built.warnings.length || notes.length)}
 					<ul
 						class="mt-3 space-y-1 rounded-md border border-status-warning/40 bg-status-warning-bg px-4 py-2 text-sm text-status-warning-ink"
 					>
 						{#each built.warnings as w, i (i)}<li>{w.replace(/\*\*/g, '')}</li>{/each}
+						{#each notes as n, i (i)}<li>{n}</li>{/each}
 					</ul>
 				{/if}
 			{/if}

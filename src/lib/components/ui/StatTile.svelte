@@ -6,15 +6,24 @@
 		value: string;
 		/** 값 옆 보조 표기 (예: "= 143%") */
 		sub?: string;
-		/** 변화량 텍스트 + 방향 (up 이 좋은지 여부는 goodWhenUp) */
-		delta?: { text: string; direction: 'up' | 'down' | 'flat'; goodWhenUp?: boolean } | null;
+		/**
+		 * 변화량 텍스트 + 방향 (up 이 좋은지 여부는 goodWhenUp).
+		 * `neutral` 이면 좋고 나쁨을 판정하지 않고 회색으로만 쓴다 — 총 임직원 수처럼 증감 자체에
+		 * 좋고 나쁨이 없는 값(2026-09-15 결정). 화살표는 그대로 방향을 보여 준다.
+		 */
+		delta?: {
+			text: string;
+			direction: 'up' | 'down' | 'flat';
+			goodWhenUp?: boolean;
+			neutral?: boolean;
+		} | null;
 		hero?: boolean;
 		children?: Snippet;
 	}
 	let { label, value, sub, delta = null, hero = false, children }: Props = $props();
 
 	const deltaClass = $derived.by(() => {
-		if (!delta || delta.direction === 'flat') return 'text-muted';
+		if (!delta || delta.neutral || delta.direction === 'flat') return 'text-muted';
 		const good = (delta.direction === 'up') === (delta.goodWhenUp ?? true);
 		return good ? 'text-status-good-ink' : 'text-status-critical-ink';
 	});

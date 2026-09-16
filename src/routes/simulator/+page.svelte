@@ -53,6 +53,11 @@
 		pick: (m: NonNullable<typeof b>, inputs: NonNullable<typeof base>['inputs']) => number | null;
 		fmt: (v: number) => string;
 		goodWhenUp: boolean;
+		/**
+		 * 증감 자체에 좋고 나쁨이 없는 행 — 빨강/초록 대신 회색 + 화살표로만 방향을 보여 준다
+		 * (2026-09-15 결정: 총 임직원 수만 해당. 금액·이익 계열은 색을 그대로 둔다).
+		 */
+		neutral?: boolean;
 		deltaFmt?: (v: number) => string;
 	};
 	const rows: Row[] = [
@@ -90,7 +95,8 @@
 			unit: '명',
 			pick: (_, i) => i.headcount,
 			fmt: formatHeadcount,
-			goodWhenUp: true
+			goodWhenUp: true,
+			neutral: true
 		},
 		{
 			label: 'HCVA (인당 부가가치)',
@@ -123,9 +129,14 @@
 		}
 	];
 
-	function deltaClass(d: number | null, goodWhenUp: boolean) {
-		if (d === null || Math.abs(d) < 1e-9) return 'text-muted';
+	function deltaClass(d: number | null, goodWhenUp: boolean, neutral = false) {
+		if (neutral || d === null || Math.abs(d) < 1e-9) return 'text-muted';
 		return d > 0 === goodWhenUp ? 'text-status-good-ink' : 'text-status-critical-ink';
+	}
+	/** 색을 쓰지 않는 행의 방향 표시 — 회색이라 부호만으로는 눈에 덜 띈다 */
+	function arrowOf(d: number | null) {
+		if (d === null || Math.abs(d) < 1e-9) return '';
+		return d > 0 ? '↑ ' : '↓ ';
 	}
 </script>
 
@@ -273,10 +284,9 @@
 							max={30}
 							step={1}
 							unit="%"
-							help="적용 후 {formatHeadcount(r.inputs.headcount)} ({formatSigned(
-								r.delta.headcount,
-								(n) => `${n}명`
-							)})"
+							help="적용 후 {formatHeadcount(r.inputs.headcount)} ({arrowOf(
+								r.delta.headcount
+							)}{formatSigned(r.delta.headcount, (n) => `${n}명`)})"
 						/>
 					{:else}
 						<SliderField
@@ -286,10 +296,9 @@
 							max={50}
 							step={1}
 							unit="명"
-							help="적용 후 {formatHeadcount(r.inputs.headcount)} ({formatSigned(
-								r.delta.headcount,
-								(n) => `${n}명`
-							)})"
+							help="적용 후 {formatHeadcount(r.inputs.headcount)} ({arrowOf(
+								r.delta.headcount
+							)}{formatSigned(r.delta.headcount, (n) => `${n}명`)})"
 						/>
 					{/if}
 				</div>
@@ -469,8 +478,9 @@
 							<td
 								class="tabular px-4 py-2 text-right text-sm font-semibold {deltaClass(
 									d,
-									row.goodWhenUp
-								)}">{formatSigned(d, row.deltaFmt ?? row.fmt)}</td
+									row.goodWhenUp,
+									row.neutral
+								)}">{row.neutral ? arrowOf(d) : ''}{formatSigned(d, row.deltaFmt ?? row.fmt)}</td
 							>
 						{/each}
 					</tr>

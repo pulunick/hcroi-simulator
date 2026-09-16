@@ -216,7 +216,7 @@
 					<div class="kpi-value mono">
 						{k.kind === 'headcount' ? `${formatInt(k.value)}명` : formatAmount(k.value, amountUnit)}
 					</div>
-					<div class="kpi-delta">
+					<div class="kpi-delta" class:kpi-delta-neutral={k.kind === 'headcount'}>
 						{#if k.kind === 'headcount'}
 							{k.deltaCount === null
 								? `${head.prevWord} 자료 없음`
@@ -526,6 +526,10 @@
 	.kpi-delta {
 		font-size: 12px;
 		color: var(--r-ink-2);
+	}
+	/* 임직원 수 증감은 좋고 나쁨이 없다 — 한 단계 연한 회색 (2026-09-15 결정) */
+	.kpi-delta-neutral {
+		color: var(--r-muted);
 	}
 
 	.block {

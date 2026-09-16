@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { periodFromRange, scanDocument } from './locate';
 import {
 	columnKindOf,
+	columnMismatchNote,
 	currentColumns,
+	defaultCandidateIndex,
 	mapFields,
 	matchAccount,
 	normalizePdfPrefs,
@@ -339,6 +341,79 @@ describe('쪽 넘김 · 목차 기반 연결/별도', () => {
 			preferred: true
 		});
 		expect(salary.candidates.find((c) => c.page === 40)!.preferred).toBe(false);
+	});
+});
+
+describe('인건비 항목의 기간 구간을 손익 열에 맞춘다 (2026-09-15 QA)', () => {
+	// report-a 의 성격별 비용 표는 머리글이 한 줄("3개월" · "누적")뿐이다 — 예전에는 열마다
+	// 다른 그룹이 되어 `currentColumns` 가 첫 열(3개월)만 남겼고, 반기 누적 손익에 3개월치
+	// 인건비가 붙어 총 인건비가 절반만 들어갔다.
+	const scan = scanDocument(pagesA);
+	const expense = scan.tables.find((t) => t.kind === 'expenseByNature')!;
+
+	it('머리글 한 줄짜리 표도 당기 열을 모두 후보로 내놓는다', () => {
+		expect(expense.columns.map((c) => c.group)).toEqual([0, 0]);
+		expect(currentColumns(expense, 'cumulative')).toEqual([1, 0]);
+		expect(currentColumns(expense, 'period')).toEqual([0, 1]);
+	});
+
+	it('손익 열이 누적이면 인건비 4항목 기본 선택도 누적', () => {
+		const fields = mapFields(scan, { consolidated: false, column: 'cumulative' });
+		for (const key of ['revenue', 'baseSalary', 'retirement', 'otherWelfare', 'stockComp']) {
+			const fm = fields.find((f) => f.key === key)!;
+			const i = defaultCandidateIndex(fm.candidates, 'cumulative');
+			expect(i, key).not.toBeNull();
+			expect(fm.candidates[i!].columnKind, key).toBe('cumulative');
+		}
+		const salary = fields.find((f) => f.key === 'baseSalary')!;
+		expect(salary.candidates[defaultCandidateIndex(salary.candidates, 'cumulative')!].value).toBe(
+			6_568_774_000
+		);
+	});
+
+	it('손익 열이 3개월이면 인건비 기본 선택도 3개월', () => {
+		const fields = mapFields(scan, { consolidated: false, column: 'period' });
+		const salary = fields.find((f) => f.key === 'baseSalary')!;
+		const i = defaultCandidateIndex(salary.candidates, 'period')!;
+		expect(salary.candidates[i].columnKind).toBe('period');
+		expect(salary.candidates[i].value).toBe(1_509_336_000);
+		const retire = fields.find((f) => f.key === 'retirement')!;
+		expect(retire.candidates[defaultCandidateIndex(retire.candidates, 'period')!].value).toBe(
+			113_551_000
+		);
+	});
+
+	it('같은 구간 후보가 없으면 기본 선택을 비운다 — 구간 미상이면 첫 후보', () => {
+		const fields = mapFields(scan, { consolidated: false, column: 'cumulative' });
+		const salary = fields.find((f) => f.key === 'baseSalary')!;
+		const onlyPeriod = salary.candidates.filter((c) => c.columnKind === 'period');
+		expect(onlyPeriod.length).toBeGreaterThan(0);
+		expect(defaultCandidateIndex(onlyPeriod, 'cumulative')).toBeNull();
+		expect(defaultCandidateIndex([], 'cumulative')).toBeNull();
+		const unknown = salary.candidates.map((c) => ({ ...c, columnKind: null }));
+		expect(defaultCandidateIndex(unknown, 'cumulative')).toBe(0);
+	});
+
+	it('다른 구간을 고르면 불일치 경고 문구', () => {
+		const fields = mapFields(scan, { consolidated: false, column: 'cumulative' });
+		const salary = fields.find((f) => f.key === 'baseSalary')!;
+		const three = salary.candidates.find((c) => c.columnKind === 'period')!;
+		const cum = salary.candidates.find((c) => c.columnKind === 'cumulative')!;
+		expect(columnMismatchNote(three, 'cumulative')).toBe(
+			'이 항목은 3개월 기준 — 손익 열(누적)과 다릅니다'
+		);
+		expect(columnMismatchNote(cum, 'period')).toBe(
+			'이 항목은 누적 기준 — 손익 열(3개월)과 다릅니다'
+		);
+		expect(columnMismatchNote(cum, 'cumulative')).toBeNull();
+		expect(columnMismatchNote(undefined, 'cumulative')).toBeNull();
+		expect(columnMismatchNote({ ...cum, columnKind: null }, 'period')).toBeNull();
+	});
+
+	it('두 줄 머리글 표(report-b)의 당기/전기 구분은 그대로', () => {
+		const b = scanDocument(pagesB).tables.find((t) => t.kind === 'expenseByNature')!;
+		expect(b.columns.map((c) => c.group)).toEqual([0, 0, 1, 1]);
+		expect(currentColumns(b, 'cumulative')).toEqual([1, 0]);
 	});
 });
 

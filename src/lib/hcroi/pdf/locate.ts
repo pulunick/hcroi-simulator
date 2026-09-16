@@ -25,7 +25,10 @@ export type TableKind = 'pl' | 'expenseByNature' | 'employees';
 export interface TableColumn {
 	/** 예: "제 15 기 반기 3개월" */
 	label: string;
-	/** 상위 머리글(당기/전기 그룹) 순번 — 0 이 가장 왼쪽(대개 당기). 그룹이 없으면 열 순번 */
+	/**
+	 * 상위 머리글(당기/전기 그룹) 순번 — 0 이 가장 왼쪽(대개 당기).
+	 * 머리글이 한 줄뿐이면 하위 머리글 글자로 당기(0)/이전 기간(1)만 나눈다 (`headerPeriodGroup`).
+	 */
 	group: number;
 	/** 하위 머리글 텍스트 ("3개월" · "누적" · "제 15 기" …) */
 	sub: string;
@@ -187,6 +190,18 @@ interface PagedRow {
 }
 
 /**
+ * 머리글이 **한 줄뿐인** 표(주석의 "성격별 비용" 등 — 위에 "당반기/전반기" 묶음 행이 없다)에서
+ * 열이 어느 기간 묶음인지 추정한다. 당기 = 0, 전기·전반기·전분기 = 1.
+ *
+ * 열마다 다른 그룹(옛 `group: i`)을 주면 `currentColumns` 가 최소 그룹(첫 열)만 남겨
+ * **"3개월/누적" 선택이 통하지 않는다** — 반기 누적 손익에 3개월치 인건비가 붙어 HCROI 가
+ * 부풀려졌다(2026-09-15 QA). 기수 표시가 없는 열은 모두 당기 한 묶음으로 본다.
+ */
+export function headerPeriodGroup(text: string): number {
+	return /^전(기|반기|분기|년|기말|회계연도)/.test(text.replace(/\s/g, '')) ? 1 : 0;
+}
+
+/**
  * 앵커 행 뒤의 단위·머리글·데이터 행을 읽어 표로 만든다.
  * 앵커 쪽 끝까지 표가 끝나지 않았으면(제목·주석·다른 단위를 만나지 않음) 다음 쪽을 이어 읽는다 —
  * 이어 읽는 쪽에서는 첫 데이터 행 전의 라벨 행(반복 머리글)·단위 행을 건너뛴다.
@@ -242,8 +257,9 @@ function readTable(
 		.filter((cells) => cells.length >= 2 && cells.some((c) => HEADER_TOKEN_RE.test(c.text)));
 	const subCells = candidates[candidates.length - 1] ?? [];
 	const groupCells = candidates.length >= 2 ? candidates[candidates.length - 2] : [];
-	const columns: TableColumn[] = subCells.map((c, i) => {
-		if (groupCells.length === 0) return { label: c.text, group: i, sub: c.text };
+	const columns: TableColumn[] = subCells.map((c) => {
+		if (groupCells.length === 0)
+			return { label: c.text, group: headerPeriodGroup(c.text), sub: c.text };
 		let g = 0;
 		let best = Infinity;
 		groupCells.forEach((gc, gi) => {
