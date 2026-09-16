@@ -370,3 +370,4 @@
 
 - main 0174892(설명서 `/guide/manual` · 공유 메타 + `/intro` SSR · 첫 방문 `/`→`/intro` · `+error.svelte` · 백업 권장 링크 · 폰트 자체 호스팅 · favicon · README · QA 스크립트 보정)를 머지 → a2581d7. `SITE_ENABLED = true` 유지. 상세는 main 의 decision-log 2026-09-16.
 - QA 세션 재검증(공개판 변형 포함) 제품 결함 0건. 프로덕션(hcroi-simulator.vercel.app)은 현재 main 빌드 — **Vercel Production Branch 를 `product/commercial` 로 바꿔야 공개판이 배포된다(사용자)**. LICENSE 파일은 사용자 결정 대기.
+- (이어서) main 2997dec 머지: 설명서 재작성 · 산식 탭 쉬운 말 · 소개 제목 한 줄.
