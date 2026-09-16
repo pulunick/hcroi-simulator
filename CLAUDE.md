@@ -37,6 +37,7 @@
 - `src/lib/hcroi/excel/excel.test.ts` — 엑셀 행 변환·검증·병합·exceljs 왕복. 시트 구조(`schema.ts`) 변경 시 user-guide §4 도 갱신
 - `src/lib/hcroi/pdf/*.test.ts` — 표 복원·표 찾기·매핑·레코드. 픽스처(`pdf/fixtures/*.json`)는 실 PDF 좌표에 **가상 수치**(4자리 이상 숫자 치환, 회사명 치환) — 실 수치·실 PDF 커밋 금지
 - UI 컴포넌트는 테스트 강제하지 않음
+- `tests/qa/` — Playwright 브라우저 QA(`npm run qa`, dev 서버 필요, 로컬 Chrome). 커밋 전 필수는 아님
 
 ## 문서
 

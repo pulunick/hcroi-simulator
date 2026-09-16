@@ -25,3 +25,6 @@ vite.config.ts.timestamp-*
 # 참고용 결산·공시 자료 (타사 PDF, 용량 큼 — 공개 저장소에 올리지 않는다)
 docs/*.pdf
 !docs/Martin*.pdf
+
+# Playwright QA 산출물(스크린샷·PDF·엑셀 — 회사명·실 수치가 담길 수 있음)
+tests/qa/out/
