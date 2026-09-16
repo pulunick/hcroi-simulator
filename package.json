@@ -13,7 +13,10 @@
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write .",
 		"test:unit": "vitest",
-		"test": "npm run test:unit -- --run"
+		"test": "npm run test:unit -- --run",
+		"qa": "node tests/qa/sweep.mjs && node tests/qa/items.mjs && node tests/qa/baseline.mjs && node tests/qa/branch.mjs && node tests/qa/dark.mjs",
+		"qa:site": "node tests/qa/site.mjs",
+		"qa:pdf": "node tests/qa/pdf.mjs"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
@@ -27,6 +30,7 @@
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.19.0",
 		"globals": "^17.6.0",
+		"playwright": "^1.62.1",
 		"prettier": "^3.8.3",
 		"prettier-plugin-svelte": "^4.1.0",
 		"prettier-plugin-tailwindcss": "^0.8.0",
