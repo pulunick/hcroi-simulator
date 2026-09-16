@@ -12,13 +12,10 @@
 	const hero = asset('/hero-dashboard.jpg');
 </script>
 
-<svelte:head>
-	<title>Headroom — DART 결산서로 HCROI</title>
-	<meta
-		name="description"
-		content="DART 결산서 PDF 한 부로 매출액·영업이익·인건비·임직원 수를 뽑아 HCROI 를 계산하고, 정원·임금 시나리오를 시뮬레이션합니다. 데이터는 브라우저 안에만 남습니다."
-	/>
-</svelte:head>
+<!--
+	제목·설명·링크 공유 메타(og/twitter/canonical)는 +layout.svelte 가 한 곳에서 낸다
+	(문구는 site-config 의 SITE_INTRO_TITLE · SITE_DESCRIPTION). 여기에 다시 두면 태그가 중복된다.
+-->
 
 <a
 	href="#intro-main"

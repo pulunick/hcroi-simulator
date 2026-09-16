@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { afterNavigate, replaceState } from '$app/navigation';
+	import { afterNavigate, goto, replaceState } from '$app/navigation';
+	import { SITE_ENABLED } from '$lib/site-config';
 	import { workspace } from '$lib/state/workspace.svelte';
 	import {
 		computeMetrics,
@@ -66,16 +67,31 @@
 	$effect(() => {
 		if (!workspace.loaded || !routerReady || startHandled) return;
 		startHandled = true;
-		const params = new URLSearchParams(window.location.search);
-		if (params.get('start') !== 'sample') return;
-		if (workspace.records.length === 0) {
-			workspace.resetToSample();
-		} else if (
-			!workspace.isSampleOnly() &&
-			confirm('현재 데이터를 가상 회사 샘플로 바꿀까요? (먼저 설정에서 백업하세요)')
-		) {
-			workspace.resetToSample();
+		const start = new URLSearchParams(window.location.search).get('start');
+		/**
+		 * 공개판 첫 방문 — 도메인 루트로 처음 온 사람은 샘플 대시보드가 아니라 소개를 먼저 본다.
+		 * 판정은 `workspace.hadStoredData`(= load() 시점에 저장본이 있었는가)로 한다. 지금
+		 * `hasStoredData()` 를 읽으면 안 된다 — 레이아웃의 저장 $effect 가 load() 직후 곧바로
+		 * 키를 만들기 때문에 언제나 true 가 되어 리다이렉트가 죽는다.
+		 * `?start=…` 가 붙어 있으면(소개 페이지의 시작 링크들) 건너뛴다 — 저장본이 생기기 전에
+		 * 소개 → 앱 → 소개 로 튕기는 것을 막는 신호다. 사내 배포에는 /intro 가 없으므로 공개판만.
+		 */
+		if (!start && SITE_ENABLED && !workspace.hadStoredData) {
+			goto(resolve('/intro'), { replaceState: true });
+			return;
 		}
+		if (!start) return;
+		if (start === 'sample') {
+			if (workspace.records.length === 0) {
+				workspace.resetToSample();
+			} else if (
+				!workspace.isSampleOnly() &&
+				confirm('현재 데이터를 가상 회사 샘플로 바꿀까요? (먼저 설정에서 백업하세요)')
+			) {
+				workspace.resetToSample();
+			}
+		}
+		// `start=app` 은 "소개로 되돌리지 말고 그냥 열어라"는 신호일 뿐이라 하는 일이 없다.
 		// 처리 후 쿼리를 지워 새로고침 시 반복되지 않게 한다
 		replaceState(resolve('/'), {});
 	});

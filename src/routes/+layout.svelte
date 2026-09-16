@@ -1,13 +1,21 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
+	import { asset, resolve } from '$app/paths';
 	import './layout.css';
-	import favicon from '$lib/assets/favicon.svg';
 	import wordmark from '$lib/assets/headroom-wordmark.svg';
 	import wordmarkLight from '$lib/assets/headroom-wordmark-light.svg';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import { workspace } from '$lib/state/workspace.svelte';
-	import { SITE_ENABLED } from '$lib/site-config';
+	import {
+		SITE_DESCRIPTION,
+		SITE_ENABLED,
+		SITE_INTRO_TITLE,
+		SITE_OG_IMAGE,
+		SITE_OG_IMAGE_ALT,
+		SITE_OG_IMAGE_HEIGHT,
+		SITE_OG_IMAGE_WIDTH,
+		PRODUCT_NAME
+	} from '$lib/site-config';
 
 	let { children } = $props();
 
@@ -54,10 +62,66 @@
 	// 소개(랜딩) 페이지는 자기 헤더·푸터를 직접 그린다 — 앱 크롬을 씌우지 않는다.
 	// 사내 배포(SITE_ENABLED=false)에는 /intro 자체가 없으니(404) 앱 헤더를 항상 쓴다.
 	const isSite = $derived(SITE_ENABLED && page.url.pathname.startsWith('/intro'));
+
+	// ───────────────── 링크 공유 메타 (OG · Twitter · canonical) ─────────────────
+	// 화면마다 <title> 을 따로 두므로(각 +page.svelte 의 workspace.pageTitle) 여기서는 같은 문자열을
+	// 경로 → 메뉴 이름 매핑으로 다시 만들어 og:title 에 쓴다. 소개 페이지만은 제목이 화면에 없어
+	// (site-config 의 SITE_INTRO_TITLE) 여기서 <title> 까지 함께 낸다.
+	const navSection = $derived.by(() => {
+		const p = page.url.pathname;
+		const hit = nav.find((n) => n.href !== resolve('/') && p.startsWith(n.href));
+		return hit?.label;
+	});
+	const metaTitle = $derived(isSite ? SITE_INTRO_TITLE : workspace.pageTitle(navSection));
+	// 절대 URL 이라야 링크 미리보기가 이미지를 가져간다. `asset()` 은 설정에 따라 상대 경로
+	// (`./hero-dashboard.jpg`)를 돌려주므로 현재 주소 기준으로 풀어서 절대 URL 로 만든다.
+	// 쿼리(?start=…)는 canonical 에서 뺀다.
+	const ogImage = $derived(new URL(asset(SITE_OG_IMAGE), page.url).href);
+	const canonical = $derived(page.url.origin + page.url.pathname);
+	// 오류 화면(404 등)은 공유·색인 대상이 아니다 — 메타 대신 noindex 만 낸다
+	const isErrorPage = $derived(page.error !== null);
+
+	// ───────────────── 백업 권장 알림 ─────────────────
+	// 직접 입력한 데이터가 있는데(샘플만이면 알리지 않는다) 백업 파일을 한 번도 저장하지 않았거나
+	// 마지막 저장이 7일을 넘었으면 헤더에서 설정 화면으로 한 번 찔러 준다. 저장은 이 PC 브라우저뿐이라
+	// 캐시를 지우면 그대로 사라지기 때문이다. 문구는 title 속성으로 이유까지 밝힌다.
+	const BACKUP_STALE_DAYS = 7;
+	const backupNudgeReason = $derived.by(() => {
+		if (!workspace.loaded) return null;
+		if (workspace.records.length === 0 || workspace.isSampleOnly()) return null;
+		const last = workspace.lastBackupAt;
+		if (last === null) return '백업 파일을 저장한 적이 없습니다';
+		// 며칠 지났는지는 백업 시각이 바뀔 때만 다시 센다 (헤더 시계와 달리 분 단위 갱신이 필요 없다)
+		const days = Math.floor((Date.now() - last) / 86_400_000);
+		return days > BACKUP_STALE_DAYS ? `마지막 백업 ${days}일 전` : null;
+	});
 </script>
 
 <svelte:head>
-	<link rel="icon" href={favicon} />
+	{#if isSite}
+		<title>{SITE_INTRO_TITLE}</title>
+	{/if}
+	{#if isErrorPage}
+		<meta name="robots" content="noindex" />
+	{:else}
+		<meta name="description" content={SITE_DESCRIPTION} />
+		<link rel="canonical" href={canonical} />
+		<meta property="og:type" content="website" />
+		<meta property="og:site_name" content={PRODUCT_NAME} />
+		<meta property="og:locale" content="ko_KR" />
+		<meta property="og:url" content={canonical} />
+		<meta property="og:title" content={metaTitle} />
+		<meta property="og:description" content={SITE_DESCRIPTION} />
+		<meta property="og:image" content={ogImage} />
+		<meta property="og:image:width" content={String(SITE_OG_IMAGE_WIDTH)} />
+		<meta property="og:image:height" content={String(SITE_OG_IMAGE_HEIGHT)} />
+		<meta property="og:image:alt" content={SITE_OG_IMAGE_ALT} />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content={metaTitle} />
+		<meta name="twitter:description" content={SITE_DESCRIPTION} />
+		<meta name="twitter:image" content={ogImage} />
+		<meta name="twitter:image:alt" content={SITE_OG_IMAGE_ALT} />
+	{/if}
 </svelte:head>
 
 {#if isSite}
@@ -168,6 +232,16 @@
 				<span class="hidden shrink-0 text-xs text-muted lg:inline"
 					>이 PC 에만 저장 · {workspace.savedLabel}</span
 				>
+				<!-- 저장 실패 경고가 떠 있을 때는 그쪽이 먼저다 — 백업 권장은 숨긴다(위 분기).
+				     저장 표기(lg:inline)와 달리 이 링크는 좁은 화면에서도 보여 준다. -->
+				{#if backupNudgeReason}
+					<a
+						href={resolve('/settings')}
+						title={backupNudgeReason}
+						class="shrink-0 text-xs font-semibold text-status-warning-ink underline underline-offset-2 hover:text-brand"
+						>백업 권장 →</a
+					>
+				{/if}
 			{/if}
 		</div>
 	</header>

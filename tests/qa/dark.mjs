@@ -1,7 +1,16 @@
 // tests/qa/dark.mjs (구 v2-dark.mjs) — 다크 모드 스윕: 설정에서 전환 후 7화면이 모두 다크를 유지하는지,
 // 콘솔/페이지 오류가 없는지 확인한다.
-import { BASE, OUT, launchChrome, outPath, Results, isIgnorableConsoleMessage } from './lib.mjs';
+import {
+	BASE,
+	OUT,
+	launchChrome,
+	outPath,
+	siteExpectations,
+	Results,
+	isIgnorableConsoleMessage
+} from './lib.mjs';
 
+const site = siteExpectations();
 const b = await launchChrome();
 const p = await (await b.newContext({ viewport: { width: 1440, height: 1000 } })).newPage();
 const logs = [];
@@ -28,8 +37,13 @@ for (const [n, path] of [
 	['intro', '/intro'],
 	['settings', '/settings']
 ]) {
+	// /intro 는 사내 배포(SITE_ENABLED=false)에서 의도적으로 404 를 낸다 — 그 404 로 인한
+	// 콘솔/HTTP 로그는 오류로 세지 않는다(sweep.mjs 의 is404Intro 와 같은 처리).
+	const is404Intro = n === 'intro' && !site.enabled;
+	const logsBefore = logs.length;
 	await p.goto(BASE + path, { waitUntil: 'networkidle' });
 	await p.waitForTimeout(600);
+	if (is404Intro) logs.length = logsBefore;
 	await p.screenshot({ path: outPath(`d-${n}.png`, OUT), fullPage: true });
 	const c = await p.evaluate(() => {
 		const s = getComputedStyle(document.body);

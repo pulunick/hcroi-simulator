@@ -88,6 +88,10 @@
 | PDF 기간 자동 감지 · 열 기준 통일             | `pdf/detectPeriod.ts`, `locate.ts`, `map.ts`                                            | 표지 종류+종료 월, 인건비 항목은 손익 열과 같은 구간                              |
 | 검증 오류 레코드 제외 · 합산 차단 · 복사됨 칩 | `workspace.invalidIds`, `rollup.ts`, `copiedFrom`                                       | QA 2026-09-15                                                                     |
 | 내보내기 공용 `src/lib/state/io.ts`           | JSON/엑셀 내보내기·가져오기 한 벌                                                       | exceljs 동적 import 유지                                                          |
+| 사용 설명서 앱 안 렌더 `/guide/manual`        | `src/lib/guide/`(marked · GitHub 슬러그 · 링크 변환), `static/samples/`                 | 원본은 `docs/user-guide.md` 하나, 2026-09-16                                      |
+| 링크 공유 메타 · 소개 SSR                     | `+layout.svelte` og/twitter/canonical, `intro/+page.ts` `ssr = true`                    | 앱 화면은 `ssr=false` 유지(미리보기는 `/intro` 만)                                |
+| 첫 방문 `/` → `/intro` · 오류 페이지          | `+page.svelte`(`workspace.hadStoredData`), `+error.svelte`                              | 공개판만, `?start=` 있으면 건너뜀                                                 |
+| 백업 권장 링크 · 폰트 자체 호스팅 · 버튼 대비 | `+layout.svelte`, `layout.css`(`pretendard` 패키지, `--accent` 4.66:1)                  | CDN 요청 0, 2026-09-16                                                            |
 
 ## 4. 결론
 

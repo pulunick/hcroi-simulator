@@ -4,6 +4,7 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="color-scheme" content="light dark" />
+		<link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
 		<!--
 			화면 테마를 첫 렌더 전에 확정한다 (라이트 → 다크 깜빡임 방지).
 			작업공간 본문(hcroi:workspace:v1)은 큰 JSON 이라 여기서 파싱하지 않고,
@@ -18,13 +19,6 @@
 				/* 프라이빗 모드 등 저장소 접근 불가 — 기기 설정을 따른다 */
 			}
 		</script>
-		<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-		<link
-			rel="stylesheet"
-			as="style"
-			crossorigin
-			href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
-		/>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

@@ -275,6 +275,12 @@ class Workspace {
 	theme = $state<ThemePref>('system');
 	/** localStorage 로드 완료 여부 — 로드 전에는 저장하지 않는다 */
 	loaded = $state(false);
+	/**
+	 * `load()` 를 부른 시점에 이 브라우저에 저장본이 **있었는지** — "이 도구를 처음 여는 사람인가" 판정용.
+	 * 로드 직후 레이아웃의 저장 `$effect` 가 곧바로 키를 만들어 버리므로, 화면에서 그때
+	 * `hasStoredData()` 를 읽으면 언제나 true 가 된다. 그래서 읽은 순간의 사실을 여기 기억해 둔다.
+	 */
+	hadStoredData = $state(false);
 	/** 되돌릴 수 있는 가져오기 스냅샷이 있는지 */
 	undoAvailable = $state(false);
 	/** 마지막으로 localStorage 에 저장한 시각 (epoch ms). 헤더가 "n분 전" 으로 보여 준다 */
@@ -415,8 +421,23 @@ class Workspace {
 		this.applyHeadcountBasis();
 	}
 
+	/**
+	 * 이 PC 브라우저에 저장된 작업공간이 있는지. 저장소 키 이름은 이 모듈만 안다 —
+	 * 화면에서 localStorage 를 직접 읽지 말고 이것(또는 `hadStoredData`)을 쓴다.
+	 */
+	hasStoredData(): boolean {
+		if (!browser) return false;
+		try {
+			return localStorage.getItem(STORAGE_KEY) !== null;
+		} catch {
+			return false;
+		}
+	}
+
 	load() {
 		if (!browser) return;
+		// 저장 $effect 가 키를 만들기 전에, "원래 저장본이 있었는가"를 먼저 붙잡아 둔다
+		this.hadStoredData = this.hasStoredData();
 		try {
 			const raw = localStorage.getItem(STORAGE_KEY);
 			if (raw) {

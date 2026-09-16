@@ -43,7 +43,9 @@
 
 - docs/spec.md — 요구사항·수식·가정·화면 (원본)
 - docs/decision-log.md — 결정 이력 (변경 시 추가)
-- docs/user-guide.md — 인사담당자용 사용 설명서 (화면·기능 변경 시 함께 갱신)
+- docs/user-guide.md — 인사담당자용 사용 설명서 (화면·기능 변경 시 함께 갱신). **앱 `/guide/manual` 이 이 파일을 그대로 렌더한다**(`src/lib/guide/`, marked) — 헤딩 앵커는 GitHub 슬러그, md 상대 링크는 GitHub blob 으로 변환되므로 링크는 `spec.md`·`samples/…` 처럼 docs 기준 상대 경로로 쓴다. svelte 로 복제 금지
+- 겉면 규칙: SSR 은 `/intro` 만(`intro/+page.ts`), 앱 화면은 `ssr=false`. 공유 메타·백업 권장 링크는 `+layout.svelte` 한 곳, 문구는 `site-config.ts`. 폰트는 `pretendard` npm 자체 호스팅(CDN 금지). 첫 방문 `/`→`/intro` 는 공개판만(`workspace.hadStoredData`, `?start=` 있으면 건너뜀)
+- Vercel 프로덕션(hcroi-simulator.vercel.app)은 2026-09-16 현재 **main 빌드** — 공개판 배포는 Vercel Production Branch 를 `product/commercial` 로 바꿔야 함(사용자 몫)
 - docs/requirements-coverage.md — 요구사항(spec) ↔ 구현 대조표
 - docs/plans/ — 착수 전 기능 계획서 (구현 시 spec/user-guide 로 흡수)
 - supabase/README.md — hcroi 스키마 적용 절차
