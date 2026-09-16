@@ -377,3 +377,4 @@
 - **사용자 결정 대기**: (1) LICENSE 파일(README 에 절 없음, 소개 푸터 "소스 코드" 링크는 유지) (2) 사용량 파악(Vercel Analytics 등) 쓸지 (3) Vercel Production Branch → `product/commercial`.
 - **다음**: product/commercial 에 `git merge main` → test/check/`npm run qa:site` → 커밋·push 는 지시 시.
 - **QA 세션(hcroi-simulator-46) 재검증 완료**: 제품 결함 0건. main 변형(qa 전 항목 + 항목 1·2·3·6) PASS, 공개판 변형(`SITE_ENABLED=true` 임시, 되튕김 정밀 5/5·SSR og·390·다크) PASS. 실패 2건은 스크립트 결함 → sonnet 이 보정: `site.mjs` 진입 `/?start=app` + "첫 방문 `/`→`/intro`" 항목 신설(12/12), `sweep.mjs` 모바일 폭은 overflow 래퍼(cue) 있으면 통과(`W=390` 38/38). `site-config.ts` 2행은 false 로 복구 확인.
+- (이어서) 사용자 평 "가이드가 어렵다" → `docs/user-guide.md` 전면 재작성(인사담당자 말, H2 12·백틱 0, opus) · `/guide` 산식 탭 쉬운 말 우선(sonnet) · 소개 h2 `break-keep` + 문구 단축("방법은 셋, 결과는 하나" · "귀사 데이터는 귀사 PC 안에만"). decision-log 2026-09-16 둘째 항목.

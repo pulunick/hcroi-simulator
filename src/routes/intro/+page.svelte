@@ -72,8 +72,8 @@
 		>
 			<div class="flex flex-col gap-2.5 lg:gap-3.5">
 				<span class="label">시작하기 · 세 가지 길</span>
-				<h2 class="text-[22px] leading-[1.35] font-bold lg:text-[28px]">
-					숫자를 넣는 방법은 셋, 결과는 하나
+				<h2 class="text-[22px] leading-[1.35] font-bold break-keep lg:text-[28px]">
+					방법은 셋, 결과는 하나
 				</h2>
 				<p class="text-[15px] text-pretty break-keep text-ink-2">
 					어느 길이든 필요한 값은 다섯 개 — 매출액, 영업비용(또는 영업이익), 총 인건비, 임직원 수,
@@ -128,7 +128,9 @@
 		>
 			<div class="flex flex-col gap-2.5 lg:gap-3.5">
 				<span class="label">01 · 산식</span>
-				<h2 class="text-[22px] leading-[1.35] font-bold lg:text-[28px]">공개된 식, 검증된 계산</h2>
+				<h2 class="text-[22px] leading-[1.35] font-bold break-keep lg:text-[28px]">
+					공개된 식, 검증된 계산
+				</h2>
 			</div>
 			<div class="flex max-w-[720px] flex-col gap-5 lg:gap-8">
 				<div class="card flex flex-col gap-2 px-5 py-[18px] lg:gap-2.5 lg:px-7 lg:py-6">
@@ -168,8 +170,8 @@
 		>
 			<div class="flex flex-col gap-2.5 lg:gap-3.5">
 				<span class="label">02 · 데이터 보관</span>
-				<h2 class="text-[22px] leading-[1.35] font-bold lg:text-[28px]">
-					귀사 데이터는 귀사 PC 를 떠나지 않습니다
+				<h2 class="text-[22px] leading-[1.35] font-bold break-keep lg:text-[28px]">
+					귀사 데이터는 귀사 PC 안에만
 				</h2>
 			</div>
 			<div class="flex max-w-[720px] flex-col gap-5 lg:gap-7">
