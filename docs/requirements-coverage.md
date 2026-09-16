@@ -76,15 +76,18 @@
 
 ## 3-B. 공개판 브랜치(`product/commercial`)에서 더한 것 (2026-09-15)
 
-| 항목                                    | 구현                                                                                    | 비고                                |
-| --------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------- |
-| 브랜드(Headroom) 토큰 · 서체 · 워드마크 | `src/routes/layout.css`, `src/app.html`, `src/lib/assets/`                              | 차트 범주색·등급색은 코어 규칙 유지 |
-| 다크모드                                | `hcroi:theme` + `app.html` 인라인 스크립트 + `:root[data-theme]`/`prefers-color-scheme` | 설정 03 에서 고정 가능              |
-| 반응형(390px)                           | 전 화면 단일 컬럼 · 표 가로 스크롤 · 헤더 탭 가로 스크롤                                | 리포트 종이는 원본 폭 유지          |
-| 설정 화면 `/settings`                   | 금액 단위 · 인원 산정 · 화면 · 백업                                                     | `/data` 상단 컨트롤은 요약+링크로   |
-| 경영진 리포트 `/report`                 | `src/lib/report/data.ts`(+27 테스트), `components/report/`                              | A4 1장, 코어 함수만 사용            |
-| 소개 페이지 `/intro`                    | `src/routes/intro/`, `components/site/`                                                 | 앱 헤더 미표시                      |
-| 내보내기 공용 `src/lib/state/io.ts`     | JSON/엑셀 내보내기·가져오기 한 벌                                                       | exceljs 동적 import 유지            |
+| 항목                                          | 구현                                                                                    | 비고                                                                              |
+| --------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| 브랜드(Headroom) 토큰 · 서체 · 워드마크       | `src/routes/layout.css`, `src/app.html`, `src/lib/assets/`                              | 차트 범주색·등급색은 코어 규칙 유지                                               |
+| 다크모드                                      | `hcroi:theme` + `app.html` 인라인 스크립트 + `:root[data-theme]`/`prefers-color-scheme` | 설정 03 에서 고정 가능                                                            |
+| 반응형(390px)                                 | 전 화면 단일 컬럼 · 표 가로 스크롤 · 헤더 탭 가로 스크롤                                | 리포트 종이는 원본 폭 유지                                                        |
+| 설정 화면 `/settings`                         | 금액 단위 · 인원 산정 · 화면 · 백업                                                     | `/data` 상단 컨트롤은 요약+링크로                                                 |
+| 경영진 리포트 `/report`                       | `src/lib/report/data.ts`(+27 테스트), `components/report/`                              | A4 1장, 코어 함수만 사용                                                          |
+| 소개 페이지 `/intro`                          | `src/routes/intro/`, `components/site/`                                                 | `SITE_ENABLED`(product 만) · 앱 헤더 미표시 · 시작 경로 `?start=pdf/excel/sample` |
+| 앱 룩                                         | 기존 디자인 시스템(흰 카드·파랑·고딕) + 다크 팔레트                                     | 2026-09-15 담당자 비교로 복귀, 워드마크만 브랜드                                  |
+| PDF 기간 자동 감지 · 열 기준 통일             | `pdf/detectPeriod.ts`, `locate.ts`, `map.ts`                                            | 표지 종류+종료 월, 인건비 항목은 손익 열과 같은 구간                              |
+| 검증 오류 레코드 제외 · 합산 차단 · 복사됨 칩 | `workspace.invalidIds`, `rollup.ts`, `copiedFrom`                                       | QA 2026-09-15                                                                     |
+| 내보내기 공용 `src/lib/state/io.ts`           | JSON/엑셀 내보내기·가져오기 한 벌                                                       | exceljs 동적 import 유지                                                          |
 
 ## 4. 결론
 
