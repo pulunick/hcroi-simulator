@@ -3,6 +3,7 @@
 	import { HC_COST_KEYS, HC_COST_LABELS } from '$lib/hcroi/types';
 	import { formatAmount, headcountBasisLabel } from '$lib/hcroi/format';
 	import { workspace } from '$lib/state/workspace.svelte';
+	import GuideTabs from '$lib/guide/GuideTabs.svelte';
 
 	/** 금액 표기 — 작업공간의 표시 단위 설정을 따른다 (저장값은 언제나 원 단위 정수) */
 	const won = (v: number | null | undefined, suffix = '원') =>
@@ -11,6 +12,8 @@
 </script>
 
 <svelte:head><title>{workspace.pageTitle('가이드')}</title></svelte:head>
+
+<GuideTabs />
 
 <h1 class="mb-2 text-2xl font-bold text-ink">가이드</h1>
 <p class="mb-8 text-[15px] text-ink-2">

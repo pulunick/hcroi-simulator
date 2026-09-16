@@ -1,4 +1,5 @@
 import type ExcelJS from 'exceljs';
+import { PRODUCT_NAME } from '$lib/site-config';
 import { compareScenarios } from '../scenario';
 import type { HeadcountBasis, PeriodRecord, Scenario } from '../types';
 import { YEAR_MAX, YEAR_MIN, allPeriodTexts, periodLabel } from '../period';
@@ -419,7 +420,7 @@ export interface ExportData {
 export async function buildWorkbookBuffer(data: ExportData): Promise<ArrayBuffer> {
 	const Excel = await loadExcel();
 	const wb = new Excel.Workbook();
-	wb.creator = 'HCROI 시뮬레이터';
+	wb.creator = PRODUCT_NAME;
 	wb.created = new Date();
 	addSummarySheet(wb, data.summaryRecords ?? data.records);
 	const input = addInputSheet(wb, data.records);
@@ -434,7 +435,7 @@ export async function buildWorkbookBuffer(data: ExportData): Promise<ArrayBuffer
 export async function buildTemplateBuffer(opts: { withSample: boolean } = { withSample: true }) {
 	const Excel = await loadExcel();
 	const wb = new Excel.Workbook();
-	wb.creator = 'HCROI 시뮬레이터';
+	wb.creator = PRODUCT_NAME;
 	const input = addInputSheet(wb, opts.withSample ? sampleRecords() : []);
 	const org = addOrgSheet(wb, '', DEFAULT_HEADCOUNT_BASIS);
 	addFormulaSheet(wb);

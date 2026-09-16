@@ -28,7 +28,10 @@ const R = new Results('site');
 		if ((m.type() === 'error' || m.type() === 'warning') && !isIgnorableConsoleMessage(m))
 			logs.push(`[${m.type()}] ${m.text().slice(0, 90)}`);
 	});
-	await p.goto(BASE + '/', { waitUntil: 'networkidle' });
+	// 공개판은 저장본 없는 첫 방문 `/` 을 `/intro` 로 리다이렉트한다(아래 별도 항목에서 검사) —
+	// 여기서는 대시보드 자체를 보려는 것이므로 `?start=app`(리다이렉트만 건너뛰고 쿼리는 스스로
+	// 지우는 앱 진입 표시, +page.svelte 참고)로 들어간다.
+	await p.goto(BASE + '/?start=app', { waitUntil: 'networkidle' });
 	await p.waitForTimeout(800);
 	const h = await p.evaluate(() => ({
 		wm: [...document.querySelectorAll('header img, header svg')].some((e) =>
@@ -69,6 +72,22 @@ const R = new Results('site');
 		JSON.stringify([...new Set(ctas)])
 	);
 	R.add('공개판 콘솔/페이지 오류 없음', logs.length === 0, [...new Set(logs)].join(' || '));
+}
+
+// ===== 첫 방문 리다이렉트 (저장본 없는 새 컨텍스트에서 / → /intro) =====
+// site.mjs 는 공개판이 아니면 파일 맨 위에서 이미 종료하므로 이 시점엔 항상 site.enabled === true 지만,
+// readSiteEnabled 로 다시 분기해 두면 이 항목만 떼어 다른 스크립트에서 재사용해도 사내 배포에서 안전하다.
+{
+	if (!site.enabled) {
+		console.log('SKIP 첫 방문 / → /intro 리다이렉트 — 공개판 아님');
+	} else {
+		const ctx = await b.newContext({ viewport: { width: 1440, height: 1000 } });
+		const p = await ctx.newPage();
+		await p.goto(BASE + '/', { waitUntil: 'networkidle' });
+		await p.waitForTimeout(800);
+		R.add('첫 방문 / → /intro 리다이렉트', p.url() === BASE + '/intro', p.url());
+		await ctx.close();
+	}
 }
 
 // ===== CTA 실동작(랜딩에서 클릭) =====

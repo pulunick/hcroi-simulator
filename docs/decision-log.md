@@ -242,3 +242,16 @@
 - **총 임직원 수 증감만 회색 중립 + 화살표**(대시보드 타일·시뮬레이터 비교표·미니 결과·리포트 KPI). 금액·이익 계열의 빨강/초록은 유지 — 인원 증가가 좋은지는 회사 상황에 달려 도구가 판정하지 않는다(QA 세션 경유 사용자 결론).
 - 시작 경로(`?start=…`) 회귀 원인: `$effect` 안 `replaceState` 가 라우터 초기화 전에 호출돼 하이드레이션이 중단 → `afterNavigate` 로 준비 플래그 후 처리.
 - 다크 입력칸 테두리 토큰 `--field-line`(`#5e6779`, 카드 대비 3.06:1).
+
+## 2026-09-16 — 공개판 겉면 정리 (main 에서 작업, product 로 머지)
+
+- **첫 방문은 소개부터**: 공개판(`SITE_ENABLED`)에서 저장본이 없는 브라우저가 `/` 를 열면 `/intro` 로 보낸다. 판정은 `workspace.hadStoredData`(`load()` 시점에 키가 있었는가 — 레이아웃 저장 `$effect` 가 곧바로 키를 만들어 버려 그 뒤에 읽으면 항상 true). `?start=…` 가 있으면 건너뛰고, 소개의 "시작하기"는 `?start=app`(아무 일도 안 함) 으로 되튕김을 막는다. 앱 주소 `/` 는 그대로(brain §12 "앱 진입은 / 유지" 와 양립).
+- **SSR 은 `/intro` 에만**: 루트 `ssr=false` 를 `intro/+page.ts` 에서만 덮는다. 링크 미리보기 크롤러가 og 태그를 보려면 서버 HTML 이 있어야 하는데, 앱 화면은 localStorage 상태라 SSR 하면 샘플이 먼저 그려진다. 오류 페이지는 SvelteKit 이 루트 레이아웃 `ssr` 만 보므로 SSR 되지 않는다(상태 코드는 정상 404).
+- **공유 메타는 레이아웃 한 곳**: og:title 은 각 화면 `<title>` 과 같은 문자열(`nav` 매핑 + `workspace.pageTitle`), 소개 제목·설명·이미지는 `site-config.ts` 상수. `og:image` 는 `new URL(asset(...), page.url)` 로 절대 URL(`origin + asset()` 은 상대 base 에서 깨짐). 오류 화면은 `noindex` 만.
+- **사용 설명서는 원본 하나**: `docs/user-guide.md` 를 `?raw` 로 읽어 `marked` 로 `/guide/manual` 에 렌더(모듈 스코프 1회 파싱). 헤딩 id 는 GitHub 슬러그(`src/lib/guide/slug.ts`, 테스트), md 상대 링크는 GitHub blob URL 로, 샘플 엑셀은 `static/samples/` 복사본으로. `/guide` 는 "산식·가정 | 사용 설명서" 탭. md 에 `/guide/manual` 안내 한 줄 추가.
+- **백업 권장 링크**: 실데이터가 있고(샘플만이면 제외) 백업이 없거나 7일 초과면 헤더에 "백업 권장 →"(설정). 저장 실패 경고가 우선.
+- **오류 페이지** `+error.svelte`: 404 는 경로 + 대시보드/가이드(+소개) 링크, 그 외는 백업 후 초기화 안내.
+- **폰트 자체 호스팅**: `pretendard` npm 패키지의 dynamic-subset css 를 `layout.css` 최상단 `@import` — 빌드에 woff2 92개 포함, jsdelivr 요청 0. 공개판 "서버로 보내는 것 없음" 문구·사내망 차단 대비.
+- **라이트 기본 버튼 대비**: `--accent` `#2a78d6`→`#2974d0`(흰 글자 4.42→4.66:1), `--accent-hover` `#2467b8`. 다크 팔레트 무변경.
+- **엑셀 작성자 속성** `wb.creator = PRODUCT_NAME`(공개판 Headroom / 사내 HCROI 시뮬레이터). 소개 푸터에 `문제 신고`(GitHub Issues) 추가. README 를 공개 저장소 첫 화면으로 재작성(라이선스 절은 사용자 결정 대기 — 파일 없음).
+- **프로덕션 실측**(hcroi-simulator.vercel.app): pdf.js worker 자산 200 · PDF 카드 생성 · 엑셀 다운로드 정상. 다만 **현재 배포는 main 빌드**(제목 "HCROI 대시보드") — 공개판을 내려면 Vercel Production Branch 를 `product/commercial` 로(사용자 몫). 배포 시점 폰트는 아직 CDN.

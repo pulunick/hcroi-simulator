@@ -7,6 +7,8 @@
 	// 768px 미만에서는 링크 셋을 "메뉴" 토글 아래로 접는다 (JS 는 이 불리언 하나뿐).
 	let menuOpen = $state(false);
 
+	// 앱 진입 링크에는 `?start=app` 을 붙인다 — "소개로 되돌리지 말고 그냥 열어라"는 신호로,
+	// 대시보드가 처리 후 쿼리를 지운다. (첫 방문자는 / 에서 /intro 로 보내지므로 표시가 없으면 되튕긴다)
 	const appHref = resolve('/');
 	const introHref = resolve('/intro');
 	const guideHref = resolve('/guide');
@@ -33,12 +35,12 @@
 				<a href="#formula" class={linkClass}>산식</a>
 				<a href="#privacy" class={linkClass}>데이터 보관</a>
 				<a href={guideHref} class={linkClass}>가이드</a>
-				<a href={appHref} class="btn btn-primary">시작하기</a>
+				<a href="{appHref}?start=app" class="btn btn-primary">시작하기</a>
 			</nav>
 
 			<!-- 모바일 (<768) -->
 			<div class="flex items-center gap-5 md:hidden">
-				<a href={appHref} class={startClass}>시작하기</a>
+				<a href="{appHref}?start=app" class={startClass}>시작하기</a>
 				<button
 					type="button"
 					class="flex min-h-11 items-center text-[15px] text-ink-2 hover:text-brand"

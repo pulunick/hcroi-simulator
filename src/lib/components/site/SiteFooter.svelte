@@ -22,6 +22,11 @@
 					rel="noreferrer"
 					class="hover:text-brand">소스 코드</a
 				>
+				<a
+					href="https://github.com/pulunick/hcroi-simulator/issues"
+					rel="noreferrer"
+					class="hover:text-brand">문제 신고</a
+				>
 			</div>
 		</div>
 	</div>

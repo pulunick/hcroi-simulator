@@ -1,3 +1,4 @@
+@import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css';
 @import 'tailwindcss';
 @plugin '@tailwindcss/forms';
 
@@ -41,8 +42,12 @@
 	--field-line: var(--line-2);
 
 	/* 브랜드/액션 — 파랑 (= 범주형 슬롯 1) */
-	--accent: #2a78d6;
-	--accent-hover: #256abf;
+	/* 2026-09-16: --accent 위 흰 글자(--on-accent) 대비가 4.415:1 로 WCAG AA(4.5) 미달이라
+	   색조 유지한 채 아주 소폭 어둡게 조정(2a78d6→2974d0, ΔL 최소) → 4.663:1.
+	   --accent-hover 는 그보다 더 어둡게(같은 비율로 축소) → 5.665:1. --accent-ink 는 원래도
+	   흰 배경 대비 6.628:1 이라 변경 없음. (스크래치패드 contrast*.js, WCAG 상대휘도 계산) */
+	--accent: #2974d0;
+	--accent-hover: #2467b8;
 	--accent-tint: #eaf2fc;
 	--accent-ink: #1c5cab;
 	/* 강조 배경 위 글자색 (버튼 라벨) */

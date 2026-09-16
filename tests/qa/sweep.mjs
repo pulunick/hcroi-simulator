@@ -105,7 +105,9 @@ for (const [name, path] of pages) {
 	}
 	R.add(
 		`${name} 표 가로 잘림 없음`,
-		d.tables.every((t) => t.ww == null || t.tw <= t.ww + 1),
+		// 모바일(W<500)은 표 래퍼에 overflow-x-auto 로 가로 스크롤을 의도적으로 두므로(cue 매치),
+		// 그 경우는 표 자체가 래퍼보다 넓어도 통과 — 문서 가로 스크롤 0 은 아래 항목이 따로 본다.
+		d.tables.every((t) => t.ww == null || t.tw <= t.ww + 1 || (W < 500 && t.cue)),
 		JSON.stringify(d.tables)
 	);
 	R.add(`${name} 문서 가로 스크롤 없음`, d.scrollW <= d.clientW + 1, `${d.scrollW} / ${d.clientW}`);
