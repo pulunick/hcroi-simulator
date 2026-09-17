@@ -4,7 +4,7 @@
 > 결정된 사항(바뀌지 않는 규칙)은 [brain.md](brain.md) 에만 적는다 — 여기에 중복하지 않는다.
 > 형식: 상단 "현재 상태" 스냅샷 → "다음 할 일" → 하단에 세션 로그 누적.
 
-## 현재 상태 (2026-09-14 세션 11 진행 중)
+## 현재 상태 (2026-09-17 세션 14 진행 중)
 
 | 항목            | 상태                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -84,8 +84,7 @@
 4. ~~분기 단위 지원~~ → **기간 레코드로 구현 완료** (2026-09-08). 월(M) 단위는 요구 확인 시 같은 구조로 추가
 5. ~~결산서 PDF → 엑셀 입력 시트 변환~~ → **M1–M4 구현 완료**(2026-09-09). 남은 것: (a) 담당자 자사 결산서로 실전 확인(질문지 §6) (b) 내부 결산서 양식이 다르면 계획서 §6 수동 셀 지정 모드 (c) Vercel 배포 후 pdf.js worker 자산 로드 확인
 6. **부서별 HCROI** — 배부율 α = 인건비 비중(확정), 단위 본부–팀(보유 확인됨). 부서 마스터 입력 화면 필요
-7. **동종업계 비교 (C안 확정)** — 엑셀에 `동종업계` 시트 추가 후 8개사 수기 입력. 파서 없이 비교 화면·계산부터.
-   테스트용 결산서 2부 수령 완료(루닛·코어라인소프트, `docs/*.pdf` — 커밋 제외)
+7. ~~동종업계 비교 (C안 확정)~~ → **구현 완료(2026-09-17, main)**: `peers.ts` + `/peers` + 엑셀 `동종업계` 시트. 다음: PDF→동종업계 회사 바로 넣기, 리포트 한 줄, DART API 자동 채우기(계획 §7)
 8. **DART Open API 자동화 (B안, 선택)** — 6번이 매 분기 반복으로 굳어지면 착수.
    `fnlttSinglAcntAll`(재무제표) + `empSttus`(직원수·연간급여총액). Vercel 서버 라우트 1개 + 무료 API 키 필요
 
@@ -378,3 +377,29 @@
 - **다음**: product/commercial 에 `git merge main` → test/check/`npm run qa:site` → 커밋·push 는 지시 시.
 - **QA 세션(hcroi-simulator-46) 재검증 완료**: 제품 결함 0건. main 변형(qa 전 항목 + 항목 1·2·3·6) PASS, 공개판 변형(`SITE_ENABLED=true` 임시, 되튕김 정밀 5/5·SSR og·390·다크) PASS. 실패 2건은 스크립트 결함 → sonnet 이 보정: `site.mjs` 진입 `/?start=app` + "첫 방문 `/`→`/intro`" 항목 신설(12/12), `sweep.mjs` 모바일 폭은 overflow 래퍼(cue) 있으면 통과(`W=390` 38/38). `site-config.ts` 2행은 false 로 복구 확인.
 - (이어서) 사용자 평 "가이드가 어렵다" → `docs/user-guide.md` 전면 재작성(인사담당자 말, H2 12·백틱 0, opus) · `/guide` 산식 탭 쉬운 말 우선(sonnet) · 소개 h2 `break-keep` + 문구 단축("방법은 셋, 결과는 하나" · "귀사 데이터는 귀사 PC 안에만"). decision-log 2026-09-16 둘째 항목.
+
+### 2026-09-17 — 세션 14 (main): 동종업계 비교 C안 구현
+
+- 시작: 남은 할 일 점검(코드·문서 잔여 없음, 사용자 몫만: Vercel Production Branch · LICENSE · 도메인 · 담당자 허락 문서). 미추적 `.agents/skills/patch-notes/` 는 Codex 플러그인이 만든 깨진 사본("claude"→"Codex" 치환) — 커밋 금지, 삭제는 지시 대기.
+- 사용자 질문(시장에 비슷한 것 있나 · DART Open API 가 더 정확한가) 조사 → decision-log 2026-09-17. 결론: 자사는 PDF 유지, 동종업계는 C안 착수, API 는 동종업계 자동 채우기 후보. 사용자 "그렇게 진행하자".
+- 계획서 `docs/plans/peer-comparison.md` 작성 → 1단계(opus): `types.ts` `PeerCompany` · `defaults.ts` `samplePeers()` · `peers.ts`(comparePeers·peerPeriods, 13 tests) · workspace `peers` 상태/저장/이행/편집 API · 엑셀 `동종업계` 시트(schema·toRows·fromRows `parsePeerRows`·`mergePeers`·io, 13 tests). 248 tests.
+- 2단계(opus): `/peers` 화면(비교 표·HCROI 가로 막대·회사 카드 편집) · 헤더 탭 7개 · `/data` 가져오기 미리보기 동종업계 카드(체크박스·병합 수·오류 행) · 문서(spec §2·§7·§8, user-guide 새 §8 + 번호 밀기, coverage, CLAUDE.md).
+- 검수 수정 2건: 동종업계 시트만 있는 파일도 반영 가능 · 범례 "자사 (자사)" 중복.
+- Fable 검수: 248 tests · check 0 · lint OK · `peers.ts`·`parsePeerRows`·`mergePeers`·`normalizePeer` 직접 읽어 이상 없음. **Codex 리뷰는 사용량 한도로 실패**(task-mu4x98iz-rsn9aq, 2026-09-17 14:40 이후 재시도 가능) — 재시도 필요.
+- QA 세션(hcroi-simulator-d8)에 13개 항목 검증 지시 발송(결과 대기).
+- Codex 는 토큰 소진(사용자 확인) → **Claude `/code-review medium` 로 대체**(탐색 8관점). 결과를 아래 수정 목록으로 확정. 사용자 지시로 여기서 중단(2시간 뒤 재개).
+- **다음 세션 시작점 — 리뷰 수정 목록(opus 서브에이전트 1회에 위임, 이후 test/check/lint + 스크린샷)**
+  - 버그(높음)
+    1. `excel/io.ts` `readWorkbook` 폴백 `wb.worksheets[0]` 이 `동종업계` 시트를 자사 입력 시트로 읽음(머리글이 필수 열을 다 만족) → 폴백은 `SHEET` 의 다른 이름(동종업계·조직 정보·지표 요약·시나리오 비교·산식·가정)이 아닌 첫 시트만, 없으면 `null`(입력 시트 없음 = 행 0 으로 취급, 오류 아님).
+    2. `/data` `canApply`: 입력 데이터 **머리글 오류는 다시 차단**(옛 규칙 복원). 단 입력 시트가 아예 없거나 비어 있으면 오류 없이 "행 없음". 동종업계 오류 행은 **체크가 켜진 경우만** `errorRowCount` 에 포함(끄면 반영 가능). 미리보기 머리글의 "정상 N행 · 오류 M행" 도 같은 값으로.
+    3. `workspace.svelte.ts` 이행: `Persisted.peers` 가 **없는** 옛 JSON 백업·되돌리기 스냅샷을 적용하면 현재 동종업계가 `[]` 로 지워짐 → `Migrated.peers: PeerCompany[] | null`, `applyMigrated` 는 null 이면 현재 목록 유지 + `ImportResult.warning` "이 백업에는 동종업계가 없어 현재 목록을 유지했습니다". `load()` 는 null → `[]`.
+    4. `/peers` 연도 칸 `oninput` 이 중간값(2→20→202)을 저장 → `patchRow` 에서 `isValidYear`/`isValidPeriod` 통과할 때만 반영(연도·기간 셀은 `onchange`), 같은 기간 충돌 시 입력값을 되돌려 화면과 상태 불일치 제거.
+  - 문구(중간) 5. 반영 메시지: 입력 시트 행이 전부 오류로 건너뛴 경우와 "행 없음" 구분("입력 데이터 오류 N행은 반영하지 않았습니다" / "입력 데이터 시트에 행이 없어 동종업계만 반영했습니다"). 동종업계 머리글 오류로 건너뛴 경우 "동종업계 시트는 머리글 오류로 반영하지 않았습니다" 를 메시지에 포함.
+  - 성능(중간) 6. `peerPeriods`·`comparePeers` 가 호출마다 회사별 `rollup`+`validateRecord` 를 2회 → 워크스페이스에 `peerEffective = $derived(peers.map(p => ({...p, effective: rollup(p.records, basis)})))` 하나를 두고 코어 함수는 **합산 끝난 목록**을 받게 시그니처 변경(자사는 `workspace.effective`). `peers.test.ts` 갱신. `patchRow` 의 `$state.snapshot` 두 번 → 한 번, `updatePeerRecord` 는 기간이 바뀔 때만 재정렬.
+  - 정리(낮음) 7. `replacePeers(companies, mode)` → `replacePeers(companies)` 로 최종 목록만 대입(`replaceRecords` 와 같은 모양). `/data` 는 이미 계산한 `peerMerge.result` 를 넘겨 병합 두 번 실행 제거. workspace 의 `excel/fromRows` import 제거. 8. `fromRows.ts` `newRowId()` 복제 제거 → `ParseOptions.newId?: () => string`(`MergeOptions.newId` 와 같은 주입 방식), 페이지가 workspace `newId` 전달. `mergePeers` 는 깊은 복사 없이 유지 회사는 참조 재사용. 9. `schema.ts`: `DataColumn<K>` 하나로 `InputColumn`·`PeerColumn` 통일, `PEER_COLUMNS` 는 `INPUT_COLUMNS` 에서 골라 만들기(회사명 열만 신규), `PEER_HEADER_ROW` 등 별칭 삭제(`INPUT_*` 직접 사용 또는 `DATA_*` 로 한 번 개명). `addColumnValidations`·`dataNumFmt`·`mapHeaderWith`·`headerText` 가 그 타입을 받게. `addPeerSheet` 의 안 쓰는 `return ws` 제거. 10. `toRows.ts` 의 `PeerRow` → `PeerInputRow` 로 개명(`peers.ts` `PeerRow` 와 충돌). 회사 이름 정렬 `localeCompare('ko')` 4곳 → `peers.ts` 의 `sortPeersByName` 하나. 11. `/peers` 비교 표의 자사 행·상대 행 마크업 중복(~40줄) → `{#each [c.self, ...c.peers]}` + `isSelf` 분기 또는 snippet. `$lib/hcroi/peers` 중복 import 정리. `parsePeerRows` 의 이중 `if (messages.length === 0)` 를 `parseInputRows` 모양으로 평탄화. 12. 선택: 기간 선택 UI(`/data` 기간 추가 · `/peers` 행/추가 폼)를 `components/ui/PeriodPicker.svelte` 로 추출, `/data` 동종업계 오류 표를 입력 미리보기 오류 행과 같은 컴포넌트로. `excel.test.ts` 의 `peerHeader/pcol/prow/peerSheet` 헬퍼를 `sheetHelpers(columns)` 로 매개변수화.
+  - QA(hcroi-simulator-d8) 결과: **13/13 PASS, 막는 버그 0**, `npm run qa` 전부 통과. 작은 개선 4건(같은 위임에 포함): 13. `/data` 동종업계 머리글 오류 시 체크박스가 비활성이어도 체크된 모양 → 오류면 체크를 끄고 비활성(또는 숨김). 14. 설정 "이 PC 의 데이터 지우기" 확인창의 지워지는 목록에 "동종업계 회사" 추가(`settings/+page.svelte` `clearThisPc`). 15. `/peers` 범례의 "업계 평균" 점선 견본 색이 `border-line-2` 라 라이트에서 안 보임 → 차트 선과 같은 `ink-2`. 16. 평균 점선이 값이 비슷한 막대 라벨(1.25·1.26배) 글자를 가로지름 → 라벨을 선 뒤로 두거나 라벨 배경/오프셋.
+    QA 산출물: `…\Temp\claude\c--Users-user-Desktop-hcroi-simulatord4d37ac-b8fe-4828-9024-90b9ea07a14b\scratchpad\out\` (재현 `qa1.mjs` 화면 · `qa2.mjs` 엑셀).
+    환경: QA 가 소문자 경로로 띄운 dev 서버(PID 58308, 127.0.0.1:5173)는 Pretendard 404 를 내지만 앱 버그 아님 — 재개 시 종료. [::1]:5173(PID 35328) 도 남아 있음.
+  - **2026-09-17 오후 재개 — 1~16번 처리 완료(opus)**: 12번은 테스트 헬퍼 통일만 하고 `PeriodPicker` 추출·오류 표 컴포넌트 공용화는 미실시(선택, 이득 작음). 시그니처 변경: `peerPeriods(selfEffective, peers: PeerEffective[])`·`comparePeers(selfEffective, peers, period)`, workspace `peerEffective` derived, `replacePeers(companies)`, `ParseOptions.newId`, `DataColumn<K>`·`DATA_*_ROW`, `PeerInputRow`, `sortPeersByName`. Fable 검증: 250 tests · check 0 · lint OK · 스크린샷(`fix-*.png`) · 식별자 스캔 이상 없음. QA 세션이 띄운 소문자 경로 dev 서버(PID 58308) 종료, `[::1]:5173`(PID 35328) 유지.
+  - 그 뒤: 커밋(지시 시) → product/commercial 에 `git merge main` → 패치노트(`/patch-notes`, 지시 시).
+- 남긴 것: workspace 이행 테스트(`.svelte.ts` 테스트 환경 없음) · 리포트/대시보드 미반영.

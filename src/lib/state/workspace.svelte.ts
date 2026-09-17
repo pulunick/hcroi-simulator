@@ -1,18 +1,21 @@
 import { normalizePdfPrefs, type PdfPrefs } from '$lib/hcroi/pdf/map';
 import { browser } from '$app/environment';
 import { DASHBOARD_TITLE, PRODUCT_NAME } from '$lib/site-config';
-import { sampleRecords } from '$lib/hcroi/defaults';
+import { samplePeers, sampleRecords } from '$lib/hcroi/defaults';
 import { DEFAULT_SCENARIO_PARAMS } from '$lib/hcroi/scenario';
 import type {
 	HcCostBreakdown,
 	HeadcountBasis,
 	HeadcountBreakdown,
+	PeerCompany,
 	Scenario,
 	Period,
 	PeriodRecord,
 	PeriodType,
 	ScenarioParams
 } from '$lib/hcroi/types';
+import { PEER_NAME_MAX } from '$lib/hcroi/types';
+import { peerPeriods, type PeerEffective } from '$lib/hcroi/peers';
 import {
 	comparePeriods,
 	isValidPeriod,
@@ -98,6 +101,8 @@ interface Persisted {
 	savedAt?: number;
 	/** 마지막으로 백업 파일을 내려받은 시각 (epoch ms, 선택). 설정 화면 표기용 — 백업 파일 자체에는 넣지 않는다 */
 	lastBackupAt?: number;
+	/** 동종업계 회사 (선택). 키 자체가 없으면 "모르는 값" 으로 다뤄 현재 목록을 지우지 않는다 */
+	peers?: unknown[];
 }
 
 /**
@@ -206,8 +211,34 @@ function normalizeRecord(raw: unknown): PeriodRecord | null {
 	};
 }
 
+/**
+ * 저장된 동종업계 회사 하나를 현재 스키마로 맞춘다.
+ * id·이름이 문자열이 아니면 null(제외). 이름은 앞뒤 공백을 지우고 `PEER_NAME_MAX` 자로 자른다.
+ * 레코드는 자사와 같은 `normalizeRecord` 로 정리하고, 읽지 못한 것은 조용히 뺀다.
+ */
+function normalizePeer(raw: unknown): PeerCompany | null {
+	if (!raw || typeof raw !== 'object') return null;
+	const o = raw as Partial<PeerCompany>;
+	if (typeof o.id !== 'string' || typeof o.name !== 'string') return null;
+	const name = o.name.trim().slice(0, PEER_NAME_MAX);
+	if (!name) return null;
+	return {
+		id: o.id,
+		name,
+		memo: typeof o.memo === 'string' ? o.memo : undefined,
+		records: Array.isArray(o.records)
+			? o.records.map(normalizeRecord).filter((r): r is PeriodRecord => r !== null)
+			: []
+	};
+}
+
 interface Migrated {
 	records: PeriodRecord[];
+	/**
+	 * 동종업계 — `peers` 키가 아예 없는 저장값(2026-09-17 이전 백업)은 **null**.
+	 * null 은 "이 파일은 동종업계를 모른다" 는 뜻이라 현재 목록을 지우지 않는다(`applyMigrated`).
+	 */
+	peers: PeerCompany[] | null;
 	/** 기간을 읽을 수 없어 제외한 레코드 수 */
 	dropped: number;
 	scenarios: Scenario[];
@@ -229,6 +260,9 @@ function migratePersisted(p: Persisted): Migrated {
 	const records = list.map(normalizeRecord).filter((r): r is PeriodRecord => r !== null);
 	return {
 		records,
+		peers: Array.isArray(p.peers)
+			? p.peers.map(normalizePeer).filter((c): c is PeerCompany => c !== null)
+			: null,
 		dropped: list.length - records.length,
 		scenarios: p.scenarios.length ? p.scenarios : defaultScenarios(),
 		baseId: p.baseId ?? p.baseYearId ?? null,
@@ -250,6 +284,11 @@ export type ImportResult = { ok: true; warning: string | null } | { ok: false; e
 class Workspace {
 	/** 직접 입력한 기간 레코드(연간·반기·분기·월 혼재 가능). 정렬은 `sorted`, 합산 포함 목록은 `effective` */
 	records = $state<PeriodRecord[]>(sampleRecords());
+	/**
+	 * 동종업계(비교 대상) 회사. 자사와 같은 기간 레코드를 회사별로 담는다 —
+	 * 상위 기간은 저장하지 않고 비교 화면이 `rollup` 으로 읽을 때 합산한다.
+	 */
+	peers = $state<PeerCompany[]>(samplePeers());
 	scenarios = $state<Scenario[]>(defaultScenarios());
 	/** 시뮬레이터 기준 기간 id (없으면 최신 기간). 합산 레코드의 id(`derived:…`)도 될 수 있다 */
 	baseId = $state<string | null>(null);
@@ -339,6 +378,19 @@ class Workspace {
 	base = $derived(this.effective.find((y) => y.id === this.baseId) ?? this.latest);
 	/** 지표를 낼 수 있는 기준 기간 — 시뮬레이터가 쓴다 (선택한 기준이 오류면 null) */
 	validBase = $derived(this.base && !this.invalidIds.has(this.base.id) ? this.base : null);
+	/**
+	 * 상대 회사별 **합산까지 끝난** 기간 목록 — 코어 비교 함수(`comparePeers`·`peerPeriods`)가 받는 모양.
+	 * 여기서 회사마다 한 번만 `rollup` 을 돌린다 (화면이 부를 때마다 다시 합산하지 않도록).
+	 */
+	peerEffective = $derived<PeerEffective[]>(
+		this.peers.map((p) => ({
+			id: p.id,
+			name: p.name,
+			effective: rollup(p.records, this.headcountBasis)
+		}))
+	);
+	/** 동종업계와 견줄 수 있는 기간 (자사·상대의 합산 포함, 시간순) — 비교 화면의 기간 셀렉트 */
+	peerPeriodList = $derived(peerPeriods(this.effective, this.peerEffective));
 
 	/** 이 레코드에 검증 오류가 없는가 (화면 공통 판정 — 규칙은 코어 `validateRecord` 한 곳) */
 	isValid(rec: PeriodRecord | null | undefined): boolean {
@@ -407,6 +459,8 @@ class Workspace {
 	/** 이행된 저장값을 상태에 싣는다. 인원 구분을 쓴 레코드는 실린 기준으로 총원을 다시 맞춘다 */
 	private applyMigrated(m: Migrated) {
 		this.records = m.records;
+		// 동종업계를 모르는 저장값(옛 백업)은 현재 목록을 그대로 둔다 — 조용히 지워지지 않게
+		if (m.peers !== null) this.peers = m.peers;
 		this.scenarios = m.scenarios;
 		this.baseId = m.baseId;
 		this.orgName = m.orgName;
@@ -442,7 +496,12 @@ class Workspace {
 			const raw = localStorage.getItem(STORAGE_KEY);
 			if (raw) {
 				const parsed: unknown = JSON.parse(raw);
-				if (isPersisted(parsed)) this.applyMigrated(migratePersisted(parsed));
+				if (isPersisted(parsed)) {
+					const m = migratePersisted(parsed);
+					this.applyMigrated(m);
+					// 저장본은 있는데 동종업계가 없던 옛 사용자 → 샘플 회사가 아니라 빈 목록으로 시작한다
+					if (m.peers === null) this.peers = [];
+				}
 			}
 		} catch {
 			/* 손상된 저장값은 무시하고 샘플로 시작 */
@@ -468,6 +527,7 @@ class Workspace {
 		const ts = Date.now();
 		const data: Persisted = {
 			records: $state.snapshot(this.records),
+			peers: $state.snapshot(this.peers),
 			scenarios: $state.snapshot(this.scenarios),
 			baseId: this.baseId,
 			orgName: this.orgName,
@@ -494,6 +554,7 @@ class Workspace {
 
 	resetToSample() {
 		this.records = sampleRecords();
+		this.peers = samplePeers();
 		this.scenarios = defaultScenarios();
 		this.baseId = null;
 	}
@@ -514,6 +575,7 @@ class Workspace {
 	 */
 	startFresh() {
 		this.records = [];
+		this.peers = [];
 		this.scenarios = defaultScenarios();
 		this.baseId = null;
 		this.orgName = '';
@@ -531,6 +593,7 @@ class Workspace {
 
 	clearAll() {
 		this.records = [];
+		this.peers = [];
 		this.scenarios = defaultScenarios();
 		this.baseId = null;
 	}
@@ -547,6 +610,7 @@ class Workspace {
 	 */
 	wipeAll() {
 		this.records = [];
+		this.peers = [];
 		this.scenarios = defaultScenarios();
 		this.baseId = null;
 		this.orgName = '';
@@ -690,6 +754,81 @@ class Workspace {
 		this.applyHeadcountBasis();
 	}
 
+	/* ── 동종업계 편집 ─────────────────────────────────────────────── */
+
+	getPeer(id: string): PeerCompany | undefined {
+		return this.peers.find((c) => c.id === id);
+	}
+
+	/** 같은 이름의 회사 (앞뒤 공백을 지운 뒤 정확히 일치할 때만) */
+	private peerByName(name: string, exceptId?: string): PeerCompany | undefined {
+		const want = name.trim();
+		return this.peers.find((c) => c.name.trim() === want && c.id !== exceptId);
+	}
+
+	/** 상대 회사를 추가한다. 이름이 비었거나 이미 있는 이름이면 null */
+	addPeer(name: string, memo?: string): PeerCompany | null {
+		const clean = name.trim().slice(0, PEER_NAME_MAX);
+		if (!clean || this.peerByName(clean)) return null;
+		const company: PeerCompany = {
+			id: newId(),
+			name: clean,
+			memo: memo?.trim() || undefined,
+			records: []
+		};
+		this.peers.push(company);
+		return company;
+	}
+
+	/** 이름·메모를 바꾼다. 없는 회사이거나 이름이 비었거나 다른 회사와 겹치면 false */
+	renamePeer(id: string, name: string, memo?: string): boolean {
+		const company = this.getPeer(id);
+		const clean = name.trim().slice(0, PEER_NAME_MAX);
+		if (!company || !clean || this.peerByName(clean, id)) return false;
+		company.name = clean;
+		if (memo !== undefined) company.memo = memo.trim() || undefined;
+		return true;
+	}
+
+	removePeer(id: string) {
+		this.peers = this.peers.filter((c) => c.id !== id);
+	}
+
+	/** 기간 레코드를 추가한다. 그 회사에 같은 기간이 이미 있으면 false */
+	addPeerRecord(peerId: string, rec: PeriodRecord): boolean {
+		const company = this.getPeer(peerId);
+		if (!company || company.records.some((r) => samePeriod(r.period, rec.period))) return false;
+		company.records.push(rec);
+		company.records.sort((a, b) => comparePeriods(a.period, b.period));
+		return true;
+	}
+
+	/** 기간 레코드를 통째로 바꾼다 (id 로 찾는다). 다른 레코드와 기간이 겹치면 false */
+	updatePeerRecord(peerId: string, rec: PeriodRecord): boolean {
+		const company = this.getPeer(peerId);
+		const i = company?.records.findIndex((r) => r.id === rec.id) ?? -1;
+		if (!company || i < 0) return false;
+		if (company.records.some((r) => r.id !== rec.id && samePeriod(r.period, rec.period)))
+			return false;
+		company.records[i] = rec;
+		company.records.sort((a, b) => comparePeriods(a.period, b.period));
+		return true;
+	}
+
+	removePeerRecord(peerId: string, recId: string) {
+		const company = this.getPeer(peerId);
+		if (company) company.records = company.records.filter((r) => r.id !== recId);
+	}
+
+	/**
+	 * 동종업계 목록을 통째로 바꾼다 (`replaceRecords` 와 같은 모양).
+	 * 병합 규칙(이름이 같으면 교체 · 시트에 없는 회사는 유지)은 `mergePeers` 가 맡고,
+	 * 화면이 그 결과(최종 목록)를 넘긴다 — 여기서 다시 병합하지 않는다.
+	 */
+	replacePeers(companies: PeerCompany[]) {
+		this.peers = companies;
+	}
+
 	/** 가져오기 반영 전 현재 상태를 보관한다 (1회분, 새로고침 후에도 유지) */
 	takeSnapshot() {
 		if (!browser) return;
@@ -723,6 +862,7 @@ class Workspace {
 	exportJson(): string {
 		const data: Persisted = {
 			records: $state.snapshot(this.records),
+			peers: $state.snapshot(this.peers),
 			scenarios: $state.snapshot(this.scenarios),
 			baseId: this.baseId,
 			orgName: this.orgName,
@@ -744,12 +884,11 @@ class Workspace {
 				return { ok: false, error: '형식이 올바르지 않습니다 (records, scenarios 배열 필요).' };
 			const m = migratePersisted(parsed);
 			this.applyMigrated(m);
-			return {
-				ok: true,
-				warning: m.dropped
-					? `${m.dropped}개 레코드는 기간(연도·유형·순번)을 읽을 수 없어 제외했습니다.`
-					: null
-			};
+			const warnings: string[] = [];
+			if (m.dropped)
+				warnings.push(`${m.dropped}개 레코드는 기간(연도·유형·순번)을 읽을 수 없어 제외했습니다.`);
+			if (m.peers === null) warnings.push('이 백업에는 동종업계가 없어 현재 목록을 유지했습니다.');
+			return { ok: true, warning: warnings.length ? warnings.join(' ') : null };
 		} catch (e) {
 			return { ok: false, error: `JSON 파싱 실패: ${(e as Error).message}` };
 		}

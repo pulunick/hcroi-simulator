@@ -43,6 +43,7 @@
 		{ href: resolve('/'), label: '대시보드' },
 		{ href: resolve('/simulator'), label: '시뮬레이터' },
 		{ href: resolve('/data'), label: '데이터' },
+		{ href: resolve('/peers'), label: '동종업계' },
 		{ href: resolve('/report'), label: '리포트' },
 		{ href: resolve('/settings'), label: '설정' },
 		{ href: resolve('/guide'), label: '가이드' }
@@ -135,7 +136,7 @@
 
 	<header class="sticky top-0 z-20 border-b border-line bg-surface/95 backdrop-blur">
 		<!--
-			모바일(≤640px)에서는 탭 6개가 한 줄에 들어가지 않는다. 가로 스크롤로 숨기면 리포트·설정·가이드에
+			모바일(≤640px)에서는 탭 7개가 한 줄에 들어가지 않는다. 가로 스크롤로 숨기면 리포트·설정·가이드에
 			닿을 수 없으므로(QA 7) 줄바꿈(flex-wrap)으로 두 줄에 모두 보이게 한다. 넓은 화면에서는 그대로 한 줄.
 		-->
 		<div

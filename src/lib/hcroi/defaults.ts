@@ -1,4 +1,4 @@
-import type { BaseInputs, HcCostBreakdown, Period, PeriodRecord } from './types';
+import type { BaseInputs, HcCostBreakdown, PeerCompany, Period, PeriodRecord } from './types';
 
 /**
  * 표준 HR 레퍼런스 기본값 (요구사항 §응답규칙: 데이터 누락 시 기본값 안내)
@@ -85,5 +85,55 @@ export function sampleRecords(): PeriodRecord[] {
 		mk('sample-2025-q2', Q(2025, 2), 3_400_000_000, 190_000_000, 830_000_000, 35),
 		mk('sample-2025-q3', Q(2025, 3), 3_600_000_000, 230_000_000, 850_000_000, 36),
 		mk('sample-2025-q4', Q(2025, 4), 3_900_000_000, 276_000_000, 884_000_000, 37)
+	];
+}
+
+/**
+ * 동종업계 샘플 — 실제 회사가 아닌 **가상의 회사 3곳**(2024·2025 연간).
+ * 샘플 자사(`sampleRecords`)의 HCROI(2024 약 1.30배 · 2025 약 1.25배)와 견주었을 때
+ * A사는 높고(1.55~1.60배), B사는 낮고(약 1.05배), C사는 비슷하게(1.26~1.30배) 잡아
+ * 비교 화면의 평균·중앙값·순위가 한눈에 들어오게 했다. 세부 내역은 넣지 않는다(공시 합계만 넣는 전제).
+ */
+export function samplePeers(): PeerCompany[] {
+	const rec = (
+		companyId: string,
+		year: number,
+		revenue: number,
+		operatingProfit: number,
+		hcCost: number,
+		headcount: number
+	): PeriodRecord => ({
+		id: `${companyId}-${year}`,
+		period: { year, type: 'Y', index: 1 },
+		inputs: { revenue, operatingCost: revenue - operatingProfit, hcCost, headcount },
+		breakdown: null,
+		headcountBreakdown: null
+	});
+	const company = (
+		id: string,
+		name: string,
+		rows: [year: number, revenue: number, operatingProfit: number, hcCost: number, head: number][]
+	): PeerCompany => ({
+		id,
+		name,
+		memo: '가상 · 참고용',
+		records: rows.map(([y, rev, op, hc, head]) => rec(id, y, rev, op, hc, head))
+	});
+	return [
+		// HCROI 1.55배 → 1.60배 (자사보다 높음)
+		company('sample-peer-a', '가상 A사', [
+			[2024, 15_000_000_000, 1_650_000_000, 3_000_000_000, 36],
+			[2025, 16_200_000_000, 1_944_000_000, 3_240_000_000, 38]
+		]),
+		// HCROI 1.05배 → 1.04배 (자사보다 낮음)
+		company('sample-peer-b', '가상 B사', [
+			[2024, 11_000_000_000, 143_000_000, 2_860_000_000, 32],
+			[2025, 11_500_000_000, 124_000_000, 3_100_000_000, 34]
+		]),
+		// HCROI 1.30배 → 1.26배 (자사와 비슷)
+		company('sample-peer-c', '가상 C사', [
+			[2024, 12_600_000_000, 870_000_000, 2_900_000_000, 31],
+			[2025, 13_400_000_000, 819_000_000, 3_150_000_000, 33]
+		])
 	];
 }

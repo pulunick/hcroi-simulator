@@ -19,6 +19,7 @@
 - 데이터 단위는 **기간 레코드**(`PeriodRecord.period = {year, type: Y|H|Q|M, index}`). 라벨·정렬·기간 텍스트 파싱·전기/전년 동기·상하위 관계는 `src/lib/hcroi/period.ts` 만 쓴다. 값은 기간 실적 그대로(연율화 금지), 추이는 한 유형만
 - **상위 기간은 저장하지 않는다.** 직접 입력한 레코드(`workspace.records`)에서 `src/lib/hcroi/rollup.ts` 가 읽을 때 합산한다. 화면은 `workspace.effective`, 저장·엑셀 입력 시트·JSON 은 `records`. 합산 규칙(직접 입력 우선·차감·인원 산정 방식) 변경 시 rollup 테스트 + docs/spec.md §2 함께
 - 레코드 검증은 `validateRecord`(formulas.ts) 한 곳 — 화면과 엑셀 가져오기가 같은 규칙. 인원 총원 = 산정 기준 적용 합계 는 레이아웃 `$effect(applyHeadcountBasis)` 가 유지하므로 화면에서 따로 맞추지 말 것
+- 동종업계 비교(평균·중앙값·순위)는 `src/lib/hcroi/peers.ts` 만 — 화면에서 재계산 금지
 - 표기 규칙(표 칸/열 머리글/입력 힌트 단위)은 `format.ts` 의 `formatCellAmount·columnUnitSuffix·hintAmountUnit` 만 — 화면에 복제 금지
 - 차트: 이중축 금지, 범주형 색 고정 순서(Baseline=series-1, A=series-2, B=series-3), 범례+직접 라벨+표 병행
 - **DB 는 아직 없음.** `supabase/migrations` 는 준비만 된 상태. 대상은 **개발자 개인 Supabase 계정**(프로젝트 ref 는 연동 착수 시 확정). 연동 절차: `supabase init`(config.toml 생성, 기존 migrations 폴더 유지) → `supabase link --project-ref <ref>` → `supabase db push` → Data API exposed schemas 에 `hcroi` 추가. **push 는 사람이 직접 실행**, Claude 가 임의 실행 금지
@@ -33,7 +34,7 @@
 
 ## 테스트
 
-- `src/lib/hcroi/*.test.ts` — 수식·시나리오·손익분기 역산·인사이트·기간·합산. **계산 로직 변경 시 테스트 없이 커밋 금지**
+- `src/lib/hcroi/*.test.ts` — 수식·시나리오·손익분기 역산·인사이트·기간·합산·동종업계. **계산 로직 변경 시 테스트 없이 커밋 금지**
 - `src/lib/hcroi/excel/excel.test.ts` — 엑셀 행 변환·검증·병합·exceljs 왕복. 시트 구조(`schema.ts`) 변경 시 user-guide §4 도 갱신
 - `src/lib/hcroi/pdf/*.test.ts` — 표 복원·표 찾기·매핑·레코드. 픽스처(`pdf/fixtures/*.json`)는 실 PDF 좌표에 **가상 수치**(4자리 이상 숫자 치환, 회사명 치환) — 실 수치·실 PDF 커밋 금지
 - UI 컴포넌트는 테스트 강제하지 않음

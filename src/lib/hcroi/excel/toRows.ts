@@ -1,8 +1,15 @@
 import { computeMetrics, GRADE_LABEL, gradeOf } from '../formulas';
 import type { Comparison } from '../scenario';
-import { HC_COST_KEYS, HEADCOUNT_KEYS, type Metrics, type PeriodRecord } from '../types';
+import {
+	HC_COST_KEYS,
+	HEADCOUNT_KEYS,
+	type Metrics,
+	type PeerCompany,
+	type PeriodRecord
+} from '../types';
 import { comparePeriods, periodLabel, periodText } from '../period';
-import { NUM_FMT, type InputColumnKey } from './schema';
+import { sortPeersByName } from '../peers';
+import { NUM_FMT, type InputColumnKey, type PeerColumnKey } from './schema';
 
 /**
  * 작업공간 → 시트 행 (순수 함수, exceljs 무관).
@@ -41,6 +48,31 @@ export function inputRows(records: PeriodRecord[]): InputRow[] {
 			if (y.headcountBreakdown) for (const k of HEADCOUNT_KEYS) row[k] = y.headcountBreakdown[k];
 			return row;
 		});
+}
+
+/** 시트 `동종업계` 한 행 (코어의 비교 표 행 `peers.ts` PeerRow 와 다른 것) */
+export type PeerInputRow = Record<PeerColumnKey, CellValue>;
+
+/**
+ * 시트 `동종업계` — 회사 이름 순 → 기간 순.
+ * 영업비용·영업이익을 둘 다 채워 둔다(입력 데이터 시트와 같은 방식) — 사용자가 편한 쪽을 고쳐 다시 넣을 수 있게.
+ */
+export function peerRows(peers: PeerCompany[]): PeerInputRow[] {
+	return sortPeersByName(peers).flatMap((c) =>
+		[...c.records]
+			.sort((a, b) => comparePeriods(a.period, b.period))
+			.map((r) => ({
+				company: c.name,
+				year: r.period.year,
+				period: periodText(r.period),
+				revenue: r.inputs.revenue,
+				operatingCost: r.inputs.operatingCost,
+				operatingProfit: r.inputs.revenue - r.inputs.operatingCost,
+				headcount: r.inputs.headcount,
+				hcCost: r.inputs.hcCost,
+				memo: r.memo ?? null
+			}))
+	);
 }
 
 export interface SummaryColumn {

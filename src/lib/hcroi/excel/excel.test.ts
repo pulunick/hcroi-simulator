@@ -1,17 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { sampleRecords } from '../defaults';
+import { samplePeers, sampleRecords } from '../defaults';
 import { computeMetrics } from '../formulas';
 import { compareScenarios } from '../scenario';
 import { DEFAULT_SCENARIO_PARAMS } from '../scenario';
 import {
 	ORG_NAME_MAX,
+	mergePeers,
 	mergeRecords,
 	parseAmountUnit,
 	parseCumulative,
 	parseHeadcountBasis,
 	parseInputRows,
 	parseNumber,
-	parseOrgName
+	parseOrgName,
+	parsePeerRows
 } from './fromRows';
 import { buildTemplateBuffer, buildWorkbookBuffer, readInputSheet, readWorkbook } from './io';
 import {
@@ -19,23 +21,35 @@ import {
 	CUMULATIVE_SHEET,
 	INPUT_COLUMNS,
 	ORG_SHEET,
+	PEER_COLUMNS,
+	SHEET,
 	UNIT_SHEET,
-	headerText
+	headerText,
+	type DataColumn
 } from './schema';
-import { inputRows, scenarioSheet, summaryRows } from './toRows';
+import { inputRows, peerRows, scenarioSheet, summaryRows } from './toRows';
 import { INPUT_COLUMN_BY_HEADER } from './schema';
-import { DEFAULT_HEADCOUNT_BASIS, type HeadcountBasis } from '../types';
+import { DEFAULT_HEADCOUNT_BASIS, type HeadcountBasis, type PeerCompany } from '../types';
 import { comparePeriods, periodKey } from '../period';
 import { rollup } from '../rollup';
 
-const header = INPUT_COLUMNS.map(headerText);
-const col = (key: string) => INPUT_COLUMNS.findIndex((c) => c.key === key);
-function row(values: Partial<Record<string, unknown>>): unknown[] {
-	const r: unknown[] = new Array(INPUT_COLUMNS.length).fill(null);
-	for (const [k, v] of Object.entries(values)) r[col(k)] = v;
-	return r;
+/**
+ * 데이터 시트(`입력 데이터`·`동종업계`) 한 장을 만드는 도구 — 열 정의만 갈아 끼우면 둘 다 만들 수 있다.
+ * `row({ year: 2025, … })` 는 열 키로 칸을 채우고, `sheet(...)` 는 머리글 2행을 앞에 붙인다.
+ */
+function sheetHelpers(columns: readonly DataColumn<string>[]) {
+	const header = columns.map(headerText);
+	const col = (key: string) => columns.findIndex((c) => c.key === key);
+	const row = (values: Record<string, unknown>): unknown[] => {
+		const r: unknown[] = new Array(columns.length).fill(null);
+		for (const [k, v] of Object.entries(values)) r[col(k)] = v;
+		return r;
+	};
+	const sheet = (...data: unknown[][]) => [header, header.map(() => '단위 설명'), ...data];
+	return { header, col, row, sheet };
 }
-const sheet = (...data: unknown[][]) => [header, header.map(() => '단위 설명'), ...data];
+
+const { header, col, row, sheet } = sheetHelpers(INPUT_COLUMNS);
 /** 샘플 + 합산 레코드 (2025 반기·연간) */
 const sampleEffective = () => rollup(sampleRecords(), DEFAULT_HEADCOUNT_BASIS);
 /** 연간 3개년을 직접 입력 레코드로 (2025 는 합산값을 복사해 id 'sample-2025') */
@@ -529,7 +543,7 @@ describe('exceljs 입출력 (node)', { timeout: 30_000 }, () => {
 		);
 		expect(parseHeadcountBasis(read.org)).toEqual(basis);
 
-		const parsed = parseInputRows(read.input, parseHeadcountBasis(read.org) ?? undefined);
+		const parsed = parseInputRows(read.input!, parseHeadcountBasis(read.org) ?? undefined);
 		expect(parsed.errors).toEqual([]);
 		expect(parsed.records.map((p) => p.record.headcountBreakdown)).toEqual(
 			years.map((y) => y.headcountBreakdown)
@@ -538,7 +552,7 @@ describe('exceljs 입출력 (node)', { timeout: 30_000 }, () => {
 			years.map((y) => y.inputs.headcount)
 		);
 		// 기준이 바뀌면 같은 파일에서도 총원이 달라진다 (그래서 기준을 파일에 싣는다)
-		const asDefault = parseInputRows(read.input, DEFAULT_HEADCOUNT_BASIS);
+		const asDefault = parseInputRows(read.input!, DEFAULT_HEADCOUNT_BASIS);
 		expect(asDefault.records[0].record.inputs.headcount).toBe(years[0].headcountBreakdown.regular);
 	});
 
@@ -669,5 +683,350 @@ describe('exceljs — 작성 편의 장치', { timeout: 30_000 }, () => {
 		const parsed = parseInputRows(await readInputSheet(buf));
 		expect(parsed.errors).toEqual([]);
 		expect(parsed.records).toHaveLength(6);
+	});
+});
+
+/* ─────────────────────────── 동종업계 시트 ─────────────────────────── */
+
+const { col: pcol, row: prow, sheet: peerSheet } = sheetHelpers(PEER_COLUMNS);
+
+describe('peerRows (동종업계 행 변환)', () => {
+	it('회사 이름 순 → 기간 순으로 펴고, 영업비용·영업이익을 둘 다 채운다', () => {
+		const rows = peerRows([...samplePeers()].reverse());
+		expect(rows.map((r) => `${r.company}/${r.year}`)).toEqual([
+			'가상 A사/2024',
+			'가상 A사/2025',
+			'가상 B사/2024',
+			'가상 B사/2025',
+			'가상 C사/2024',
+			'가상 C사/2025'
+		]);
+		for (const r of rows) {
+			expect(Number(r.operatingCost) + Number(r.operatingProfit)).toBe(Number(r.revenue));
+			expect(r.period).toBe('연간');
+		}
+	});
+});
+
+describe('parsePeerRows', () => {
+	const ok = { revenue: 1_000, operatingProfit: 100, headcount: 10, hcCost: 200 };
+
+	it('같은 회사명 행을 한 회사로 묶고, 회사는 이름 순·기간은 시간순으로 준다', () => {
+		const p = parsePeerRows(
+			peerSheet(
+				prow({ company: '나회사', year: 2025, ...ok }),
+				prow({ company: '가회사', year: 2025, period: '2분기', ...ok }),
+				prow({ company: '가회사', year: 2025, period: '1분기', ...ok, memo: '반기보고서' })
+			)
+		);
+		expect(p.headerError).toBeNull();
+		expect(p.errors).toEqual([]);
+		expect(p.rowCount).toBe(3);
+		expect(p.companies.map((c) => c.name)).toEqual(['가회사', '나회사']);
+		expect(p.companies[0].records.map((r) => periodKey(r.period))).toEqual(['2025-Q1', '2025-Q2']);
+		expect(p.companies[0].records[0].memo).toBe('반기보고서');
+		// 영업이익으로 넣으면 영업비용으로 저장된다 · 세부 내역은 없다
+		expect(p.companies[1].records[0].inputs).toEqual({
+			revenue: 1_000,
+			operatingCost: 900,
+			hcCost: 200,
+			headcount: 10
+		});
+		expect(p.companies[1].records[0].breakdown).toBeNull();
+		// id 는 새로 만든다 (회사·레코드 모두)
+		expect(p.companies[0].id).toBeTruthy();
+		expect(p.companies[0].id).not.toBe(p.companies[1].id);
+		expect(p.companies[0].records[0].id).toBeTruthy();
+	});
+
+	it('회사명이 비었거나 40자를 넘거나 같은 회사에 같은 기간이 두 번이면 행 오류', () => {
+		const p = parsePeerRows(
+			peerSheet(
+				prow({ company: '가회사', year: 2025, ...ok }),
+				prow({ company: '가회사', year: 2025, ...ok }),
+				prow({ company: '', year: 2025, ...ok }),
+				prow({ company: '가'.repeat(41), year: 2025, ...ok })
+			)
+		);
+		expect(p.errors.map((e) => e.row)).toEqual([4, 5, 6]);
+		expect(p.errors[0].messages[0]).toContain('중복');
+		expect(p.errors[1].messages[0]).toContain('회사명이 비어');
+		expect(p.errors[2].messages[0]).toContain('40자');
+		expect(p.companies).toHaveLength(1);
+		expect(p.companies[0].records).toHaveLength(1);
+		expect(p.rowCount).toBe(4);
+	});
+
+	it('검증은 자사와 같은 규칙 — 인건비>영업비용·필수 누락은 오류', () => {
+		const p = parsePeerRows(
+			peerSheet(
+				prow({
+					company: '가회사',
+					year: 2025,
+					revenue: 1_000,
+					operatingCost: 100,
+					headcount: 10,
+					hcCost: 200
+				}),
+				prow({ company: '나회사', year: 2025, revenue: 1_000, operatingProfit: 100, hcCost: 200 }),
+				prow({ company: '다회사', year: 2025, revenue: 1_000, headcount: 10, hcCost: 200 })
+			)
+		);
+		expect(p.companies).toEqual([]);
+		expect(p.errors[0].messages[0]).toContain('영업비용보다 클 수 없');
+		expect(p.errors[1].messages[0]).toContain('총 임직원 수가 비어');
+		expect(p.errors[2].messages[0]).toContain('영업비용 또는 영업이익');
+	});
+
+	it('헤더가 없으면 headerError, 헤더는 단위·별표·공백 차이를 무시한다', () => {
+		expect(parsePeerRows([['아무거나']]).headerError).toMatch(/필수 열/);
+		const loose = [
+			'회사명',
+			'연도',
+			'기간',
+			'매출액',
+			'영업비용(인건비 포함)',
+			'영업이익',
+			'총임직원수',
+			'총 인건비 (원)',
+			'메모'
+		];
+		const p = parsePeerRows([loose, [], ['가회사', 2025, null, 1_000, 900, null, 10, 200, null]]);
+		expect(p.headerError).toBeNull();
+		expect(p.companies[0].records[0].inputs.operatingCost).toBe(900);
+	});
+
+	it('금액 단위 배수는 금액 칸에만 적용된다 (인원은 그대로)', () => {
+		const p = parsePeerRows(peerSheet(prow({ company: '가회사', year: 2025, ...ok })), {
+			scale: 1_000
+		});
+		expect(p.errors).toEqual([]);
+		expect(p.companies[0].records[0].inputs).toEqual({
+			revenue: 1_000_000,
+			operatingCost: 900_000,
+			hcCost: 200_000,
+			headcount: 10
+		});
+	});
+
+	it('누계는 회사별로 앞 순번을 뺀다 (다른 회사 값이 섞이지 않는다)', () => {
+		const p = parsePeerRows(
+			peerSheet(
+				prow({
+					company: '가회사',
+					year: 2025,
+					period: '1분기',
+					revenue: 100,
+					operatingProfit: 10,
+					headcount: 10,
+					hcCost: 40
+				}),
+				prow({
+					company: '가회사',
+					year: 2025,
+					period: '2분기',
+					revenue: 210,
+					operatingProfit: 22,
+					headcount: 10,
+					hcCost: 81
+				}),
+				prow({
+					company: '나회사',
+					year: 2025,
+					period: '1분기',
+					revenue: 500,
+					operatingProfit: 50,
+					headcount: 20,
+					hcCost: 100
+				}),
+				prow({
+					company: '나회사',
+					year: 2025,
+					period: '2분기',
+					revenue: 1_100,
+					operatingProfit: 110,
+					headcount: 20,
+					hcCost: 220
+				})
+			),
+			{ cumulative: true }
+		);
+		expect(p.errors).toEqual([]);
+		const q2 = (name: string) =>
+			p.companies.find((c) => c.name === name)!.records.find((r) => r.period.index === 2)!.inputs;
+		expect(q2('가회사')).toEqual({ revenue: 110, operatingCost: 98, hcCost: 41, headcount: 10 });
+		expect(q2('나회사')).toEqual({ revenue: 600, operatingCost: 540, hcCost: 120, headcount: 20 });
+	});
+
+	it('누계인데 앞 순번이 없으면 그 행만 오류', () => {
+		const p = parsePeerRows(
+			peerSheet(
+				prow({
+					company: '가회사',
+					year: 2025,
+					period: '3분기',
+					revenue: 330,
+					operatingProfit: 36,
+					headcount: 10,
+					hcCost: 120
+				})
+			),
+			{ cumulative: true }
+		);
+		expect(p.companies).toEqual([]);
+		expect(p.errors[0].messages[0]).toMatch(/앞 순번\(2분기\)/);
+	});
+});
+
+describe('mergePeers', () => {
+	const a = (name: string, year: number): PeerCompany => ({
+		id: `id-${name}`,
+		name,
+		records: [
+			{
+				id: `${name}-${year}`,
+				period: { year, type: 'Y', index: 1 },
+				inputs: { revenue: 1_000, operatingCost: 900, hcCost: 200, headcount: 10 },
+				breakdown: null,
+				headcountBreakdown: null
+			}
+		]
+	});
+
+	it('이름이 같으면 시트 내용으로 통째 교체(기존 id 유지)하고, 시트에 없는 회사는 그대로 둔다', () => {
+		const existing = [a('가회사', 2023), a('나회사', 2023)];
+		const m = mergePeers(existing, [a('가회사', 2025), a('다회사', 2025)]);
+		expect({ added: m.added, replaced: m.replaced, kept: m.kept }).toEqual({
+			added: 1,
+			replaced: 1,
+			kept: 1
+		});
+		expect(m.result.map((c) => c.name)).toEqual(['가회사', '나회사', '다회사']);
+		const replaced = m.result[0];
+		expect(replaced.id).toBe('id-가회사'); // 화면 선택 상태가 풀리지 않게 id 는 유지
+		expect(replaced.records.map((r) => r.period.year)).toEqual([2025]);
+		expect(m.result[1].records.map((r) => r.period.year)).toEqual([2023]);
+		// 원본 불변
+		expect(existing[0].records[0].period.year).toBe(2023);
+	});
+
+	it('이름 비교는 앞뒤 공백을 지운 뒤 정확히 일치할 때만', () => {
+		const m = mergePeers([a('가회사', 2023)], [{ ...a('  가회사  ', 2025), id: 'new' }]);
+		expect(m.replaced).toBe(1);
+		expect(m.result).toHaveLength(1);
+		expect(m.result[0].name).toBe('가회사');
+	});
+});
+
+describe('exceljs — 동종업계 시트 (node)', { timeout: 30_000 }, () => {
+	it('시나리오 비교 뒤에 동종업계 시트가 들어가고, 다시 읽어 복원된다', async () => {
+		const records = sampleRecords();
+		const peers = samplePeers();
+		const buf = await buildWorkbookBuffer({
+			records,
+			scenarios: [
+				{ id: 'a', name: '시나리오 A', params: { ...DEFAULT_SCENARIO_PARAMS, headcountPct: 10 } }
+			],
+			base: records[1],
+			peers
+		});
+		const ExcelJS = (await import('exceljs')).default ?? (await import('exceljs'));
+		const wb = new ExcelJS.Workbook();
+		await wb.xlsx.load(buf);
+		expect(wb.worksheets.map((w) => w.name)).toEqual([
+			SHEET.summary,
+			SHEET.input,
+			SHEET.scenarios,
+			SHEET.peers,
+			SHEET.org,
+			SHEET.formulas
+		]);
+
+		const read = await readWorkbook(buf);
+		expect(read.peerRows).not.toBeNull();
+		expect(read.peerRows![0][0]).toBe('회사명 *');
+		const p = parsePeerRows(read.peerRows!);
+		expect(p.headerError).toBeNull();
+		expect(p.errors).toEqual([]);
+		expect(p.companies.map((c) => c.name)).toEqual(peers.map((c) => c.name));
+		expect(p.companies.map((c) => c.records.map((r) => r.inputs))).toEqual(
+			peers.map((c) => c.records.map((r) => r.inputs))
+		);
+	});
+
+	it('상대 회사가 없어도 시트와 머리글은 들어간다 (옛 파일은 시트가 없어 null)', async () => {
+		const read = await readWorkbook(
+			await buildWorkbookBuffer({ records: sampleRecords(), scenarios: [], base: null })
+		);
+		expect(read.peerRows).not.toBeNull();
+		const p = parsePeerRows(read.peerRows!);
+		expect(p.headerError).toBeNull();
+		expect(p.companies).toEqual([]);
+		expect(p.rowCount).toBe(0);
+
+		// 동종업계 시트가 없던 옛 파일은 null — 화면이 동종업계를 건드리지 않는다는 신호
+		const ExcelJS = (await import('exceljs')).default ?? (await import('exceljs'));
+		const old = new ExcelJS.Workbook();
+		old.addWorksheet(SHEET.input);
+		const oldRead = await readWorkbook((await old.xlsx.writeBuffer()) as unknown as ArrayBuffer);
+		expect(oldRead.peerRows).toBeNull();
+	});
+
+	it('동종업계 시트만 있는 파일은 입력 행 0 이고 동종업계는 그대로 읽힌다', async () => {
+		// 내보낸 파일에서 "입력 데이터" 시트만 지운 상황 — 예전에는 동종업계 시트를 자사 입력으로 잘못 읽었다
+		const ExcelJS = (await import('exceljs')).default ?? (await import('exceljs'));
+		const wb = new ExcelJS.Workbook();
+		await wb.xlsx.load(
+			await buildWorkbookBuffer({
+				records: sampleRecords(),
+				scenarios: [],
+				base: null,
+				peers: samplePeers()
+			})
+		);
+		wb.removeWorksheet(wb.getWorksheet(SHEET.input)!.id);
+
+		const read = await readWorkbook((await wb.xlsx.writeBuffer()) as unknown as ArrayBuffer);
+		expect(read.input).toBeNull(); // 입력 시트 없음 = 행 0 (오류가 아니다)
+		expect(read.peerRows).not.toBeNull();
+		const p = parsePeerRows(read.peerRows!);
+		expect(p.headerError).toBeNull();
+		expect(p.companies.map((c) => c.name)).toEqual(samplePeers().map((c) => c.name));
+	});
+
+	it('시트 이름을 바꾼 입력 시트는 첫 시트 폴백으로 읽되, 우리가 아는 시트는 고르지 않는다', async () => {
+		const ExcelJS = (await import('exceljs')).default ?? (await import('exceljs'));
+		const wb = new ExcelJS.Workbook();
+		await wb.xlsx.load(
+			await buildWorkbookBuffer({ records: sampleRecords(), scenarios: [], base: null })
+		);
+		wb.getWorksheet(SHEET.input)!.name = '내 데이터';
+
+		const read = await readWorkbook((await wb.xlsx.writeBuffer()) as unknown as ArrayBuffer);
+		expect(read.input).not.toBeNull();
+		expect(parseInputRows(read.input!).records).toHaveLength(sampleRecords().length);
+	});
+
+	it('템플릿에는 가상 회사 2곳 예시와 기간 드롭다운이 들어 있다', async () => {
+		const buf = await buildTemplateBuffer({ withSample: true });
+		const p = parsePeerRows((await readWorkbook(buf)).peerRows!);
+		expect(p.errors).toEqual([]);
+		expect(p.companies).toHaveLength(2);
+		expect(p.rowCount).toBe(4); // 2곳 × 2행
+
+		const ExcelJS = (await import('exceljs')).default ?? (await import('exceljs'));
+		const wb = new ExcelJS.Workbook();
+		await wb.xlsx.load(buf);
+		const ws = wb.getWorksheet(SHEET.peers)!;
+		type Dv = { type: string; formulae: unknown[] };
+		const dv = (ws as unknown as { dataValidations: { model: Record<string, Dv> } }).dataValidations
+			.model;
+		const periodLetter = ws.getColumn(pcol('period') + 1).letter;
+		const rule = Object.entries(dv).find(([ref]) => ref.startsWith(periodLetter + '3'));
+		expect(rule?.[1].type).toBe('list');
+		expect(String(rule?.[1].formulae[0])).toContain('3분기');
+		// 검증 열·시트 보호는 넣지 않는다
+		expect(ws.getRow(1).getCell(PEER_COLUMNS.length + 1).value).toBeNull();
+		expect((ws as unknown as { sheetProtection?: unknown }).sheetProtection).toBeFalsy();
 	});
 });

@@ -19,6 +19,7 @@ export const SHEET = {
 	summary: '지표 요약',
 	input: '입력 데이터',
 	scenarios: '시나리오 비교',
+	peers: '동종업계',
 	formulas: '산식·가정',
 	org: '조직 정보'
 } as const;
@@ -85,10 +86,10 @@ export const ORG_ROWS = {
 	cumulative: 13
 } as const;
 
-/** 시트 ② 행 구조: 1행 헤더, 2행 단위·설명, 3행부터 데이터 */
-export const INPUT_HEADER_ROW = 1;
-export const INPUT_UNIT_ROW = 2;
-export const INPUT_FIRST_DATA_ROW = 3;
+/** 데이터 시트(`입력 데이터`·`동종업계`) 행 구조: 1행 헤더, 2행 단위·설명, 3행부터 데이터 */
+export const DATA_HEADER_ROW = 1;
+export const DATA_UNIT_ROW = 2;
+export const DATA_FIRST_DATA_ROW = 3;
 /** 유효성 검사·검증 수식·보호 해제를 미리 넣어 두는 데이터 행 수 (월 단위 3개년 = 36행이므로 넉넉히) */
 export const INPUT_PREPARED_ROWS = 300;
 
@@ -114,8 +115,12 @@ export type InputColumnKey =
 	| keyof HeadcountBreakdown
 	| 'memo';
 
-export interface InputColumn {
-	key: InputColumnKey;
+/**
+ * 데이터 시트의 열 하나 — `입력 데이터`(`InputColumn`)와 `동종업계`(`PeerColumn`)가 같은 모양을 쓴다.
+ * 헤더 매핑·셀 유효성·숫자 서식이 전부 이 타입 하나만 받는다.
+ */
+export interface DataColumn<K extends string> {
+	key: K;
 	/** 헤더 텍스트 (단위·필수 표시 제외) */
 	header: string;
 	unit: '' | '원' | '명';
@@ -125,6 +130,8 @@ export interface InputColumn {
 	/** 열 너비 (문자 수) */
 	width: number;
 }
+
+export type InputColumn = DataColumn<InputColumnKey>;
 
 const breakdownColumns: InputColumn[] = HC_COST_KEYS.map((k) => ({
 	key: k,
@@ -202,8 +209,8 @@ export const INPUT_COLUMNS: readonly InputColumn[] = [
 	{ key: 'memo', header: '메모', unit: '', required: false, note: '선택', width: 28 }
 ];
 
-/** 엑셀 헤더 셀 문구 — 예: "매출액(원) *" */
-export function headerText(c: InputColumn): string {
+/** 엑셀 헤더 셀 문구 — 예: "매출액(원) *" (입력 데이터·동종업계 시트 공용) */
+export function headerText(c: Pick<DataColumn<string>, 'header' | 'unit' | 'required'>): string {
 	return `${c.header}${c.unit ? `(${c.unit})` : ''}${c.required ? ' *' : ''}`;
 }
 
@@ -218,6 +225,59 @@ export function normalizeHeader(v: unknown): string {
 export const INPUT_COLUMN_BY_HEADER: ReadonlyMap<string, InputColumn> = new Map(
 	INPUT_COLUMNS.map((c) => [normalizeHeader(c.header), c])
 );
+
+/**
+ * 시트 `동종업계` — 상대 회사의 기간별 값 (docs/plans/peer-comparison.md §4).
+ * 같은 회사명 행은 같은 회사다. 인건비 세부·인원 구분은 넣지 않는다(공시 합계만 넣는 전제).
+ * 행 구조·헤더 매칭 규칙은 `입력 데이터` 시트와 같다.
+ */
+export type PeerColumnKey =
+	| 'company'
+	| 'year'
+	| 'period'
+	| 'revenue'
+	| 'operatingCost'
+	| 'operatingProfit'
+	| 'headcount'
+	| 'hcCost'
+	| 'memo';
+
+export type PeerColumn = DataColumn<PeerColumnKey>;
+
+/** `입력 데이터` 열을 그대로 쓰되(헤더 문구·단위·너비 공유) 설명·필수 여부만 동종업계에 맞게 고친다 */
+function fromInput(key: InputColumnKey, override: Partial<PeerColumn> = {}): PeerColumn {
+	const base = INPUT_COLUMNS.find((c) => c.key === key);
+	if (!base) throw new Error(`알 수 없는 입력 열: ${key}`);
+	return { ...base, ...override } as PeerColumn;
+}
+
+export const PEER_COLUMNS: readonly PeerColumn[] = [
+	{
+		key: 'company',
+		header: '회사명',
+		unit: '',
+		required: true,
+		note: '같은 이름의 행은 같은 회사로 묶입니다. 40자까지',
+		width: 20
+	},
+	fromInput('year'),
+	fromInput('period', {
+		note: '비우면 연간. 목록에서 고르세요: 상반기·하반기 / 1~4분기 / 1~12월'
+	}),
+	fromInput('revenue'),
+	fromInput('operatingCost'),
+	fromInput('operatingProfit'),
+	fromInput('headcount', { note: '정수. 공시 "직원 등 현황" 합계를 그대로 넣습니다' }),
+	fromInput('hcCost', { required: true, note: '급여·퇴직급여·복리후생비 등 인건비 총액' }),
+	fromInput('memo', { note: '선택. 회사 메모가 아니라 그 기간의 메모입니다', width: 24 })
+];
+
+export const PEER_COLUMN_BY_HEADER: ReadonlyMap<string, PeerColumn> = new Map(
+	PEER_COLUMNS.map((c) => [normalizeHeader(c.header), c])
+);
+
+/** 셀 유효성을 미리 넣어 두는 데이터 행 수 (8개사 × 여러 기간을 넉넉히 담는다) */
+export const PEER_PREPARED_ROWS = 200;
 
 /** 열 인덱스(0부터) → 엑셀 열 문자 (0 → A, 26 → AA) */
 export function columnLetter(index: number): string {

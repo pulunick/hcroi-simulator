@@ -129,8 +129,10 @@ LLM 인사이트 서술, PDF 리포트, 다년 예측.
   계획서 [docs/plans/pdf-to-excel.md](../docs/plans/pdf-to-excel.md). 실 PDF·실 수치는 커밋하지 않고 픽스처는 가상 수치.
   **2026-09-09 구현 완료**(M1–M4): `src/lib/hcroi/pdf/` + `PdfImport.svelte`. 규칙: 별도 기본·3개월 열 기본(반기보고서 3개월=2분기, 누적=상반기), 인건비 = 성격별 비용 체크 항목 합(주식보상·장기급여 기본 제외),
   인원 = 직원 등 현황 합계 행(검산 합계=정규직+기간제, 기말 경고). 회사별 선택은 `workspace.pdfPrefs`(localStorage·JSON, 엑셀엔 안 실림). 수동 셀 지정·OCR 은 미구현.
-- **동종업계 비교 경로**: ① 엑셀 `동종업계` 시트 **수기 입력**(확정, 우선) → ② 반복이 확정되면 **DART Open API**(`fnlttSinglAcntAll` + `empSttus`)로 자동화.
-  API 경로는 CORS 때문에 Vercel 서버 라우트 1개가 필요하다(DB 아님, 비용 0). ~~PDF 좌표 파싱(pdf.js)은 품 대비 정확도가 낮아 채택하지 않는다~~ → 2026-09-09 철회(위 결산서 항목 참조).
+- **동종업계 비교 경로**: ① 엑셀 `동종업계` 시트 **수기 입력**(확정, 우선 — **2026-09-17 착수**, 계획 [docs/plans/peer-comparison.md](../docs/plans/peer-comparison.md)) → ② 반복이 확정되면 **DART Open API**(`fnlttSinglAcntAll` + `empSttus`)로 **동종업계 회사 값만** 자동화.
+  API 경로는 CORS 때문에 Vercel 서버 라우트 1개가 필요하다(DB 아님, 비용 0).
+  **API 는 자사 입력을 대체하지 않는다**(2026-09-17): 재무제표 API 에 인건비 주석이 없고, 직원현황 API 의 연간급여총액은 급여만이라 총 인건비 정의와 다르며, 공시 법인·공시 후에만 있다. 자사는 PDF 가져오기.
+  동종업계 규칙: 상대 회사 `PeerCompany {id, name, memo, records: PeriodRecord[]}` 로 자사 레코드 구조 재사용 · **업계 평균 = 각 사 지표 단순 평균 + 중앙값**, 검증 통과 레코드만, 자사 제외 · 순위는 자사 포함(인건비율은 낮을수록 상위) · 한 기간만 비교 · 엑셀 병합은 회사명 일치 시 통째 교체. ~~PDF 좌표 파싱(pdf.js)은 품 대비 정확도가 낮아 채택하지 않는다~~ → 2026-09-09 철회(위 결산서 항목 참조).
 - **참고용 결산 PDF 는 커밋하지 않는다** — 공개 저장소 + 대용량. `.gitignore` 의 `docs/*.pdf`. 필요하면 DART 에서 재다운로드.
   Claude 는 PDF 를 대화에 올리지 말고 `pdftotext -layout` 로 텍스트만 뽑아 필요한 구간만 읽는다(컨텍스트 초과 방지).
 

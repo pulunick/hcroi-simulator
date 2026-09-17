@@ -176,6 +176,25 @@ export interface DerivedInfo {
 	count: number;
 }
 
+/** 동종업계 회사 이름의 최대 길이 — 화면 카드·엑셀 `동종업계` 시트가 같은 한도를 쓴다 */
+export const PEER_NAME_MAX = 40;
+
+/**
+ * 동종업계(비교 대상) 회사 하나.
+ * `records` 는 자사와 똑같은 기간 레코드이며 **직접 입력한 기간만** 담는다
+ * (상위 기간은 저장하지 않고 `rollup.ts` 가 읽을 때 합산한다 — 자사와 같은 규칙).
+ * 상대 회사는 공시 합계만 넣는 것이 보통이라 인건비 세부 내역·인원 구분은 대개 null 이다.
+ */
+export interface PeerCompany {
+	id: string;
+	/** 회사명 — 필수, 최대 `PEER_NAME_MAX` 자, 작업공간 안에서 유일 */
+	name: string;
+	/** 회사 메모 (예: "코스닥 · 의료 AI") */
+	memo?: string;
+	/** 직접 입력한 기간 레코드 */
+	records: PeriodRecord[];
+}
+
 export type HcroiGrade = 'critical' | 'warning' | 'excellent';
 
 export interface Diagnosis {

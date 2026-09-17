@@ -96,7 +96,8 @@
 				base: workspace.base ? $state.snapshot(workspace.base) : null,
 				orgName: workspace.orgName,
 				headcountBasis: $state.snapshot(workspace.headcountBasis),
-				summaryRecords: $state.snapshot(workspace.effective)
+				summaryRecords: $state.snapshot(workspace.effective),
+				peers: $state.snapshot(workspace.peers)
 			});
 			message = `엑셀 파일(${filename})을 내려받았습니다.`;
 		} catch (err) {
@@ -110,7 +111,7 @@
 		if (
 			!confirm(
 				'이 PC 에 저장된 데이터를 모두 지울까요? 되돌릴 수 없습니다.\n\n' +
-					'지워지는 것: 모든 기간 레코드 · 시나리오 · 회사/조직 이름 · 임직원 수 산정 기준 · ' +
+					'지워지는 것: 모든 기간 레코드 · 동종업계 회사 · 시나리오 · 회사/조직 이름 · 임직원 수 산정 기준 · ' +
 					'PDF 읽기 설정 · 리포트 작성자/소속 · 마지막 백업 기록 · 가져오기 되돌리기 저장분.\n' +
 					'화면 테마(밝게/어둡게)는 유지됩니다.\n\n' +
 					'지운 뒤에는 빈 화면으로 시작합니다. 먼저 백업 파일을 저장하는 것을 권합니다.'
