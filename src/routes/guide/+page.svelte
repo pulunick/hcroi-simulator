@@ -11,8 +11,6 @@
 	const basisLabel = $derived(headcountBasisLabel(workspace.headcountBasis));
 </script>
 
-<svelte:head><title>{workspace.pageTitle('가이드')}</title></svelte:head>
-
 <GuideTabs />
 
 <h1 class="mb-2 text-2xl font-bold text-ink">가이드</h1>
@@ -188,3 +186,5 @@
 		</p>
 	</section>
 </div>
+
+<p class="mt-6 text-xs text-muted">계산 결과는 참고용이며 회계·법률 판단을 대신하지 않습니다.</p>

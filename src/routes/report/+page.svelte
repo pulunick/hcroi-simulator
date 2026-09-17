@@ -10,6 +10,7 @@
 	import { resolve } from '$app/paths';
 	import { workspace } from '$lib/state/workspace.svelte';
 	import { periodLabel } from '$lib/hcroi/period';
+	import { track } from '$lib/site/analytics';
 	import ReportPaper from '$lib/components/report/ReportPaper.svelte';
 	import { reportBlocker, todayText } from '$lib/report/data';
 
@@ -33,8 +34,6 @@
 	});
 </script>
 
-<svelte:head><title>{workspace.pageTitle('리포트')}</title></svelte:head>
-
 <div class="tools mb-5">
 	<div class="mb-4 flex flex-wrap items-end justify-between gap-4">
 		<div>
@@ -48,7 +47,10 @@
 				type="button"
 				class="btn btn-primary"
 				disabled={!!blocker}
-				onclick={() => window.print()}>인쇄 / PDF 저장</button
+				onclick={() => {
+					track('report_print');
+					window.print();
+				}}>인쇄 / PDF 저장</button
 			>
 			<span class="text-xs text-muted">
 				{blocker

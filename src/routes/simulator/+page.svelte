@@ -140,8 +140,6 @@
 	}
 </script>
 
-<svelte:head><title>{workspace.pageTitle('시뮬레이터')}</title></svelte:head>
-
 <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
 	<div>
 		<h1 class="text-2xl font-bold text-ink">시뮬레이터</h1>

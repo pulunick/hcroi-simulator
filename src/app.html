@@ -19,6 +19,15 @@
 				/* 프라이빗 모드 등 저장소 접근 불가 — 기기 설정을 따른다 */
 			}
 		</script>
+		<!--
+			페이지 제목에 회사 이름이 들어가므로 방문 통계에는 제목을 보내지 않는다.
+			유마미(Umami) 스크립트 태그의 data-before-send 가 이 함수 이름을 가리킨다.
+		-->
+		<script>
+			function hcroiAnalyticsBeforeSend(type, payload) {
+				return Object.assign({}, payload, { title: '' });
+			}
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

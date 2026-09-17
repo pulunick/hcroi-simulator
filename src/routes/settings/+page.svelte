@@ -123,8 +123,6 @@
 	}
 </script>
 
-<svelte:head><title>{workspace.pageTitle('설정')}</title></svelte:head>
-
 <div class="flex max-w-[720px] flex-col gap-2 pb-2">
 	<span class="text-xs font-semibold tracking-wide text-muted">설정</span>
 	<h1 class="text-2xl leading-[1.3] font-bold text-ink">표시 방식과 산정 기준, 백업</h1>

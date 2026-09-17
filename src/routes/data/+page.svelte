@@ -66,6 +66,7 @@
 	import NumberField from '$lib/components/ui/NumberField.svelte';
 	import GradeBadge from '$lib/components/ui/GradeBadge.svelte';
 	import PdfImport from '$lib/components/data/PdfImport.svelte';
+	import { track } from '$lib/site/analytics';
 
 	// 금액 표기는 작업공간의 표시 단위를 따른다 (저장값은 언제나 원 단위 정수). 규칙은 format.ts 한 곳
 	const won = (v: number | null | undefined, suffix = '원') =>
@@ -263,6 +264,8 @@
 		 * "행 없음" 으로 다룬다 — 머리글 오류로 반영을 막지 않는다.
 		 */
 		hasInputSheet: boolean;
+		/** 어디서 온 미리보기인가 — 방문 통계에서 두 경로를 구분하는 데만 쓴다(값은 보내지 않는다) */
+		source: 'excel' | 'pdf';
 	} | null>(null);
 	let overwrite = $state(true);
 	let skipErrors = $state(false);
@@ -339,7 +342,8 @@
 			cumulative: false,
 			// 결산서 PDF 는 자사 기간만 만든다 — 동종업계는 건드리지 않는다
 			peers: null,
-			hasInputSheet: true
+			hasInputSheet: true,
+			source: 'pdf'
 		};
 	}
 	async function exportExcel() {
@@ -412,7 +416,8 @@
 				unit,
 				cumulative,
 				peers: read.peerRows ? parsePeerRows(read.peerRows, options) : null,
-				hasInputSheet
+				hasInputSheet,
+				source: 'excel'
 			};
 		} catch (err) {
 			ioMessage = `엑셀 파일을 읽지 못했습니다: ${(err as Error).message}`;
@@ -548,6 +553,8 @@
 		if (applied && peerErrorRows > 0) parts.push(`동종업계 오류 ${peerErrorRows}행 제외`);
 		if (peerHeaderError) parts.push('동종업계 시트는 머리글 오류로 반영하지 않았습니다');
 		ioMessage = `${preview.fileName} 반영: ${parts.join(', ')}. 잘못 반영했으면 "되돌리기" 를 누르세요.`;
+		// 반영이 끝난 뒤 한 번만 — 어느 경로로 들어왔는지 이름만 센다
+		track(preview.source === 'pdf' ? 'pdf_applied' : 'excel_import');
 		preview = null;
 		selectedId = null;
 	}
@@ -605,8 +612,6 @@
 
 	const sharePct = REFERENCE_DEFAULTS.breakdownSharePct;
 </script>
-
-<svelte:head><title>{workspace.pageTitle('데이터')}</title></svelte:head>
 
 <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
 	<div>

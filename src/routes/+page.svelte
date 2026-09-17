@@ -232,8 +232,6 @@
 	});
 </script>
 
-<svelte:head><title>{pageTitle}</title></svelte:head>
-
 <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
 	<div>
 		<div class="flex flex-wrap items-center gap-x-3 gap-y-1">

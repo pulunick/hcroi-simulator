@@ -276,8 +276,6 @@
 	}
 </script>
 
-<svelte:head><title>{workspace.pageTitle('동종업계')}</title></svelte:head>
-
 <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
 	<div>
 		<h1 class="text-2xl font-bold text-ink">동종업계</h1>

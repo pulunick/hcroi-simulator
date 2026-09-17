@@ -2,6 +2,7 @@
 	import { asset, resolve } from '$app/paths';
 	import SiteHeader from '$lib/components/site/SiteHeader.svelte';
 	import SiteFooter from '$lib/components/site/SiteFooter.svelte';
+	import { track } from '$lib/site/analytics';
 
 	// 소개(랜딩) 페이지. 시안: docs/design/commercial/Landing.dc.html(1440) · LandingMobile.dc.html(390).
 	// 두 시안은 같은 페이지의 두 상태다 — ≥1024 에서 2열, 그 아래 1열, 헤더는 <768 에서 모바일형.
@@ -42,14 +43,21 @@
 			>
 				사업·반기·분기보고서를 올리면 손익계산서와 직원 현황을 찾아 매출액·영업이익·인건비·임직원
 				수를 뽑고, 그 자리에서 HCROI 를 계산합니다. 사람이 하는 일은 뽑힌 숫자를 확인하는
-				것뿐입니다. 전부 이 브라우저 안에서 — 데이터는 서버로 가지 않습니다.
+				것뿐입니다. 입력한 데이터는 서버로 가지 않고 이 브라우저 안에만 남습니다.
 			</p>
 			<!-- 모바일에서는 버튼이 한 줄을 가득 채운다 (시안 390) -->
 			<div
 				class="flex flex-col items-start gap-4 pt-1 sm:flex-row sm:items-center sm:gap-7 lg:pt-2"
 			>
-				<a href="{resolve('/data')}?start=pdf" class="cta w-full sm:w-auto">결산서 PDF 로 시작</a>
-				<a href="{app}?start=sample" class="underlink">가상 회사 샘플 열어 보기 →</a>
+				<!-- 어느 길로 시작하는지만 센다(이름 하나) — 기본 이동은 막지 않는다 -->
+				<a
+					href="{resolve('/data')}?start=pdf"
+					class="cta w-full sm:w-auto"
+					onclick={() => track('start_pdf')}>결산서 PDF 로 시작</a
+				>
+				<a href="{app}?start=sample" class="underlink" onclick={() => track('start_sample')}
+					>가상 회사 샘플 열어 보기 →</a
+				>
 			</div>
 		</div>
 		<div class="flex flex-col gap-2.5 lg:gap-3">
@@ -184,7 +192,9 @@
 				<div class="card flex flex-col px-5 sm:px-6">
 					<div class="cell">
 						<span class="cell-k">서버로 보내는 것</span>
-						<span class="cell-v">없음. 계정도 없습니다.</span>
+						<span class="cell-v"
+							>방문 통계만(어느 화면을 봤는지) — 입력한 숫자·파일·회사 이름은 보내지 않습니다</span
+						>
 					</div>
 					<div class="cell">
 						<span class="cell-k">저장되는 곳</span>

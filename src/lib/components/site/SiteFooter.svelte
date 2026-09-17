@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { CONTACT_EMAIL, DONATE_URL } from '$lib/site/env';
 
-	// 소개 페이지 전용 푸터. 공개 저장소 위생 — 이메일·회사명은 넣지 않는다.
+	// 소개 페이지 전용 푸터. 공개 저장소 위생 — 문의처·후원 주소는 배포 환경변수로만 들어온다.
 	const guide = resolve('/guide');
 </script>
 
@@ -27,6 +28,16 @@
 					rel="noreferrer"
 					class="hover:text-brand">문제 신고</a
 				>
+				<a href={resolve('/privacy')} class="hover:text-brand">개인정보</a>
+				{#if CONTACT_EMAIL}
+					<a href="mailto:{CONTACT_EMAIL}" class="hover:text-brand">문의</a>
+				{/if}
+				{#if DONATE_URL}
+					<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- 배포 환경변수로 받은 외부 주소 -->
+					<a href={DONATE_URL} target="_blank" rel="noreferrer" class="hover:text-brand"
+						>커피 한 잔 후원</a
+					>
+				{/if}
 			</div>
 		</div>
 	</div>

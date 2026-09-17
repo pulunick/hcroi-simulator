@@ -9,6 +9,8 @@ import { SITE_ENABLED } from '$lib/site-config';
  * SITE_ENABLED=false(사내 배포)에서는 아래 load 가 서버에서 404 를 내고 `+error.svelte` 가 렌더된다.
  */
 export const ssr = true;
+// 빌드할 때 HTML 로 굽는다 — 사내 배포(SITE_ENABLED=false)에서는 404 라 굽지 않는다.
+export const prerender = SITE_ENABLED;
 
 // 사내 배포(main, SITE_ENABLED=false)에는 소개 페이지가 없다 — 공개판(product/commercial)에서만 렌더.
 export function load() {
