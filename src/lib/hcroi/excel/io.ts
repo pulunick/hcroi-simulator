@@ -1,7 +1,7 @@
 import type ExcelJS from 'exceljs';
 import { PRODUCT_NAME } from '$lib/site-config';
 import { compareScenarios } from '../scenario';
-import type { HeadcountBasis, PeriodRecord, Scenario } from '../types';
+import type { HeadcountBasis, PeerCompany, PeriodRecord, Scenario } from '../types';
 import { YEAR_MAX, YEAR_MIN, allPeriodTexts, periodLabel } from '../period';
 import {
 	DEFAULT_HEADCOUNT_BASIS,
@@ -9,29 +9,33 @@ import {
 	HEADCOUNT_OPTIONAL_KEYS,
 	HC_COST_KEYS
 } from '../types';
-import { sampleRecords } from '../defaults';
+import { samplePeers, sampleRecords } from '../defaults';
 import {
 	BASIS_SHEET,
 	CHECK_COLUMN,
 	CUMULATIVE_SHEET,
+	DATA_FIRST_DATA_ROW,
+	DATA_HEADER_ROW,
+	DATA_UNIT_ROW,
 	INPUT_COLUMNS,
-	INPUT_FIRST_DATA_ROW,
-	INPUT_HEADER_ROW,
 	INPUT_PREPARED_ROWS,
-	INPUT_UNIT_ROW,
 	NUM_FMT,
 	ORG_ROWS,
 	ORG_SHEET,
+	PEER_COLUMNS,
+	PEER_PREPARED_ROWS,
 	SHEET,
 	UNIT_SHEET,
 	columnLetter,
 	headerText,
+	type DataColumn,
 	type InputColumnKey
 } from './schema';
 import {
 	FORMULA_LINES,
 	SUMMARY_COLUMNS,
 	inputRows,
+	peerRows,
 	scenarioSheet,
 	summaryRows,
 	type CellValue,
@@ -123,7 +127,7 @@ const COL = Object.fromEntries(INPUT_COLUMNS.map((c, i) => [c.key, columnLetter(
 >;
 const CHECK_COL_INDEX = INPUT_COLUMNS.length; // 0-based → 맨 끝
 const CHECK_COL = columnLetter(CHECK_COL_INDEX);
-const LAST_DATA_ROW = INPUT_FIRST_DATA_ROW + INPUT_PREPARED_ROWS - 1;
+const LAST_DATA_ROW = DATA_FIRST_DATA_ROW + INPUT_PREPARED_ROWS - 1;
 
 /**
  * 행 하나의 검증 수식. 앱의 validateRecord/parseInputRows 와 같은 규칙을 엑셀 수식으로 —
@@ -160,71 +164,38 @@ function checkFormula(r: number): string {
 	return `IF(${c('year')}="","",TRIM(${body}))`;
 }
 
-function addInputSheet(wb: ExcelJS.Workbook, records: PeriodRecord[]) {
-	const ws = wb.addWorksheet(SHEET.input);
-	ws.columns = [...INPUT_COLUMNS.map((c) => ({ width: c.width })), { width: CHECK_COLUMN.width }];
-	const header = ws.getRow(INPUT_HEADER_ROW);
-	setCells(header, [...INPUT_COLUMNS.map(headerText), CHECK_COLUMN.header]);
-	styleHeaderRow(header);
-	INPUT_COLUMNS.forEach((c, i) => note(header.getCell(i + 1), c.note));
-	note(header.getCell(CHECK_COL_INDEX + 1), CHECK_COLUMN.note);
-	const unit = ws.getRow(INPUT_UNIT_ROW);
-	setCells(unit, [...INPUT_COLUMNS.map((c) => c.note), CHECK_COLUMN.note]);
-	unit.font = NOTE_FONT;
-	unit.eachCell((c) => (c.alignment = { wrapText: true, vertical: 'top' }));
-	unit.height = 30;
-
-	const rows = inputRows(records);
-	rows.forEach((r, i) => {
-		const row = ws.getRow(INPUT_FIRST_DATA_ROW + i);
-		setCells(
-			row,
-			INPUT_COLUMNS.map((c) => r[c.key]),
-			(col) => {
-				const c = INPUT_COLUMNS[col];
-				return c.key === 'year'
-					? NUM_FMT.year
-					: c.key === 'period' || c.key === 'memo'
-						? '@'
-						: c.unit === '원'
-							? NUM_FMT.won
-							: c.unit === '명'
-								? '0'
-								: '@';
-			}
-		);
-	});
-
-	// 입력 칸 열기 + 검증 수식 (미리 준비한 행까지)
-	for (let r = INPUT_FIRST_DATA_ROW; r <= LAST_DATA_ROW; r++) {
-		const row = ws.getRow(r);
-		for (let ci = 1; ci <= INPUT_COLUMNS.length; ci++) row.getCell(ci).protection = UNLOCKED;
-		const check = row.getCell(CHECK_COL_INDEX + 1);
-		check.value = { formula: checkFormula(r) };
-		check.font = { color: { argb: 'FFB42318' }, size: 10 };
-	}
-
-	// 셀 유효성 — 기간 드롭다운, 연도 범위, 금액 0 이상, 인원 0 이상 정수
-	const range = (k: InputColumnKey) => `${COL[k]}${INPUT_FIRST_DATA_ROW}:${COL[k]}${LAST_DATA_ROW}`;
-	addValidation(ws, range('year'), {
-		type: 'whole',
-		operator: 'between',
-		formulae: [YEAR_MIN, YEAR_MAX],
-		showErrorMessage: true,
-		errorTitle: '연도',
-		error: `${YEAR_MIN}~${YEAR_MAX} 사이의 정수를 넣으세요.`
-	});
-	addValidation(ws, range('period'), {
-		type: 'list',
-		allowBlank: true,
-		formulae: [`"${allPeriodTexts().join(',')}"`],
-		showErrorMessage: true,
-		errorTitle: '기간',
-		error: '목록에서 고르세요 (비우면 연간).'
-	});
-	for (const c of INPUT_COLUMNS) {
-		if (c.unit === '원')
-			addValidation(ws, range(c.key), {
+/**
+ * 데이터 시트 공통 셀 유효성 — 연도 범위 · 기간 드롭다운 · 금액(0 이상) · 인원(0 이상 정수).
+ * `입력 데이터` 와 `동종업계` 가 같은 규칙을 쓴다 (안내용이고 규칙의 원본은 앱의 `validateRecord`).
+ */
+function addColumnValidations(
+	ws: ExcelJS.Worksheet,
+	columns: readonly DataColumn<string>[],
+	firstRow: number,
+	lastRow: number
+) {
+	columns.forEach((c, i) => {
+		const range = `${columnLetter(i)}${firstRow}:${columnLetter(i)}${lastRow}`;
+		if (c.key === 'year')
+			addValidation(ws, range, {
+				type: 'whole',
+				operator: 'between',
+				formulae: [YEAR_MIN, YEAR_MAX],
+				showErrorMessage: true,
+				errorTitle: '연도',
+				error: `${YEAR_MIN}~${YEAR_MAX} 사이의 정수를 넣으세요.`
+			});
+		else if (c.key === 'period')
+			addValidation(ws, range, {
+				type: 'list',
+				allowBlank: true,
+				formulae: [`"${allPeriodTexts().join(',')}"`],
+				showErrorMessage: true,
+				errorTitle: '기간',
+				error: '목록에서 고르세요 (비우면 연간).'
+			});
+		else if (c.unit === '원')
+			addValidation(ws, range, {
 				type: 'decimal',
 				operator: 'greaterThanOrEqual',
 				formulae: [0],
@@ -233,7 +204,7 @@ function addInputSheet(wb: ExcelJS.Workbook, records: PeriodRecord[]) {
 				error: '0 이상의 숫자를 넣으세요 (단위는 조직 정보 시트).'
 			});
 		else if (c.unit === '명')
-			addValidation(ws, range(c.key), {
+			addValidation(ws, range, {
 				type: 'whole',
 				operator: 'greaterThanOrEqual',
 				formulae: [0],
@@ -241,20 +212,65 @@ function addInputSheet(wb: ExcelJS.Workbook, records: PeriodRecord[]) {
 				errorTitle: c.header,
 				error: '0 이상의 정수를 넣으세요.'
 			});
+	});
+}
+
+/** 데이터 시트 공통 숫자 서식 — 연도·기간·메모는 텍스트, 금액은 천단위, 인원은 정수 */
+function dataNumFmt(c: DataColumn<string>): string {
+	if (c.key === 'year') return NUM_FMT.year;
+	if (c.unit === '원') return NUM_FMT.won;
+	if (c.unit === '명') return '0';
+	return '@';
+}
+
+function addInputSheet(wb: ExcelJS.Workbook, records: PeriodRecord[]) {
+	const ws = wb.addWorksheet(SHEET.input);
+	ws.columns = [...INPUT_COLUMNS.map((c) => ({ width: c.width })), { width: CHECK_COLUMN.width }];
+	const header = ws.getRow(DATA_HEADER_ROW);
+	setCells(header, [...INPUT_COLUMNS.map(headerText), CHECK_COLUMN.header]);
+	styleHeaderRow(header);
+	INPUT_COLUMNS.forEach((c, i) => note(header.getCell(i + 1), c.note));
+	note(header.getCell(CHECK_COL_INDEX + 1), CHECK_COLUMN.note);
+	const unit = ws.getRow(DATA_UNIT_ROW);
+	setCells(unit, [...INPUT_COLUMNS.map((c) => c.note), CHECK_COLUMN.note]);
+	unit.font = NOTE_FONT;
+	unit.eachCell((c) => (c.alignment = { wrapText: true, vertical: 'top' }));
+	unit.height = 30;
+
+	const rows = inputRows(records);
+	rows.forEach((r, i) => {
+		const row = ws.getRow(DATA_FIRST_DATA_ROW + i);
+		setCells(
+			row,
+			INPUT_COLUMNS.map((c) => r[c.key]),
+			(col) => dataNumFmt(INPUT_COLUMNS[col])
+		);
+	});
+
+	// 입력 칸 열기 + 검증 수식 (미리 준비한 행까지)
+	for (let r = DATA_FIRST_DATA_ROW; r <= LAST_DATA_ROW; r++) {
+		const row = ws.getRow(r);
+		for (let ci = 1; ci <= INPUT_COLUMNS.length; ci++) row.getCell(ci).protection = UNLOCKED;
+		const check = row.getCell(CHECK_COL_INDEX + 1);
+		check.value = { formula: checkFormula(r) };
+		check.font = { color: { argb: 'FFB42318' }, size: 10 };
 	}
+
+	// 셀 유효성 — 기간 드롭다운, 연도 범위, 금액 0 이상, 인원 0 이상 정수
+	addColumnValidations(ws, INPUT_COLUMNS, DATA_FIRST_DATA_ROW, LAST_DATA_ROW);
 	// 검증 열에 내용이 있으면 행 전체를 붉게
 	ws.addConditionalFormatting({
-		ref: `A${INPUT_FIRST_DATA_ROW}:${CHECK_COL}${LAST_DATA_ROW}`,
+		ref: `A${DATA_FIRST_DATA_ROW}:${CHECK_COL}${LAST_DATA_ROW}`,
 		rules: [
 			{
 				type: 'expression',
 				priority: 1,
-				formulae: [`$${CHECK_COL}${INPUT_FIRST_DATA_ROW}<>""`],
+				formulae: [`$${CHECK_COL}${DATA_FIRST_DATA_ROW}<>""`],
 				style: { fill: ERROR_FILL }
 			}
 		]
 	});
-	ws.views = [{ state: 'frozen', xSplit: 2, ySplit: INPUT_UNIT_ROW }];
+	ws.views = [{ state: 'frozen', xSplit: 2, ySplit: DATA_UNIT_ROW }];
 	return ws;
 }
 
@@ -316,6 +332,44 @@ function addScenarioSheet(wb: ExcelJS.Workbook, base: PeriodRecord, scenarios: S
 	styleHeaderRow(ws.getRow(r));
 	r++;
 	sheet.metrics.forEach(put);
+}
+
+/**
+ * 시트 `동종업계` — 상대 회사의 기간별 값 (docs/plans/peer-comparison.md §4).
+ * 회사가 없어도 머리글 2행은 넣는다(사용자가 바로 적을 수 있게).
+ * 입력 데이터 시트와 달리 검증 열·조건부 서식·시트 보호는 넣지 않는다 — 드롭다운과 셀 유효성만.
+ */
+function addPeerSheet(wb: ExcelJS.Workbook, peers: PeerCompany[]) {
+	const ws = wb.addWorksheet(SHEET.peers);
+	ws.columns = PEER_COLUMNS.map((c) => ({ width: c.width }));
+	const header = ws.getRow(DATA_HEADER_ROW);
+	setCells(header, PEER_COLUMNS.map(headerText));
+	styleHeaderRow(header);
+	PEER_COLUMNS.forEach((c, i) => note(header.getCell(i + 1), c.note));
+	const unit = ws.getRow(DATA_UNIT_ROW);
+	setCells(
+		unit,
+		PEER_COLUMNS.map((c) => c.note)
+	);
+	unit.font = NOTE_FONT;
+	unit.eachCell((c) => (c.alignment = { wrapText: true, vertical: 'top' }));
+	unit.height = 30;
+
+	peerRows(peers).forEach((r, i) => {
+		setCells(
+			ws.getRow(DATA_FIRST_DATA_ROW + i),
+			PEER_COLUMNS.map((c) => r[c.key]),
+			(col) => dataNumFmt(PEER_COLUMNS[col])
+		);
+	});
+
+	addColumnValidations(
+		ws,
+		PEER_COLUMNS,
+		DATA_FIRST_DATA_ROW,
+		DATA_FIRST_DATA_ROW + PEER_PREPARED_ROWS - 1
+	);
+	ws.views = [{ state: 'frozen', xSplit: 1, ySplit: DATA_UNIT_ROW }];
 }
 
 function addFormulaSheet(wb: ExcelJS.Workbook) {
@@ -414,9 +468,11 @@ export interface ExportData {
 	headcountBasis?: HeadcountBasis;
 	/** `지표 요약` 시트에 실을 목록 (합산 레코드 포함). 없으면 records */
 	summaryRecords?: PeriodRecord[];
+	/** 동종업계 회사 — `동종업계` 시트. 없으면 머리글만 내보낸다 */
+	peers?: PeerCompany[];
 }
 
-/** 작업공간 전체 → .xlsx (시트 ①②③ + 조직 정보 + 산식) */
+/** 작업공간 전체 → .xlsx (지표 요약 · 입력 데이터 · 시나리오 비교 · 동종업계 · 조직 정보 · 산식·가정) */
 export async function buildWorkbookBuffer(data: ExportData): Promise<ArrayBuffer> {
 	const Excel = await loadExcel();
 	const wb = new Excel.Workbook();
@@ -425,18 +481,21 @@ export async function buildWorkbookBuffer(data: ExportData): Promise<ArrayBuffer
 	addSummarySheet(wb, data.summaryRecords ?? data.records);
 	const input = addInputSheet(wb, data.records);
 	if (data.base) addScenarioSheet(wb, data.base, data.scenarios);
+	addPeerSheet(wb, data.peers ?? []);
 	const org = addOrgSheet(wb, data.orgName ?? '', data.headcountBasis ?? DEFAULT_HEADCOUNT_BASIS);
 	addFormulaSheet(wb);
 	await protectInputSheets([input, org]);
 	return toArrayBuffer(await wb.xlsx.writeBuffer());
 }
 
-/** 입력 템플릿 (.xlsx) — 시트 ② 구조 + 샘플 행 + 조직 정보 + 산식 시트 */
+/** 입력 템플릿 (.xlsx) — 입력 데이터 구조 + 샘플 행 + 동종업계 + 조직 정보 + 산식 시트 */
 export async function buildTemplateBuffer(opts: { withSample: boolean } = { withSample: true }) {
 	const Excel = await loadExcel();
 	const wb = new Excel.Workbook();
 	wb.creator = PRODUCT_NAME;
 	const input = addInputSheet(wb, opts.withSample ? sampleRecords() : []);
+	// 템플릿의 동종업계 예시는 가상 회사 2곳 × 2행 (샘플 3곳 중 앞의 둘)
+	addPeerSheet(wb, opts.withSample ? samplePeers().slice(0, 2) : []);
 	const org = addOrgSheet(wb, '', DEFAULT_HEADCOUNT_BASIS);
 	addFormulaSheet(wb);
 	await protectInputSheets([input, org]);
@@ -476,28 +535,42 @@ function sheetRows(ws: ExcelJS.Worksheet): unknown[][] {
 }
 
 export interface ReadResult {
-	/** 시트 ② `입력 데이터` (없으면 첫 시트) */
-	input: unknown[][];
+	/** 시트 ② `입력 데이터` — 없으면 이름을 바꾼 첫 시트, 그것도 없으면 null (= 입력 시트 없음, 오류 아님) */
+	input: unknown[][] | null;
 	/** 시트 ⑤ `조직 정보` — 시트가 없으면 null (= 제목을 건드리지 않음) */
 	org: unknown[][] | null;
+	/** 시트 `동종업계` — 시트가 없으면 null (= 동종업계를 건드리지 않음, 옛 파일 호환) */
+	peerRows: unknown[][] | null;
 }
+
+/** 이 도구가 만드는 시트 이름들 — 입력 시트 폴백에서 제외한다 */
+const KNOWN_SHEET_NAMES: readonly string[] = Object.values(SHEET).filter((n) => n !== SHEET.input);
 
 /**
  * 업로드된 .xlsx 에서 가져오기 대상 시트들을 원시값 배열로 읽는다.
- * `입력 데이터` 시트가 없으면 첫 시트를 사용한다 (사용자가 시트명을 바꾼 경우 대비).
+ * `입력 데이터` 시트가 없으면 **우리가 아는 다른 시트가 아닌** 첫 시트를 쓴다
+ * (사용자가 시트명을 바꾼 경우 대비). 그것도 없으면 null —
+ * 동종업계 시트만 담은 파일의 `동종업계` 를 자사 입력으로 잘못 읽지 않기 위해서다.
  */
 export async function readWorkbook(buffer: ArrayBuffer): Promise<ReadResult> {
 	const Excel = await loadExcel();
 	const wb = new Excel.Workbook();
 	await wb.xlsx.load(buffer);
-	const input = wb.getWorksheet(SHEET.input) ?? wb.worksheets[0];
+	const input =
+		wb.getWorksheet(SHEET.input) ??
+		wb.worksheets.find((ws) => !KNOWN_SHEET_NAMES.includes(ws.name));
 	const org = wb.getWorksheet(SHEET.org);
-	return { input: input ? sheetRows(input) : [], org: org ? sheetRows(org) : null };
+	const peers = wb.getWorksheet(SHEET.peers);
+	return {
+		input: input ? sheetRows(input) : null,
+		org: org ? sheetRows(org) : null,
+		peerRows: peers ? sheetRows(peers) : null
+	};
 }
 
-/** 시트 ② 만 필요할 때 */
+/** 시트 ② 만 필요할 때 (시트가 없으면 빈 배열) */
 export async function readInputSheet(buffer: ArrayBuffer): Promise<unknown[][]> {
-	return (await readWorkbook(buffer)).input;
+	return (await readWorkbook(buffer)).input ?? [];
 }
 
 function toArrayBuffer(buf: ArrayBuffer | Uint8Array): ArrayBuffer {

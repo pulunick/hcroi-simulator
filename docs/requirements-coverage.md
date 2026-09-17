@@ -1,4 +1,4 @@
-# 요구사항 커버리지 점검 (최종 갱신 2026-09-08)
+# 요구사항 커버리지 점검 (최종 갱신 2026-09-17)
 
 **대조 기준 2가지**
 
@@ -45,7 +45,7 @@
 | 월→분기→연간 자동 합산 (2026-09-09 지적)                   | `rollup.ts`, `workspace.effective`                                        | ✅        | 직접 입력 우선·불일치 경고·차감(4분기 = 연간 − 1~3분기). 계산 레코드 미저장                                                                                                                               |
 | 엑셀 작성 편의·유효성 (2026-09-09 요청)                    | `excel/schema.ts` `UNIT_SHEET`·`CUMULATIVE_SHEET`·`CHECK_COLUMN`, `io.ts` | ✅        | 단위 칸·누계·드롭다운·셀 유효성·검증 열·조건부 서식·보호. 규칙 원본은 `validateRecord`                                                                                                                    |
 | 부서별(본부–팀) HCROI                                      | —                                                                         | ⏳ 미착수 | 확장 지침 (2) 와 같은 작업. 배부율 α = 인건비 비중 확정. state.md 5                                                                                                                                       |
-| 동종업계 평균 비교                                         | —                                                                         | ⏳ 미착수 | 엑셀 수기 입력(C안) 확정. state.md 6                                                                                                                                                                      |
+| 동종업계 평균 비교                                         | `peers.ts`, `/peers`, 엑셀 `동종업계` 시트                                | ✅        | C안 수기+엑셀, 2026-09-17. 평균=단순 평균·중앙값 병기·자사는 평균 제외·순위는 자사 포함. DART 자동 채우기는 다음 단계                                                                                     |
 | 결산서 PDF → 입력 시트 (2026-09-09 최우선 요구)            | `src/lib/hcroi/pdf/*`, `components/data/PdfImport.svelte`, `/data`        | ✅        | pdf.js 좌표 추출 → 표 3종 + 표지 → 후보 카드 → 확인 후 미리보기 합류. 기간은 표지(종류 + 종료 월)에서 읽어 미리 채우고 못 읽으면 잠금(`detectPeriod.ts`, 2026-09-15). 픽스처 테스트 + 실 PDF 프로브 + E2E |
 
 ## 1-B. 확장 지침 "Martin's HCROI Simulator 2.0" 대조
@@ -76,26 +76,30 @@
 
 ## 3-B. 공개판 브랜치(`product/commercial`)에서 더한 것 (2026-09-15)
 
-| 항목                                          | 구현                                                                                    | 비고                                                                              |
-| --------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| 브랜드(Headroom) 토큰 · 서체 · 워드마크       | `src/routes/layout.css`, `src/app.html`, `src/lib/assets/`                              | 차트 범주색·등급색은 코어 규칙 유지                                               |
-| 다크모드                                      | `hcroi:theme` + `app.html` 인라인 스크립트 + `:root[data-theme]`/`prefers-color-scheme` | 설정 03 에서 고정 가능                                                            |
-| 반응형(390px)                                 | 전 화면 단일 컬럼 · 표 가로 스크롤 · 헤더 탭 가로 스크롤                                | 리포트 종이는 원본 폭 유지                                                        |
-| 설정 화면 `/settings`                         | 금액 단위 · 인원 산정 · 화면 · 백업                                                     | `/data` 상단 컨트롤은 요약+링크로                                                 |
-| 경영진 리포트 `/report`                       | `src/lib/report/data.ts`(+27 테스트), `components/report/`                              | A4 1장, 코어 함수만 사용                                                          |
-| 소개 페이지 `/intro`                          | `src/routes/intro/`, `components/site/`                                                 | `SITE_ENABLED`(product 만) · 앱 헤더 미표시 · 시작 경로 `?start=pdf/excel/sample` |
-| 앱 룩                                         | 기존 디자인 시스템(흰 카드·파랑·고딕) + 다크 팔레트                                     | 2026-09-15 담당자 비교로 복귀, 워드마크만 브랜드                                  |
-| PDF 기간 자동 감지 · 열 기준 통일             | `pdf/detectPeriod.ts`, `locate.ts`, `map.ts`                                            | 표지 종류+종료 월, 인건비 항목은 손익 열과 같은 구간                              |
-| 검증 오류 레코드 제외 · 합산 차단 · 복사됨 칩 | `workspace.invalidIds`, `rollup.ts`, `copiedFrom`                                       | QA 2026-09-15                                                                     |
-| 내보내기 공용 `src/lib/state/io.ts`           | JSON/엑셀 내보내기·가져오기 한 벌                                                       | exceljs 동적 import 유지                                                          |
-| 사용 설명서 앱 안 렌더 `/guide/manual`        | `src/lib/guide/`(marked · GitHub 슬러그 · 링크 변환), `static/samples/`                 | 원본은 `docs/user-guide.md` 하나, 2026-09-16                                      |
-| 링크 공유 메타 · 소개 SSR                     | `+layout.svelte` og/twitter/canonical, `intro/+page.ts` `ssr = true`                    | 앱 화면은 `ssr=false` 유지(미리보기는 `/intro` 만)                                |
-| 첫 방문 `/` → `/intro` · 오류 페이지          | `+page.svelte`(`workspace.hadStoredData`), `+error.svelte`                              | 공개판만, `?start=` 있으면 건너뜀                                                 |
-| 백업 권장 링크 · 폰트 자체 호스팅 · 버튼 대비 | `+layout.svelte`, `layout.css`(`pretendard` 패키지, `--accent` 4.66:1)                  | CDN 요청 0, 2026-09-16                                                            |
+| 항목                                            | 구현                                                                                               | 비고                                                                              |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| 브랜드(Headroom) 토큰 · 서체 · 워드마크         | `src/routes/layout.css`, `src/app.html`, `src/lib/assets/`                                         | 차트 범주색·등급색은 코어 규칙 유지                                               |
+| 다크모드                                        | `hcroi:theme` + `app.html` 인라인 스크립트 + `:root[data-theme]`/`prefers-color-scheme`            | 설정 03 에서 고정 가능                                                            |
+| 반응형(390px)                                   | 전 화면 단일 컬럼 · 표 가로 스크롤 · 헤더 탭 가로 스크롤                                           | 리포트 종이는 원본 폭 유지                                                        |
+| 설정 화면 `/settings`                           | 금액 단위 · 인원 산정 · 화면 · 백업                                                                | `/data` 상단 컨트롤은 요약+링크로                                                 |
+| 경영진 리포트 `/report`                         | `src/lib/report/data.ts`(+27 테스트), `components/report/`                                         | A4 1장, 코어 함수만 사용                                                          |
+| 소개 페이지 `/intro`                            | `src/routes/intro/`, `components/site/`                                                            | `SITE_ENABLED`(product 만) · 앱 헤더 미표시 · 시작 경로 `?start=pdf/excel/sample` |
+| 앱 룩                                           | 기존 디자인 시스템(흰 카드·파랑·고딕) + 다크 팔레트                                                | 2026-09-15 담당자 비교로 복귀, 워드마크만 브랜드                                  |
+| PDF 기간 자동 감지 · 열 기준 통일               | `pdf/detectPeriod.ts`, `locate.ts`, `map.ts`                                                       | 표지 종류+종료 월, 인건비 항목은 손익 열과 같은 구간                              |
+| 검증 오류 레코드 제외 · 합산 차단 · 복사됨 칩   | `workspace.invalidIds`, `rollup.ts`, `copiedFrom`                                                  | QA 2026-09-15                                                                     |
+| 내보내기 공용 `src/lib/state/io.ts`             | JSON/엑셀 내보내기·가져오기 한 벌                                                                  | exceljs 동적 import 유지                                                          |
+| 사용 설명서 앱 안 렌더 `/guide/manual`          | `src/lib/guide/`(marked · GitHub 슬러그 · 링크 변환), `static/samples/`                            | 원본은 `docs/user-guide.md` 하나, 2026-09-16                                      |
+| 링크 공유 메타 · 소개 SSR                       | `+layout.svelte` og/twitter/canonical, `intro/+page.ts` `ssr = true`                               | 앱 화면은 `ssr=false` 유지(미리보기는 `/intro` 만)                                |
+| 첫 방문 `/` → `/intro` · 오류 페이지            | `+page.svelte`(`workspace.hadStoredData`), `+error.svelte`                                         | 공개판만, `?start=` 있으면 건너뜀                                                 |
+| 백업 권장 링크 · 폰트 자체 호스팅 · 버튼 대비   | `+layout.svelte`, `layout.css`(`pretendard` 패키지, `--accent` 4.66:1)                             | CDN 요청 0, 2026-09-16                                                            |
+| 검색 노출(색인 4장 프리렌더 · robots · sitemap) | `src/routes/robots.txt/`, `src/routes/sitemap.xml/`, `site-config.ts`(`SITE_PAGES`), 각 `+page.ts` | 앱 화면·미리보기·사내 배포는 noindex, `/` canonical → `/intro`, 2026-09-17        |
+| 방문 분석(쿠키 없음 · 이벤트 5개)               | `src/lib/site/env.ts`, `src/lib/site/analytics.ts`, `+layout.svelte`                               | `track(name)` 은 이름만 — 값·파일명·회사명 전송 불가, ID 는 `PUBLIC_*` 환경변수   |
+| 개인정보 안내 · 문의 · 후원 링크                | `src/routes/privacy/`, `SiteFooter.svelte`, `+layout.svelte` 푸터                                  | 공개판만(사내 배포 404), 주소·이메일 실값은 저장소에 없음                         |
 
 ## 4. 결론
 
 - 최초 기획서(spec.md)에 옮겨진 요구사항은 **전부 구현·테스트됨** (61 tests).
-- **남은 것은 확장 지침 (2) 부서별과 실무 회신에서 나온 동종업계 비교** 두 가지다(기간별·임직원 수 기준은 2026-09-08 완료).
+- **남은 것은 확장 지침 (2) 부서별 분해** 하나다(기간별·임직원 수 기준은 2026-09-08, 동종업계 비교는 2026-09-17 완료).
+  동종업계는 값을 수기·엑셀로 넣는 C안까지이며, DART 로 자동 채우기는 다음 단계다.
   진행 순서는 [.claude/state.md](../.claude/state.md) "다음 할 일".
 - 미확인 리스크는 여전히 "최초 기획서를 옮겨 적는 과정에서 빠진 항목" 뿐이며, 원문 파일이 있어야 닫을 수 있다.

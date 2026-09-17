@@ -21,14 +21,17 @@
 	} from '$lib/hcroi/period';
 	import type { BlockedRollup } from '$lib/hcroi/rollup';
 	import {
+		mergePeers,
 		mergeRecords,
 		parseAmountUnit,
 		parseCumulative,
 		parseInputRows,
 		parseHeadcountBasis,
 		parseOrgName,
+		parsePeerRows,
 		type ParsedRecord,
-		type ParseResult
+		type ParseResult,
+		type PeerParseResult
 	} from '$lib/hcroi/excel/fromRows';
 	import { computeMetrics, gradeOf, sumHcCost, validateRecord } from '$lib/hcroi/formulas';
 	import { estimateFromRevenue, splitHcCost, REFERENCE_DEFAULTS } from '$lib/hcroi/defaults';
@@ -63,6 +66,7 @@
 	import NumberField from '$lib/components/ui/NumberField.svelte';
 	import GradeBadge from '$lib/components/ui/GradeBadge.svelte';
 	import PdfImport from '$lib/components/data/PdfImport.svelte';
+	import { track } from '$lib/site/analytics';
 
 	// 금액 표기는 작업공간의 표시 단위를 따른다 (저장값은 언제나 원 단위 정수). 규칙은 format.ts 한 곳
 	const won = (v: number | null | undefined, suffix = '원') =>
@@ -253,6 +257,15 @@
 		unit: { label: string; scale: number };
 		/** 손익이 누계로 적혀 있어 앞 순번을 빼서 읽었는지 */
 		cumulative: boolean;
+		/** 시트 `동종업계` 를 읽은 결과. 시트가 없는 옛 파일이면 null (= 동종업계를 건드리지 않음) */
+		peers: PeerParseResult | null;
+		/**
+		 * 자사 입력 시트가 **있고 내용이 있었는가**. 없으면(동종업계만 담은 파일) 오류가 아니라
+		 * "행 없음" 으로 다룬다 — 머리글 오류로 반영을 막지 않는다.
+		 */
+		hasInputSheet: boolean;
+		/** 어디서 온 미리보기인가 — 방문 통계에서 두 경로를 구분하는 데만 쓴다(값은 보내지 않는다) */
+		source: 'excel' | 'pdf';
 	} | null>(null);
 	let overwrite = $state(true);
 	let skipErrors = $state(false);
@@ -260,6 +273,8 @@
 	let applyOrgName = $state(true);
 	/** 미리보기에서 "산정 기준도 파일 기준으로" 체크 여부 (파일 기준이 현재와 다를 때만 노출) */
 	let applyBasisFromFile = $state(true);
+	/** 미리보기에서 "동종업계 시트도 반영" 체크 여부 (동종업계 시트가 있는 파일만 노출) */
+	let applyPeers = $state(true);
 	/** 결산서 PDF 가져오기 패널 — `/data#pdf` 로 들어오면 자동으로 펼친다(랜딩·가이드의 앵커 링크) */
 	let pdfOpen = $state(false);
 	onMount(() => {
@@ -324,7 +339,11 @@
 			orgName: companyName,
 			basis: null,
 			unit: { label: '원', scale: 1 },
-			cumulative: false
+			cumulative: false,
+			// 결산서 PDF 는 자사 기간만 만든다 — 동종업계는 건드리지 않는다
+			peers: null,
+			hasInputSheet: true,
+			source: 'pdf'
 		};
 	}
 	async function exportExcel() {
@@ -336,9 +355,10 @@
 				base: workspace.base ? $state.snapshot(workspace.base) : null,
 				orgName: workspace.orgName,
 				headcountBasis: $state.snapshot(workspace.headcountBasis),
-				summaryRecords: $state.snapshot(workspace.effective)
+				summaryRecords: $state.snapshot(workspace.effective),
+				peers: $state.snapshot(workspace.peers)
 			});
-			ioMessage = `엑셀 파일(${fname})을 내려받았습니다. 시트: 지표 요약 · 입력 데이터 · 시나리오 비교 · 조직 정보 · 산식·가정`;
+			ioMessage = `엑셀 파일(${fname})을 내려받았습니다. 시트: 지표 요약 · 입력 데이터 · 시나리오 비교 · 동종업계 · 조직 정보 · 산식·가정`;
 		} catch (e) {
 			ioMessage = `엑셀 내보내기 실패: ${(e as Error).message}`;
 		} finally {
@@ -369,21 +389,35 @@
 			const read = await readWorkbook(await file.arrayBuffer());
 			applyOrgName = true;
 			applyBasisFromFile = true;
+			applyPeers = true;
 			// 인원 구분 합계는 산정 기준에 따라 달라지므로 파일이 나른 기준을 우선 적용해 파싱한다
 			const fileBasis = parseHeadcountBasis(read.org);
 			const unit = parseAmountUnit(read.org);
 			const cumulative = parseCumulative(read.org);
+			// 동종업계 시트는 입력 데이터와 같은 옵션(단위 배수·누계·산정 기준)으로 읽는다
+			const options = {
+				basis: fileBasis ?? $state.snapshot(workspace.headcountBasis),
+				scale: unit.scale,
+				cumulative,
+				newId
+			};
+			// 입력 시트가 없거나(동종업계만 담은 파일) 한 칸도 없으면 "행 없음" 으로 — 머리글 오류가 아니다
+			const inputSheet = read.input;
+			const hasInputSheet = !!inputSheet?.some((r) =>
+				(r ?? []).some((cell) => cell !== null && cell !== undefined && String(cell).trim() !== '')
+			);
 			preview = {
 				fileName: file.name,
-				result: parseInputRows(read.input, {
-					basis: fileBasis ?? $state.snapshot(workspace.headcountBasis),
-					scale: unit.scale,
-					cumulative
-				}),
+				result: hasInputSheet
+					? parseInputRows(inputSheet as unknown[][], options)
+					: { records: [], errors: [], headerError: null },
 				orgName: parseOrgName(read.org),
 				basis: fileBasis,
 				unit,
-				cumulative
+				cumulative,
+				peers: read.peerRows ? parsePeerRows(read.peerRows, options) : null,
+				hasInputSheet,
+				source: 'excel'
 			};
 		} catch (err) {
 			ioMessage = `엑셀 파일을 읽지 못했습니다: ${(err as Error).message}`;
@@ -437,21 +471,53 @@
 			? preview.orgName
 			: null
 	);
+	/** 동종업계 시트를 읽었고 반영할 회사가 있을 때만 (헤더 오류면 반영 대상이 아니다) */
+	const peerResult = $derived(
+		preview?.peers && !preview.peers.headerError && preview.peers.companies.length > 0
+			? preview.peers
+			: null
+	);
+	/** "신규 N곳 · 교체 M곳" — 실제 반영과 같은 규칙(`mergePeers`)으로 세어 미리 보여 준다 */
+	const peerMerge = $derived(
+		peerResult
+			? mergePeers($state.snapshot(workspace.peers), $state.snapshot(peerResult.companies))
+			: null
+	);
+	/** 동종업계 시트의 오류 행 — 입력 데이터와 같은 스위치("오류 행 건너뛰고 반영")를 쓴다 */
+	const peerErrors = $derived(preview?.peers?.errors ?? []);
+	/** 입력 데이터 시트에서 반영할 기간이 있는가 */
+	const hasInputRows = $derived(
+		!!preview && !preview.result.headerError && preview.result.records.length > 0
+	);
+	/** 동종업계만 반영하는 경우 — 입력 데이터 시트를 비우고 동종업계 시트만 채운 파일 */
+	const willApplyPeers = $derived(!!peerResult && applyPeers);
+	/**
+	 * 입력 데이터 시트 **머리글**이 양식과 다르다 — 이것만은 반영을 막는다(값이 엉뚱한 열에서 읽힐 수 있다).
+	 * 시트가 아예 없거나 비어 있으면 머리글 오류가 아니다(위 `hasInputSheet`).
+	 */
+	const inputHeaderError = $derived(!!preview?.result.headerError);
+	/** 실제로 반영을 막는 오류 행 수 — 동종업계 오류는 그 시트를 반영할 때만 센다 */
+	const countedErrors = $derived(
+		(preview?.result.errors.length ?? 0) + (willApplyPeers ? peerErrors.length : 0)
+	);
 	const canApply = $derived(
 		!!preview &&
-			!preview.result.headerError &&
-			preview.result.records.length > 0 &&
-			(preview.result.errors.length === 0 || skipErrors)
+			(hasInputRows || willApplyPeers) &&
+			!inputHeaderError &&
+			(countedErrors === 0 || skipErrors)
 	);
 	function applyImport() {
 		if (!preview || !canApply) return;
 		workspace.takeSnapshot();
-		const r = mergeRecords($state.snapshot(workspace.records), preview.result.records, {
-			overwrite,
-			newId
-		});
-		workspace.replaceRecords(r.records);
-		const parts = [`${r.added}개 기간 추가`, `${r.updated}개 덮어씀`];
+		// 입력 데이터 시트가 비어 있으면 기간은 건드리지 않고 동종업계만 반영한다
+		const r = hasInputRows
+			? mergeRecords($state.snapshot(workspace.records), preview.result.records, {
+					overwrite,
+					newId
+				})
+			: null;
+		if (r) workspace.replaceRecords(r.records);
+		const parts = r ? [`${r.added}개 기간 추가`, `${r.updated}개 덮어씀`] : [];
 		// $derived 는 상태를 바꾸는 순간 다시 계산되므로 반영 전에 값을 잡아 둔다
 		const newOrgName = orgNameChange;
 		const newBasis = basisChange;
@@ -463,9 +529,32 @@
 			workspace.setHeadcountBasis(newBasis);
 			parts.push(`인원 산정 기준 "${headcountBasisLabel(newBasis)}"`);
 		}
-		if (r.skipped) parts.push(`${r.skipped}개 건너뜀(기존 기간 유지)`);
-		if (preview.result.errors.length) parts.push(`오류 ${preview.result.errors.length}행 제외`);
+		// 동종업계: 미리보기에서 이미 계산한 병합 결과(최종 목록)를 그대로 싣는다 — 병합은 한 번만
+		const merge = peerMerge;
+		const applied = willApplyPeers;
+		const peerHeaderError = preview.peers?.headerError ?? null;
+		const inputErrorRows = preview.result.errors.length;
+		const peerErrorRows = peerErrors.length;
+		if (merge && applied) {
+			workspace.replacePeers(merge.result);
+			parts.push(`동종업계 ${merge.added}곳 추가`);
+			if (merge.replaced) parts.push(`${merge.replaced}곳 교체`);
+		}
+		if (r?.skipped) parts.push(`${r.skipped}개 건너뜀(기존 기간 유지)`);
+		if (!r) {
+			// "행이 전부 오류라 건너뛴 것" 과 "애초에 행이 없던 것" 은 다른 이야기다
+			if (inputErrorRows > 0)
+				parts.push(`입력 데이터 오류 ${inputErrorRows}행은 반영하지 않았습니다`);
+			else if (applied) parts.push('입력 데이터 시트에 행이 없어 동종업계만 반영했습니다');
+			else parts.push('입력 데이터 시트는 반영할 행이 없어 건드리지 않았습니다');
+		} else if (inputErrorRows > 0) {
+			parts.push(`입력 데이터 오류 ${inputErrorRows}행 제외`);
+		}
+		if (applied && peerErrorRows > 0) parts.push(`동종업계 오류 ${peerErrorRows}행 제외`);
+		if (peerHeaderError) parts.push('동종업계 시트는 머리글 오류로 반영하지 않았습니다');
 		ioMessage = `${preview.fileName} 반영: ${parts.join(', ')}. 잘못 반영했으면 "되돌리기" 를 누르세요.`;
+		// 반영이 끝난 뒤 한 번만 — 어느 경로로 들어왔는지 이름만 센다
+		track(preview.source === 'pdf' ? 'pdf_applied' : 'excel_import');
 		preview = null;
 		selectedId = null;
 	}
@@ -523,8 +612,6 @@
 
 	const sharePct = REFERENCE_DEFAULTS.breakdownSharePct;
 </script>
-
-<svelte:head><title>{workspace.pageTitle('데이터')}</title></svelte:head>
 
 <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
 	<div>
@@ -623,8 +710,8 @@
 			<div>
 				<h2 id="preview-h" class="text-lg font-semibold text-ink">가져오기 미리보기</h2>
 				<p class="text-sm text-muted">
-					{preview.fileName} — 정상 {res.records.length}행 · 오류 {res.errors.length}행. 아직
-					반영되지 않았습니다.
+					{preview.fileName} — 정상 {res.records.length}행 · 오류 {countedErrors}행. 아직 반영되지
+					않았습니다.
 					{#if preview.unit.scale !== 1}
 						금액은 <strong class="text-ink">{preview.unit.label}</strong> 단위로 읽어 ×{preview.unit.scale.toLocaleString()}
 						했습니다.
@@ -642,7 +729,7 @@
 					/>
 					기존 기간 덮어쓰기
 				</label>
-				{#if res.errors.length}
+				{#if countedErrors}
 					<label class="flex items-center gap-2 text-sm text-ink-2">
 						<input
 							type="checkbox"
@@ -687,6 +774,19 @@
 				class="rounded-md border border-status-critical/40 bg-status-critical-bg px-4 py-3 text-sm text-status-critical-ink"
 			>
 				{res.headerError}
+			</p>
+		{:else if previewRows.length === 0}
+			<!-- 입력 데이터 시트가 비어 있거나 아예 없는 파일 — 동종업계 시트만 채워 올린 경우가 여기다 -->
+			<p class="rounded-md border border-line bg-surface-2 px-4 py-3 text-sm text-ink-2">
+				{#if !preview.hasInputSheet}
+					{peerResult
+						? '이 파일에는 "입력 데이터" 시트가 없습니다. 동종업계만 반영합니다.'
+						: '이 파일에는 "입력 데이터" 시트가 없습니다. 반영할 내용이 없습니다.'}
+				{:else}
+					{peerResult
+						? '입력 데이터 시트에 반영할 행이 없습니다. 동종업계만 반영합니다.'
+						: '입력 데이터 시트에 데이터 행이 없습니다. 3행부터 값을 입력했는지 확인하세요.'}
+				{/if}
 			</p>
 		{:else}
 			<div class="relative overflow-x-auto">
@@ -740,12 +840,6 @@
 										: 'text-muted'}">{r.notes.join(' ')}</td
 								>
 							</tr>
-						{:else}
-							<tr
-								><td colspan="8" class="px-4 py-6 text-center text-muted"
-									>데이터 행이 없습니다. 3행부터 값을 입력했는지 확인하세요.</td
-								></tr
-							>
 						{/each}
 					</tbody>
 				</table>
@@ -756,6 +850,90 @@
 					켜세요.
 				</p>
 			{/if}
+		{/if}
+
+		<!--
+			동종업계 시트 (시트가 없는 옛 파일이면 이 카드 자체가 없다 = 동종업계를 건드리지 않는다).
+			병합 규칙은 회사명이 같으면 통째 교체 · 시트에 없는 기존 회사는 유지 (`mergePeers`).
+		-->
+		{#if preview.peers}
+			{@const p = preview.peers}
+			<div class="mt-4 rounded-lg border border-line bg-surface-2 px-4 py-3">
+				<div class="flex flex-wrap items-center justify-between gap-3">
+					<div>
+						<h3 class="text-sm font-semibold text-ink">동종업계</h3>
+						{#if p.headerError}
+							<p class="mt-1 text-sm text-status-critical-ink">{p.headerError}</p>
+						{:else if peerMerge}
+							<p class="mt-1 text-sm text-ink-2">
+								신규 {peerMerge.added}곳 · 교체 {peerMerge.replaced}곳 · 행 {p.rowCount}개
+								{#if peerMerge.kept}<span class="text-muted"
+										>· 시트에 없는 {peerMerge.kept}곳은 그대로 둡니다</span
+									>{/if}
+							</p>
+						{:else}
+							<p class="mt-1 text-sm text-muted">
+								읽을 회사가 없습니다 (행 {p.rowCount}개). 동종업계는 그대로 둡니다.
+							</p>
+						{/if}
+						{#if peerErrors.length}
+							<p class="mt-1 text-sm text-status-critical-ink">
+								이 시트의 오류 {peerErrors.length}행
+							</p>
+						{/if}
+					</div>
+					<label class="flex items-center gap-2 text-sm text-ink-2">
+						<!-- 머리글 오류·읽을 회사 없음이면 켤 수 없고, 켜진 모양으로도 보이지 않게 한다 -->
+						<input
+							type="checkbox"
+							class="rounded border-line-2 text-brand"
+							checked={willApplyPeers}
+							disabled={!peerMerge}
+							onchange={(e) => (applyPeers = (e.currentTarget as HTMLInputElement).checked)}
+						/>
+						동종업계 시트도 반영
+					</label>
+				</div>
+				{#if peerErrors.length}
+					<div class="mt-3 overflow-x-auto">
+						<table class="w-full min-w-[520px] text-sm">
+							<thead>
+								<tr class="border-y border-line text-ink-2">
+									<th scope="col" class="px-3 py-1.5 text-center font-semibold">행</th>
+									<th scope="col" class="px-3 py-1.5 text-center font-semibold">기간</th>
+									<th scope="col" class="px-3 py-1.5 text-center font-semibold">상태</th>
+									<th scope="col" class="px-3 py-1.5 text-center font-semibold">비고</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each peerErrors as e (e.row)}
+									<tr class="border-b border-line bg-status-critical-bg/60 last:border-0">
+										<td class="tabular px-3 py-1.5 text-muted">{e.row}</td>
+										<td class="px-3 py-1.5 font-semibold whitespace-nowrap"
+											>{e.period ? periodLabel(e.period) : '—'}</td
+										>
+										<td class="px-3 py-1.5">
+											<span
+												class="rounded bg-status-critical-bg px-1.5 py-0.5 text-xs font-semibold text-status-critical-ink"
+												>오류</span
+											>
+										</td>
+										<td class="px-3 py-1.5 text-xs text-status-critical-ink"
+											>{e.messages.join(' ')}</td
+										>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+					{#if willApplyPeers && !skipErrors}
+						<p class="mt-2 text-sm text-status-critical-ink">
+							동종업계 시트에 오류 행이 있어 반영할 수 없습니다. 파일을 고쳐 다시 올리거나 "오류 행
+							건너뛰고 반영" 을 켜세요.
+						</p>
+					{/if}
+				{/if}
+			</div>
 		{/if}
 	</section>
 {/if}

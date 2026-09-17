@@ -18,6 +18,8 @@ npm run lint
 npm run qa         # Playwright 브라우저 QA — dev 서버 + 로컬 Chrome 필요 (tests/qa/README.md)
 ```
 
+공개판 배포에 필요한 환경변수는 `.env.example` 참조(값은 호스팅 대시보드에만 넣는다).
+
 첫 실행 시 가상의 3개년 샘플 데이터가 들어 있다. `데이터 관리` 에서 자사 실적으로 교체하거나
 결산서 PDF·엑셀·JSON 으로 가져올 수 있다.
 

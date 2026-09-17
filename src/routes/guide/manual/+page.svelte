@@ -6,10 +6,7 @@
 	 */
 	import GuideTabs from '$lib/guide/GuideTabs.svelte';
 	import { manual } from '$lib/guide/manual';
-	import { workspace } from '$lib/state/workspace.svelte';
 </script>
-
-<svelte:head><title>{workspace.pageTitle('사용 설명서')}</title></svelte:head>
 
 <GuideTabs />
 

@@ -6,7 +6,7 @@
  * `exportWorkspaceExcel()` 안에서 동적 import 로만 부르고, 이 파일 자체는 정적 import 하지 않는다.
  */
 import { workspace, type ImportResult } from './workspace.svelte';
-import type { HeadcountBasis, PeriodRecord, Scenario } from '$lib/hcroi/types';
+import type { HeadcountBasis, PeerCompany, PeriodRecord, Scenario } from '$lib/hcroi/types';
 
 /** 오늘 날짜 "YYYY-MM-DD" — 파일명에 쓴다 */
 export function todayStamp(): string {
@@ -63,6 +63,8 @@ export interface WorkspaceExcelSnapshot {
 	orgName: string;
 	headcountBasis: HeadcountBasis;
 	summaryRecords: PeriodRecord[];
+	/** 동종업계 회사 — `동종업계` 시트로 나간다 (없으면 머리글만) */
+	peers: PeerCompany[];
 }
 
 /**

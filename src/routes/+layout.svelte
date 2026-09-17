@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { asset, resolve } from '$app/paths';
 	import './layout.css';
+	import { building } from '$app/environment';
 	import wordmark from '$lib/assets/headroom-wordmark.svg';
 	import wordmarkLight from '$lib/assets/headroom-wordmark-light.svg';
 	import { page } from '$app/state';
@@ -14,8 +15,19 @@
 		SITE_OG_IMAGE_ALT,
 		SITE_OG_IMAGE_HEIGHT,
 		SITE_OG_IMAGE_WIDTH,
-		PRODUCT_NAME
+		PRODUCT_NAME,
+		sitePageMeta
 	} from '$lib/site-config';
+	import {
+		CF_BEACON_TOKEN,
+		CONTACT_EMAIL,
+		DONATE_URL,
+		GOOGLE_SITE_VERIFICATION,
+		INDEXABLE,
+		NAVER_SITE_VERIFICATION,
+		SITE_ORIGIN,
+		UMAMI_WEBSITE_ID
+	} from '$lib/site/env';
 
 	let { children } = $props();
 
@@ -43,6 +55,7 @@
 		{ href: resolve('/'), label: '대시보드' },
 		{ href: resolve('/simulator'), label: '시뮬레이터' },
 		{ href: resolve('/data'), label: '데이터' },
+		{ href: resolve('/peers'), label: '동종업계' },
 		{ href: resolve('/report'), label: '리포트' },
 		{ href: resolve('/settings'), label: '설정' },
 		{ href: resolve('/guide'), label: '가이드' }
@@ -63,23 +76,68 @@
 	// 사내 배포(SITE_ENABLED=false)에는 /intro 자체가 없으니(404) 앱 헤더를 항상 쓴다.
 	const isSite = $derived(SITE_ENABLED && page.url.pathname.startsWith('/intro'));
 
-	// ───────────────── 링크 공유 메타 (OG · Twitter · canonical) ─────────────────
-	// 화면마다 <title> 을 따로 두므로(각 +page.svelte 의 workspace.pageTitle) 여기서는 같은 문자열을
-	// 경로 → 메뉴 이름 매핑으로 다시 만들어 og:title 에 쓴다. 소개 페이지만은 제목이 화면에 없어
-	// (site-config 의 SITE_INTRO_TITLE) 여기서 <title> 까지 함께 낸다.
-	const navSection = $derived.by(() => {
-		const p = page.url.pathname;
-		const hit = nav.find((n) => n.href !== resolve('/') && p.startsWith(n.href));
-		return hit?.label;
-	});
-	const metaTitle = $derived(isSite ? SITE_INTRO_TITLE : workspace.pageTitle(navSection));
+	// ───────────────── 브라우저 탭 제목 · 링크 공유 메타 · 검색 색인 ─────────────────
+	// 제목은 이 한 곳에서만 낸다(각 화면의 +page.svelte 에는 <title> 이 없다 — 두 번 나오면 안 된다).
+	// 화면 이름은 메뉴 이름과 같게 하되 설명서만 메뉴("가이드") 아래 화면이라 따로 적는다.
+	const SECTIONS: Record<string, string | undefined> = {
+		'/': undefined,
+		'/simulator': '시뮬레이터',
+		'/data': '데이터',
+		'/peers': '동종업계',
+		'/report': '리포트',
+		'/settings': '설정',
+		'/guide': '가이드',
+		'/guide/manual': '사용 설명서',
+		'/privacy': '개인정보 안내'
+	};
+	// 검색에 내보내는 화면(소개·가이드·설명서·개인정보)은 site-config 의 표에 적힌 제목·설명이 이긴다.
+	// 사내 배포에서는 표를 쓰지 않고 지금까지의 화면 제목 규칙을 그대로 둔다.
+	const pageMeta = $derived(SITE_ENABLED ? sitePageMeta(page.url.pathname) : null);
+	const metaTitle = $derived(
+		isSite
+			? SITE_INTRO_TITLE
+			: (pageMeta?.title ?? workspace.pageTitle(SECTIONS[page.url.pathname]))
+	);
+	const metaDescription = $derived(pageMeta?.description ?? SITE_DESCRIPTION);
 	// 절대 URL 이라야 링크 미리보기가 이미지를 가져간다. `asset()` 은 설정에 따라 상대 경로
-	// (`./hero-dashboard.jpg`)를 돌려주므로 현재 주소 기준으로 풀어서 절대 URL 로 만든다.
+	// (`./hero-dashboard.jpg`)를 돌려주므로 정식 주소(없으면 지금 주소) 기준으로 풀어서 절대 URL 로 만든다.
 	// 쿼리(?start=…)는 canonical 에서 뺀다.
-	const ogImage = $derived(new URL(asset(SITE_OG_IMAGE), page.url).href);
-	const canonical = $derived(page.url.origin + page.url.pathname);
+	// 정적 생성(building=true) 중에는 page.url.origin 이 자리표시자(sveltekit-prerender)라
+	// 정식 주소가 없으면 아예 비워 둔다 — 결과 HTML 에 가짜 주소가 박히는 대신 브라우저에서
+	// 하이드레이션 후(빌드 중이 아닐 때) 실제 주소로 다시 채워진다. 그동안은 이 화면이 noindex 라 문제 없다.
+	const origin = $derived(SITE_ORIGIN || (building ? '' : page.url.origin));
+	const ogImage = $derived(origin ? new URL(asset(SITE_OG_IMAGE), origin + '/').href : '');
+	// 앱 주소 `/` 는 검색에서 소개 페이지로 모은다 — 앱은 `/` 에 그대로 두되 대표 주소만 소개로.
+	const canonical = $derived(
+		origin
+			? origin + (SITE_ENABLED && page.url.pathname === '/' ? '/intro' : page.url.pathname)
+			: ''
+	);
 	// 오류 화면(404 등)은 공유·색인 대상이 아니다 — 메타 대신 noindex 만 낸다
 	const isErrorPage = $derived(page.error !== null);
+	// 색인을 허용하는 배포(공개판 + 정식 주소)의 색인 대상 화면만 열어 둔다. 나머지는 전부 noindex —
+	// 앱 화면·미리보기 주소·사내 배포·개발 서버가 검색 결과에 남지 않게.
+	const indexThisPage = $derived(INDEXABLE && sitePageMeta(page.url.pathname) !== null);
+	// 소개 페이지에만 붙이는 구조화 데이터 — 검색 결과에 "무료 웹 도구" 로 표시되게 한다
+	const jsonLd = $derived(
+		INDEXABLE && page.url.pathname === '/intro'
+			? JSON.stringify({
+					'@context': 'https://schema.org',
+					'@type': 'SoftwareApplication',
+					name: PRODUCT_NAME,
+					applicationCategory: 'BusinessApplication',
+					operatingSystem: 'Web',
+					inLanguage: 'ko',
+					url: SITE_ORIGIN + '/intro',
+					description: SITE_DESCRIPTION,
+					offers: { '@type': 'Offer', price: 0, priceCurrency: 'KRW' }
+				}).replaceAll('<', '\\u003c')
+			: null
+	);
+	// 스크립트 태그째로 만들어 둔다 — 마크업 안에 <script> 문자열을 두면 파서가 헷갈린다
+	const jsonLdTag = $derived(
+		jsonLd === null ? '' : '<script type="application/ld+json">' + jsonLd + '<' + '/script>'
+	);
 
 	// ───────────────── 백업 권장 알림 ─────────────────
 	// 직접 입력한 데이터가 있는데(샘플만이면 알리지 않는다) 백업 파일을 한 번도 저장하지 않았거나
@@ -98,29 +156,64 @@
 </script>
 
 <svelte:head>
-	{#if isSite}
-		<title>{SITE_INTRO_TITLE}</title>
-	{/if}
 	{#if isErrorPage}
+		<!-- 제목은 +error.svelte 가 낸다 -->
 		<meta name="robots" content="noindex" />
 	{:else}
-		<meta name="description" content={SITE_DESCRIPTION} />
-		<link rel="canonical" href={canonical} />
+		<title>{metaTitle}</title>
+		{#if !indexThisPage}
+			<meta name="robots" content="noindex" />
+		{/if}
+		<meta name="description" content={metaDescription} />
 		<meta property="og:type" content="website" />
 		<meta property="og:site_name" content={PRODUCT_NAME} />
 		<meta property="og:locale" content="ko_KR" />
-		<meta property="og:url" content={canonical} />
 		<meta property="og:title" content={metaTitle} />
-		<meta property="og:description" content={SITE_DESCRIPTION} />
-		<meta property="og:image" content={ogImage} />
-		<meta property="og:image:width" content={String(SITE_OG_IMAGE_WIDTH)} />
-		<meta property="og:image:height" content={String(SITE_OG_IMAGE_HEIGHT)} />
-		<meta property="og:image:alt" content={SITE_OG_IMAGE_ALT} />
+		<meta property="og:description" content={metaDescription} />
 		<meta name="twitter:card" content="summary_large_image" />
 		<meta name="twitter:title" content={metaTitle} />
-		<meta name="twitter:description" content={SITE_DESCRIPTION} />
-		<meta name="twitter:image" content={ogImage} />
-		<meta name="twitter:image:alt" content={SITE_OG_IMAGE_ALT} />
+		<meta name="twitter:description" content={metaDescription} />
+		{#if origin}
+			<!-- 정식 주소가 없으면(빌드 중 자리표시자) 주소가 들어가는 태그는 통째로 뺀다 -->
+			<link rel="canonical" href={canonical} />
+			<meta property="og:url" content={canonical} />
+			<meta property="og:image" content={ogImage} />
+			<meta property="og:image:width" content={String(SITE_OG_IMAGE_WIDTH)} />
+			<meta property="og:image:height" content={String(SITE_OG_IMAGE_HEIGHT)} />
+			<meta property="og:image:alt" content={SITE_OG_IMAGE_ALT} />
+			<meta name="twitter:image" content={ogImage} />
+			<meta name="twitter:image:alt" content={SITE_OG_IMAGE_ALT} />
+		{/if}
+		{#if GOOGLE_SITE_VERIFICATION}
+			<meta name="google-site-verification" content={GOOGLE_SITE_VERIFICATION} />
+		{/if}
+		{#if NAVER_SITE_VERIFICATION}
+			<meta name="naver-site-verification" content={NAVER_SITE_VERIFICATION} />
+		{/if}
+		{#if jsonLdTag}
+			<!-- eslint-disable-next-line svelte/no-at-html-tags -- 우리가 만든 JSON 문자열만 넣는다 -->
+			{@html jsonLdTag}
+		{/if}
+	{/if}
+	<!--
+		방문 분석 — 쿠키를 쓰지 않는 도구만, 공개판에서 ID 가 들어왔을 때만 넣는다.
+		사내 배포에는 SITE_ENABLED 가 거짓이라 어떤 스크립트도 들어가지 않는다.
+	-->
+	{#if SITE_ENABLED && CF_BEACON_TOKEN}
+		<script
+			defer
+			src="https://static.cloudflareinsights.com/beacon.min.js"
+			data-cf-beacon={JSON.stringify({ token: CF_BEACON_TOKEN })}
+		></script>
+	{/if}
+	{#if SITE_ENABLED && UMAMI_WEBSITE_ID}
+		<!-- data-before-send: 회사 이름이 들어간 페이지 제목을 지우는 함수(app.html) -->
+		<script
+			defer
+			src="https://cloud.umami.is/script.js"
+			data-website-id={UMAMI_WEBSITE_ID}
+			data-before-send="hcroiAnalyticsBeforeSend"
+		></script>
 	{/if}
 </svelte:head>
 
@@ -135,7 +228,7 @@
 
 	<header class="sticky top-0 z-20 border-b border-line bg-surface/95 backdrop-blur">
 		<!--
-			모바일(≤640px)에서는 탭 6개가 한 줄에 들어가지 않는다. 가로 스크롤로 숨기면 리포트·설정·가이드에
+			모바일(≤640px)에서는 탭 7개가 한 줄에 들어가지 않는다. 가로 스크롤로 숨기면 리포트·설정·가이드에
 			닿을 수 없으므로(QA 7) 줄바꿈(flex-wrap)으로 두 줄에 모두 보이게 한다. 넓은 화면에서는 그대로 한 줄.
 		-->
 		<div
@@ -256,6 +349,15 @@
 		<a href={resolve('/guide')} class="underline">가이드</a> 참조
 		{#if SITE_ENABLED}
 			· <a href={resolve('/intro')} class="underline">소개</a>
+			· <a href={resolve('/privacy')} class="underline">개인정보</a>
+			{#if CONTACT_EMAIL}
+				· <a href="mailto:{CONTACT_EMAIL}" class="underline">문의</a>
+			{/if}
+			{#if DONATE_URL}
+				·
+				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- 배포 환경변수로 받은 외부 주소 -->
+				<a href={DONATE_URL} target="_blank" rel="noreferrer" class="underline">커피 한 잔 후원</a>
+			{/if}
 		{/if}
 	</footer>
 {/if}

@@ -30,6 +30,36 @@ export const SITE_DESCRIPTION = SITE_ENABLED
 	? 'DART 결산서 PDF 한 부로 매출액·영업이익·인건비·임직원 수를 뽑아 HCROI 를 계산하고, 정원·임금 시나리오를 시뮬레이션합니다. 데이터는 브라우저 안에만 남습니다.'
 	: 'HCROI 와 인건비·정원 시나리오를 계산하는 인사담당자용 도구. 데이터는 이 PC 브라우저에만 저장됩니다.';
 
+/**
+ * 검색에 노출하는 화면과 그 제목·설명. 여기 없는 경로는 전부 색인 제외(`noindex`)다 —
+ * 앱 화면은 개인 데이터를 다루므로 검색 결과에 남으면 안 된다.
+ * 제목은 "무엇을 알려주는 화면인가 — 제품명" 형식으로 통일한다.
+ */
+export type SitePagePath = '/intro' | '/guide' | '/guide/manual' | '/privacy';
+export const SITE_PAGES: Record<SitePagePath, { title: string; description: string }> = {
+	'/intro': { title: SITE_INTRO_TITLE, description: SITE_DESCRIPTION },
+	'/guide': {
+		title: `HCROI 계산식과 등급 기준 — ${PRODUCT_NAME}`,
+		description:
+			'HCROI = (영업이익 + 총 인건비) ÷ 총 인건비. HCVA 와 인당 매출·인당 인건비까지 계산식을 그대로 공개합니다. 등급 경계(1.0배·1.5배)와 인건비·정원 시뮬레이션이 쓰는 가정도 함께 정리했습니다.'
+	},
+	'/guide/manual': {
+		title: `사용 설명서 — ${PRODUCT_NAME}`,
+		description:
+			'DART 결산서 PDF 가져오기, 엑셀 양식 채우기, 인건비·정원 시뮬레이션, 경영진 리포트 인쇄까지 화면별 사용법과 자주 묻는 질문을 한 장에 담았습니다.'
+	},
+	'/privacy': {
+		title: `개인정보 안내 — ${PRODUCT_NAME}`,
+		description:
+			'입력한 숫자와 결산서 PDF 는 서버로 보내지 않습니다. 쿠키 없이 집계하는 방문 통계 항목과 문의 방법을 안내합니다.'
+	}
+};
+
+/** 주소가 색인 대상 화면인가 — 맞으면 그 화면의 제목·설명을 돌려준다 */
+export function sitePageMeta(pathname: string): { title: string; description: string } | null {
+	return SITE_PAGES[pathname as SitePagePath] ?? null;
+}
+
 /** 링크 공유 미리보기 이미지(static/) 와 그 실제 픽셀 크기 — og:image:width/height 에 그대로 쓴다 */
 export const SITE_OG_IMAGE = '/hero-dashboard.jpg';
 export const SITE_OG_IMAGE_WIDTH = 1100;
